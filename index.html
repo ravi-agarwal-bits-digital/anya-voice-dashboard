@@ -119,24 +119,22 @@ footer b{color:var(--muted)}
 </div>
 
 <div id="reportView">
-  <header style="background:linear-gradient(135deg,#0a0f15 0%,#0f1820 50%,#0a0f15 100%);border-bottom:2px solid rgba(78,201,176,0.2);padding:0 20px">
-    <div class="htop" style="max-width:1400px;margin:0 auto">
-      <div style="padding:24px 0">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-          <div style="width:40px;height:40px;background:linear-gradient(135deg,#00d4aa,#4ec9b0);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:20px">B</div>
-          <div>
-            <div style="font-size:11px;color:#00d4aa;font-weight:700;letter-spacing:2px;text-transform:uppercase">BITS Pilani Digital</div>
-            <div style="font-size:13px;color:var(--muted)">Aanya Voice Intelligence</div>
-          </div>
+  <header style="background:linear-gradient(135deg,#060c14 0%,#0a1220 100%);border-bottom:1px solid rgba(0,212,170,0.2);padding:16px 0 0 0">
+
+    <!-- TOPBAR -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4aa,#4ec9b0);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:18px;flex-shrink:0">B</div>
+        <div>
+          <div style="font-size:10px;color:#00d4aa;font-weight:700;letter-spacing:2px;text-transform:uppercase;line-height:1">BITS Pilani Digital</div>
+          <div style="font-size:18px;font-weight:800;color:#e8e8e8;line-height:1.3">Aanya Voice Analytics</div>
         </div>
-        <h1 style="font-size:32px;font-weight:900;background:linear-gradient(120deg,#00d4aa,#4ec9b0,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:12px 0 8px">Call Analytics Dashboard</h1>
-        <div class="meta" id="meta" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;font-size:12px"></div>
       </div>
-      <button class="reload" id="reloadBtn" style="display:none;background:var(--teal);color:#000;padding:8px 16px;border:none;border-radius:6px;font-weight:600;cursor:pointer;align-self:start;margin-top:24px">↻ Load another file</button>
+      <div id="meta" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
-    
-    <div style="max-width:1400px;margin:0 auto;padding:20px 0 0 0;border-top:1px solid rgba(78,201,176,0.15)">
-    <div style="padding:16px 0">
+
+    <!-- FILTER BAR -->
+    <div style="border-top:1px solid rgba(0,212,170,0.12);padding:12px 0">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
         <label style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">Filter by Date:</label>
         <button onclick="quickFilter('today')" id="btn-today" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Today</button>
@@ -403,7 +401,7 @@ function applyFilters(){
   RECORDS=FILTERED_RECORDS.length>0?FILTERED_RECORDS:ALL_RECORDS_BACKUP;
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);updateCallbacks(RECORDS);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  paintIntents(o);paintCallbacks(RECORDS);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
   closeUserSearch();
 }
 
@@ -602,7 +600,7 @@ function rowToRecord(r){
   // This way timestamps are correct, and when formatted with IST timezone, show correctly
   const dateObj=dt?new Date(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h,dt.m,0):new Date();
   return{
-    d:dt?dt.iso:null,h:dt?dt.h:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
+    d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
     dur:Number(r["Duration (s)"])||0,msg:Number(r["Messages"])||0,
     status:String(r["Status"]||"").toLowerCase(),leadTemp:String(r["Lead Temp."]||"").trim(),
     conf:Number(r["Bot Conf."])||0,need,
@@ -718,10 +716,10 @@ function boot(){
   $("filterToDate").value=dmax;
   updateFilterButtons("all");
   
-  $("meta").innerHTML=[["DATE RANGE",dmin+" – "+dmax],["CALLS",RECORDS.length],["AVG DURATION",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s"],["SOURCE",SRC]].map(m=>`<div>${m[0]}&nbsp; <b>${m[1]}</b></div>`).join("");
+  $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);updateCallbacks(RECORDS);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  paintIntents(o);paintCallbacks(RECORDS);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Bot Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
 
@@ -966,44 +964,7 @@ function paintCostSummary(o){
     <div style="padding:12px;background:#0a1f1a;border-radius:6px;border-left:2px solid var(--green);font-size:12px;color:var(--muted)"><b>Avg cost per call:</b> ₹${Math.round(totalCost/RECORDS.length)}</div>`;
 }
 
-function updateCallbacks(o){
-  const cbs=RECORDS.filter(r=>r.callback);
-  if(!cbs.length){$("cbCount").textContent="0";$("cbList").innerHTML=`<div style="padding:20px;text-align:center;color:var(--faint);font-size:13px">No callback requests detected.</div>`;return;}
-  $("cbCount").textContent=cbs.length;
-  $("cbList").innerHTML=cbs.map(r=>{
-    // Use the timestamp that was already calculated correctly
-    const callDate=new Date(r.ts*1000);
-    const dateStr=callDate.toLocaleString('en-IN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
-    
-    // Scheduled callback is next day at 10 AM
-    const schedDate=new Date(callDate);
-    schedDate.setDate(schedDate.getDate()+1);
-    schedDate.setHours(10,0,0,0);
-    const schedStr=schedDate.toLocaleString('en-IN',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
-    
-    const now=Date.now();
-    const daysSinceSched=(now-schedDate.getTime())/(1000*60*60*24);
-    const isOverdue=daysSinceSched>2;
-    
-    return`<div style="padding:14px;background:#0c1218;border-radius:6px;margin-bottom:10px;border-left:3px solid ${isOverdue?'var(--hot)':'var(--teal)'}">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;font-size:13px">
-      <b>${r.cbReason}</b>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);background:#0a0f15;padding:4px 8px;border-radius:3px;word-break:break-all">${r.callId}</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:var(--muted);margin-bottom:8px">
-      <div><b>📞 Mobile:</b><br><span style="font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--text)">${r.from}</span></div>
-      <div><b>📅 Called:</b><br><span style="font-weight:600;color:var(--text)">${dateStr}</span></div>
-    </div>
-    <div style="padding:8px;background:#0a1018;border-radius:4px;border-left:2px solid var(--teal);margin-bottom:8px;font-size:10px;line-height:1.5;color:var(--muted)">
-      <b style="color:var(--teal)">📝 Summary:</b> ${String(r.summary||"")}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);padding:8px;background:#0a0f15;border-radius:4px">
-      <div><b>Intent:</b> ${r.intent}</div>
-      <div><b>Conf:</b> ${Math.round(r.conf)}% | <b>Need:</b> ${Math.round(r.need)}</div>
-    </div>
-  </div>`;
-  }).join("");
-}
+
 </script>
 </body>
 </html>
