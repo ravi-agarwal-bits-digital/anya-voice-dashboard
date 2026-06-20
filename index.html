@@ -944,12 +944,13 @@ function paintCallbacks(recs){
   
   cbList.innerHTML=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length).map(([ph,calls])=>{
     const phoneKey=ph.replace(/\W/g,'_');
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
     
     const renderCall=(c)=>`
       <div style="padding:10px;background:#0a0f15;border-radius:6px;border-left:2px solid var(--teal);margin-bottom:6px;font-size:10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <b style="color:var(--teal)">${formatCallTime(c)}</b>
-          <span style="color:var(--muted)">${c.intent}</span>
+          <span style="color:var(--muted)">${formatDuration(c.dur)}</span>
         </div>
         <div style="color:var(--muted);margin-bottom:4px">Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | ${c.cbReason}</div>
         ${c.summary?`<div style="color:#b0b8c4;line-height:1.5;border-top:1px solid #1a2332;padding-top:4px;margin-top:2px">📝 ${c.summary}</div>`:""}
@@ -969,7 +970,10 @@ function paintCallbacks(recs){
 
     return`<div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${ph}</b>
+        <div>
+          <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${ph}</b>
+          <div style="font-size:10px;color:var(--teal);margin-top:2px">⏳ ${totalDur} mins total</div>
+        </div>
         <span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">${calls.length} callback${calls.length>1?"s":""}</span>
       </div>
       ${renderCall(latest)}
