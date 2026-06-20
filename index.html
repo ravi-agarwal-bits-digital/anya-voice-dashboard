@@ -105,7 +105,7 @@ footer b{color:var(--muted)}
 <body>
 <div class="wrap">
 
-<div id="uploadView">
+<div id="uploadView" style="display:none">
   <div class="tag">BITS Pilani Digital · Voice Bot Analytics</div>
   <h1>Aanya Voice <em>Intelligence</em></h1>
   <p class="lead">Drop in the voice call export and explore call quality, lead temperature, bot performance, and revenue impact. Everything runs in your browser; nothing is uploaded.</p>
@@ -126,7 +126,7 @@ footer b{color:var(--muted)}
         <h1>Aanya Voice <em>— Call Analytics</em></h1>
         <div class="meta" id="meta"></div>
       </div>
-      <button class="reload" id="reloadBtn">↻ Load another file</button>
+      <button class="reload" id="reloadBtn" style="display:none">↻ Load another file</button>
     </div>
     
     <div style="margin-top:20px;padding:14px;background:#0a0f15;border-radius:8px;border:1px solid var(--line)">
@@ -259,7 +259,31 @@ fi.onchange=e=>{if(e.target.files[0])handle(e.target.files[0]);};
 dz.addEventListener("drop",e=>{if(e.dataTransfer.files[0])handle(e.dataTransfer.files[0]);});
 $("reloadBtn").onclick=()=>{$("reportView").style.display="none";$("uploadView").style.display="flex";$("err").textContent="";fi.value="";};
 
-function handle(file){
+// Auto-load latest Excel from data folder on page load
+window.addEventListener('load', ()=>{
+  autoLoadLatestExcel();
+});
+
+function autoLoadLatestExcel(){
+  // Try to find and load latest Excel file from data/ folder
+  // This is called when dashboard loads on GitHub Pages
+  const possiblePaths=[
+    'data/voice_analytics.xlsx',
+    'data/latest.xlsx',
+    '../data/voice_analytics.xlsx'
+  ];
+  
+  // Try each path
+  Promise.all(possiblePaths.map(path=>
+    fetch(path).then(r=>r.ok?r.blob():null).catch(()=>null)
+  )).then(results=>{
+    const blob=results.find(b=>b);
+    if(blob){
+      const file=new File([blob],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
+      handle(file);
+    }
+  });
+}function handle(file){
   $("err").textContent="";
   if(typeof XLSX==="undefined"){$("err").textContent="❌ Spreadsheet engine didn't load — check your connection and refresh.";return;}
   const rd=new FileReader();
