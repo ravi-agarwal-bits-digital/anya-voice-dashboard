@@ -432,6 +432,8 @@ function searchUserByMobile(mobile){
   const general=userCalls.length-frustrated;
   const avgConf=Math.round(userCalls.reduce((a,c)=>a+c.conf,0)/userCalls.length);
   const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
+  const totalDur=Math.round(userCalls.reduce((a,c)=>a+c.dur,0)/60);
+  const totalCost=totalDur*5;
   
   // Lead temperature breakdown
   const hot=userCalls.filter(c=>c.leadTemp==="Hot").length;
@@ -458,6 +460,8 @@ function searchUserByMobile(mobile){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:11px">
       <div><b>Calls:</b> ${userCalls.length} (😤${frustrated} • ✓${general})</div>
       <div><b>Engagement:</b> ${engagement}</div>
+      <div><b>Duration:</b> ⏳ ${totalDur} mins</div>
+      <div><b>Total Cost:</b> 💰 ₹${totalCost}</div>
       <div><b>Avg Confidence:</b> ${avgConf}%</div>
       <div><b>Avg Need Score:</b> ${avgNeed}</div>
       <div style="grid-column:1/-1"><b>Lead Temperature:</b> 🔥${hot} | 🌡️${warm} | ❄️${cold}</div>
@@ -889,7 +893,8 @@ function findSerialCallers(records){
   const serial=Object.entries(byPhone).map(([ph,calls])=>{
     const frustrated=calls.filter(c=>c.frustrated);
     const general=calls.filter(c=>!c.frustrated);
-    return{phone:ph,total:calls.length,frustrated:frustrated.length,general:general.length,calls:calls.sort((a,b)=>b.ts-a.ts)};
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    return{phone:ph,total:calls.length,frustrated:frustrated.length,general:general.length,totalDur,calls:calls.sort((a,b)=>b.ts-a.ts)};
   }).filter(s=>s.total>=3).sort((a,b)=>b.total-a.total);
   return serial;
 }
@@ -909,6 +914,7 @@ function paintHottestLeads(records){
     const frustrated=calls.filter(c=>c.frustrated).length;
     const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
     const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
     
     // Lead score: Hot=3, Warm=2, Cold=1 + call frequency + need + confidence
     const leadScore=(hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2;
@@ -917,7 +923,7 @@ function paintHottestLeads(records){
     calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
     const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
     
-    return{phone:ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,leadScore,topIntent:topIntent?topIntent[0]:"General",calls:calls.sort((a,b)=>b.ts-a.ts)};
+    return{phone:ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",calls:calls.sort((a,b)=>b.ts-a.ts)};
   }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
   
   if(!leads.length){$("hottestLeads").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No leads found.</div>";return;}
@@ -935,10 +941,11 @@ function paintHottestLeads(records){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
         <div><b>Lead:</b> ${typeEmoji} ${l.hot}H|${l.warm}W|${l.cold}C</div>
         <div><b>Calls:</b> ${l.total} (😤${l.frustrated})</div>
+        <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
         <div><b>Avg Conf:</b> ${l.avgConf}%</div>
         <div><b>Avg Need:</b> ${l.avgNeed}</div>
         <div style="grid-column:1/-1"><b>Top Intent:</b> ${l.topIntent}</div>
-        <div style="grid-column:1/-1"><b>Score:</b> <span style="color:var(--teal)">${Math.round(l.leadScore)}</span></div>
+        <div style="grid-column:1/-1"><b>Score:</b> <span style="color:var(--teal)">${Math.round(l.leadScore)}</span> | <b>Cost:</b> <span style="color:var(--hot)">₹${l.totalDur*5}</span></div>
       </div>
       <div style="font-size:9px;color:var(--faint)">Click to view full profile →</div>
     </div>`;
@@ -958,6 +965,7 @@ function paintSerialCallers(records){
       <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
         <div><b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated</div>
         <div><b style="color:var(--green)">✓ ${s.general}</b> general</div>
+        <div style="grid-column:1/-1"><b style="color:var(--teal)">⏳ ${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
       </div>
       <div style="font-size:11px;color:var(--faint);margin-top:6px">High engagement • View timeline →</div>
     </div>
@@ -968,7 +976,7 @@ function paintSerialCallers(records){
 function showSerialTimeline(idx){
   const s=window.SERIAL_CALLERS[idx];
   $("timelineLabel").textContent=s.phone;
-  $("timelineMeta").innerHTML=`<span style="font-size:12px">🔥 ${s.total} total calls • <b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated • <b style="color:var(--green)">✓ ${s.general}</b> general</span>`;
+  $("timelineMeta").innerHTML=`<span style="font-size:12px">🔥 ${s.total} calls • <b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated • <b style="color:var(--green)">✓ ${s.general}</b> general • <b style="color:var(--teal)">⏳ ${s.totalDur} mins</b> | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</span>`;
   $("timeline").innerHTML=s.calls.map((c,i)=>{
     const date=formatCallTimeWithWeekday(c);
     const icon=c.frustrated?'😤':'✓';
