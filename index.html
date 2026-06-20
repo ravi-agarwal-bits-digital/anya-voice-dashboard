@@ -446,7 +446,7 @@ function searchUserByMobile(mobile){
   `;
   
   $("userSearchTimeline").innerHTML=userCalls.map((c,i)=>{
-    const date=new Date(c.ts*1000).toLocaleString('en-IN');
+    const date=formatCallTime(c);
     const tag=c.frustrated?`<b style="color:var(--hot)">😤 FRUSTRATED</b>`:` <b style="color:var(--green)">✓ GENERAL</b>`;
     return`<div style="padding:10px;border-left:2px solid ${c.frustrated?'var(--hot)':'var(--green)'};margin-bottom:8px;background:#0f1620;border-radius:4px">
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
@@ -510,7 +510,23 @@ function parseDateFull(v){
   return null;
 }
 
-function intentOf(t){
+function formatCallTime(rec){
+  if(!rec.d)return "";
+  const ampm=rec.h<12?"AM":"PM";
+  const displayH=rec.h%12||12;
+  const displayM=String(rec.m).padStart(2,"0");
+  return `${rec.d}, ${String(displayH).padStart(2,"0")}:${displayM} ${ampm}`;
+}
+
+function formatCallTimeWithWeekday(rec){
+  if(!rec.d)return "";
+  const dateObj=new Date(rec.d);
+  const day=dateObj.toLocaleDateString('en-IN',{weekday:'short',month:'short',day:'numeric'});
+  const ampm=rec.h<12?"AM":"PM";
+  const displayH=rec.h%12||12;
+  const displayM=String(rec.m).padStart(2,"0");
+  return `${day}, ${String(displayH).padStart(2,"0")}:${displayM} ${ampm}`;
+}
   t=t.toLowerCase();
   if(/payment|booking fee|block|cost|fee|emi|installment/.test(t))return "Payment";
   if(/admission|apply|application|enroll|registration/.test(t))return "Admission";
@@ -573,8 +589,8 @@ function rowToRecord(r){
     scheduledCB=Math.floor(defaultCB.getTime()/1000);
   }
   
-  // Create UTC date that represents IST time (IST = UTC+5:30)
-  // This way, when displayed with toLocaleString('en-IN'), it shows the correct IST time
+  // Create UTC date: subtract IST offset (5:30) to get true UTC
+  // This way timestamps are correct, and when formatted with IST timezone, show correctly
   const dateObj=dt?new Date(Date.UTC(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h-5,dt.m-30,0)):new Date();
   return{
     d:dt?dt.iso:null,h:dt?dt.h:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
@@ -627,19 +643,56 @@ function gradeOf(s){
 
 let CB_FILTER="all";
 function paintCallbacks(recs){
-  const cbs=recs.filter(r=>r.callback).sort((a,b)=>b.ts-a.ts);
+  const cbs=recs.filter(r=>r.callback);
   if(!cbs.length){$("cbCount").textContent="0";$("cbList").innerHTML=`<div class="cbempty">No callback requests detected in this range.<br>When callers ask for callbacks, they'll appear here.</div>`;$("cbFilters").innerHTML="";return;}
-  $("cbCount").textContent=cbs.length;
+  
+  // Group by phone number
+  const byPhone={};
+  cbs.forEach(r=>{
+    const ph=r.from||"unknown";
+    if(!byPhone[ph])byPhone[ph]=[];
+    byPhone[ph].push(r);
+  });
+  
+  // Apply intent filter
   const intents=new Set(cbs.map(r=>r.intent));
   $("cbFilters").innerHTML=[...intents].sort().map(i=>`<button class="cbfilt ${CB_FILTER==="all"||CB_FILTER===i?"on":""}" data-filt="${i}">${i}</button>`).join("");
   document.querySelectorAll(".cbfilt").forEach(b=>b.onclick=()=>{CB_FILTER=b.dataset.filt;paintCallbacks(recs);});
-  const filtered=CB_FILTER==="all"?cbs:cbs.filter(r=>r.intent===CB_FILTER).sort((a,b)=>b.ts-a.ts);
-  $("cbList").innerHTML=filtered.map(r=>`<div class="cbitem">
-    <span class="cbadge">CALLBACK</span>
-    <span class="cint">${r.intent}</span>
-    <div class="cmet"><span title="Bot Confidence">${Math.round(r.conf)}%</span><span title="Need Score">${Math.round(r.need)}</span><span title="Duration">${r.dur}s</span></div>
-    <span class="cid" style="word-break:break-all;font-size:9px">${r.callId}</span>
-  </div>`).join("");
+  
+  // Filter and sort
+  const filtered={};
+  Object.entries(byPhone).forEach(([ph,calls])=>{
+    const filtered_calls=CB_FILTER==="all"?calls:calls.filter(r=>r.intent===CB_FILTER);
+    if(filtered_calls.length>0){
+      filtered[ph]=filtered_calls.sort((a,b)=>a.ts-b.ts); // ASC order (oldest first)
+    }
+  });
+  
+  $("cbCount").textContent=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
+  
+  // Render grouped view
+  $("cbList").innerHTML=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length).map(([ph,calls])=>{
+    const timeline=calls.slice(0,4).map(c=>`
+      <div style="padding:8px;background:#0a0f15;border-radius:4px;border-left:2px solid var(--teal);margin-bottom:4px;font-size:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <b>${formatCallTime(c)}</b>
+        </div>
+        <div style="color:var(--muted);font-size:9px">${c.intent} | Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)}</div>
+      </div>
+    `).join("");
+    
+    const moreCount=calls.length>4?calls.length-4:0;
+    const moreText=moreCount>0?`<div style="padding:6px;color:var(--muted);font-size:10px;text-align:center">+${moreCount} more request${moreCount>1?"s":""}</div>`:"";
+    
+    return`<div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <b style="font-family:'IBM Plex Mono',monospace;font-size:12px">${ph}</b>
+        <span style="background:var(--hot);color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600">[${calls.length} callback${calls.length>1?"s":""}]</span>
+      </div>
+      ${timeline}
+      ${moreText}
+    </div>`;
+  }).join("");
 }
 
 function boot(){
@@ -873,7 +926,7 @@ function showSerialTimeline(idx){
   $("timelineLabel").textContent=s.phone;
   $("timelineMeta").innerHTML=`<span style="font-size:12px">🔥 ${s.total} total calls • <b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated • <b style="color:var(--green)">✓ ${s.general}</b> general</span>`;
   $("timeline").innerHTML=s.calls.map((c,i)=>{
-    const date=new Date(c.ts*1000).toLocaleString('en-IN');
+    const date=formatCallTimeWithWeekday(c);
     const icon=c.frustrated?'😤':'✓';
     const tag=c.frustrated?`<b style="color:var(--hot)">FRUSTRATED</b>`:` <b style="color:var(--green)">GENERAL</b>`;
     return`<div style="padding:12px;border-left:2px solid ${c.frustrated?'var(--hot)':'var(--green)'};margin-left:10px;margin-bottom:12px;background:#0f1620;border-radius:6px">
@@ -911,13 +964,13 @@ function updateCallbacks(o){
   $("cbList").innerHTML=cbs.map(r=>{
     // Use the timestamp that was already calculated correctly
     const callDate=new Date(r.ts*1000);
-    const dateStr=callDate.toLocaleString('en-IN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+    const dateStr=callDate.toLocaleString('en-IN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
     
     // Scheduled callback is next day at 10 AM
     const schedDate=new Date(callDate);
     schedDate.setDate(schedDate.getDate()+1);
     schedDate.setHours(10,0,0,0);
-    const schedStr=schedDate.toLocaleString('en-IN',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+    const schedStr=schedDate.toLocaleString('en-IN',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true,timeZone:'Asia/Kolkata'});
     
     const now=Date.now();
     const daysSinceSched=(now-schedDate.getTime())/(1000*60*60*24);
