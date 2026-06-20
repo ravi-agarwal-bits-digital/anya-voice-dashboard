@@ -268,7 +268,7 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
       const filename = `voice_analytics_${new Date().toISOString().split('T')[0]}.xlsx`;
       const path = `data/${filename}`;
 
-      // GitHub API: Upload file
+      // GitHub API: Upload file with DATE
       const response = await fetch(
         `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`,
         {
@@ -287,6 +287,25 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
       );
 
       if (response.ok) {
+        // Also upload as fixed filename for dashboard to load
+        const dashboardPath = `data/voice_analytics.xlsx`;
+        await fetch(
+          `https://api.github.com/repos/${GITHUB_REPO}/contents/${dashboardPath}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${token}`,
+              'Content-Type': 'application/json',
+              'X-GitHub-Api-Version': '2022-11-28'
+            },
+            body: JSON.stringify({
+              message: `Update dashboard data`,
+              content: base64,
+              branch: GITHUB_BRANCH
+            })
+          }
+        );
+        
         showStatus(`✅ Success! File uploaded: ${filename}\n\n🚀 Dashboard updating live in 2 minutes...\n\n📊 View: ${window.location.origin.replace('/admin', '')}`, "success");
         document.getElementById("password").value = "";
         document.getElementById("excelFile").value = "";
