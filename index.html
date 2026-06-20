@@ -58,7 +58,7 @@ section{margin:46px 0}
 .panel h4{font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin-bottom:4px}
 .panel .cap{font-size:13px;color:var(--faint);margin-bottom:20px}
 .funnel{display:flex;flex-direction:column;gap:6px}
-.fstep{height:58px;display:flex;align-items:center;padding:0 20px;border-radius:8px;color:#0a0e15}
+.fstep{height:58px;display:flex;align-items:center;padding:0 20px;border-radius:8px;color:#ffffff}
 .fstep .fn{font-family:'Fraunces',serif;font-size:28px;font-weight:900}
 .fstep .ft{margin-left:14px;font-size:13px;font-weight:600}
 .fstep .fp{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;opacity:.7}
@@ -732,7 +732,9 @@ function boot(){
   $("filterToDate").value=dmax;
   updateFilterButtons("all");
   
-  $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+  const totalMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+  const totalCost=totalMins*5;
+  $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",totalMins+" mins"],["💰","₹"+totalCost],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
   paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
@@ -799,7 +801,7 @@ function paintIntents(o){
 }
 
 function paintDurBands(o){
-  const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>({">180s":4,"<30s":0,"30-90s":1,"90-180s":2}[a[0]]||3)-({">180s":4,"<30s":0,"30-90s":1,"90-180s":2}[b[0]]||3));
+  const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>b[1]-a[1]);
   if(!sorted.length){$("durBands").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px">No duration data.</div>`;return;}
   const max=Math.max(...sorted.map(d=>d[1]),1);
   $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${d[0]==="<30s"?C.teal:d[0]==="30-90s"?C.green:C.amber};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
