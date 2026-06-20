@@ -276,15 +276,25 @@ function autoLoadLatestExcel(){
       handle(file);
     })
     .catch(err=>{
-      // File not found - just show a message
-      $("reportView").style.display="block";
-      $("uploadView").style.display="none";
-      $("err").textContent="⏳ Loading data... If this persists, admin may need to upload Excel file.";
-      setTimeout(()=>{
-        if(!RECORDS.length){
-          $("err").textContent="📁 No data loaded yet. Please wait or contact admin to upload Excel.";
-        }
-      }, 3000);
+      // File not found - show placeholder
+      document.body.innerHTML=`
+        <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0a0f15,#1a1f2e);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:20px">
+          <div style="text-align:center;color:#e8e8e8;max-width:400px">
+            <div style="font-size:64px;margin-bottom:20px">📁</div>
+            <h1 style="font-size:28px;margin-bottom:12px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">No Data Yet</h1>
+            <p style="font-size:14px;color:#999;line-height:1.8">
+              Admin has not published any data yet.<br><br>
+              Once the first Excel file is uploaded, the dashboard will automatically load and refresh with latest data.
+            </p>
+            <div style="margin-top:30px;padding:20px;background:#0f1620;border:1px solid #1a3050;border-radius:8px;font-size:12px;color:#999">
+              <p style="margin-bottom:8px">✓ Dashboard checks for latest data every page load</p>
+              <p style="margin-bottom:8px">✓ Admin uploads = Data appears instantly</p>
+              <p>✓ Always shows most recent Excel file</p>
+            </div>
+            <button onclick="location.reload()" style="margin-top:30px;padding:12px 24px;background:#00d4aa;color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">🔄 Check Again</button>
+          </div>
+        </div>
+      `;
     });
 }function handle(file){
   $("err").textContent="";
