@@ -253,33 +253,41 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
 
 async function uploadFile(path, content, token) {
   try {
-    // First, try to get the file's SHA if it exists
+    // Step 1: Get existing file's SHA (if it exists)
     let sha = null;
     try {
       const getResp = await fetch(
         `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
         {
+          method: 'GET',
           headers: {
             'Authorization': `token ${token}`,
-            'Accept': 'application/vnd.github.v3.raw'
+            'Content-Type': 'application/json'
           }
         }
       );
       
-      if(getResp.status === 200) {
+      if(getResp.ok) {
         const data = await getResp.json();
-        sha = data.sha;
+        if(data.sha) {
+          sha = data.sha;
+        }
       }
-    } catch(e) {}
+    } catch(e) {
+      // File doesn't exist yet, that's fine
+    }
     
-    // Upload file
+    // Step 2: Upload/Update file with SHA if we have it
     const body = {
       message: `Update ${path.split('/')[1]}`,
       content: content,
       branch: GITHUB_BRANCH
     };
     
-    if(sha) body.sha = sha;
+    // If file exists, include SHA
+    if(sha) {
+      body.sha = sha;
+    }
     
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
@@ -293,8 +301,15 @@ async function uploadFile(path, content, token) {
       }
     );
     
-    return response.ok;
+    if(!response.ok) {
+      const error = await response.json();
+      console.error(`Upload failed for ${path}:`, error);
+      return false;
+    }
+    
+    return true;
   } catch(err) {
+    console.error('Upload error:', err);
     return false;
   }
 }
