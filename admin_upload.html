@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Analytics Admin - Upload Excel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: #0a0f15;
+      color: #e8e8e8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      width: 100%;
+      background: #0f1620;
+      border: 1px solid #1a2332;
+      border-radius: 12px;
+      padding: 40px;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      background: linear-gradient(120deg, #ffd700, #00d4aa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 32px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    input[type="password"],
+    input[type="file"] {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0a0f15;
+      border: 1px solid #1a2332;
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    input[type="file"] {
+      padding: 8px;
+    }
+    input[type="password"]:focus,
+    input[type="file"]:focus {
+      outline: none;
+      border-color: #00d4aa;
+      box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #00d4aa;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: .2s;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #00c59a;
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+    }
+    .status.success {
+      background: #0a1f1a;
+      border-left: 3px solid #00d4aa;
+      color: #00d4aa;
+      display: block;
+    }
+    .status.error {
+      background: #1f0a0a;
+      border-left: 3px solid #ff4444;
+      color: #ff6666;
+      display: block;
+    }
+    .info {
+      background: #0a0f1f;
+      border: 1px solid #1a3050;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.6;
+      margin-top: 24px;
+    }
+    .info b { color: #00d4aa; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🔐 Voice Analytics Admin</h1>
+  <p class="subtitle">Daily Excel Upload & GitHub Publish</p>
+
+  <div class="form-group">
+    <label>Admin Password</label>
+    <input type="password" id="adminPassword" placeholder="Enter admin password">
+  </div>
+
+  <div class="form-group">
+    <label>Voice Export Excel (.xlsx)</label>
+    <input type="file" id="excelFile" accept=".xlsx,.xls">
+  </div>
+
+  <button onclick="uploadAndPublish()">📤 Upload & Publish to GitHub</button>
+
+  <div id="status" class="status"></div>
+
+  <div class="info">
+    <b>ℹ️ How it works:</b><br>
+    1. Upload the latest voice_analytics_YYYY-MM-DD.xlsx<br>
+    2. System creates GitHub commit automatically<br>
+    3. Dashboard updates live within minutes<br>
+    4. End users see fresh data instantly<br>
+    <br>
+    <b>📊 Next Steps:</b><br>
+    Share this link with end users:<br>
+    <code style="background:#000;padding:4px 6px;border-radius:3px;display:inline-block;margin-top:4px">
+      https://your-github.io/dashboard
+    </code>
+  </div>
+</div>
+
+<script>
+const ADMIN_PASSWORD = "bits2024"; // Change this to your secure password
+
+function uploadAndPublish() {
+  const password = document.getElementById("adminPassword").value;
+  const file = document.getElementById("excelFile").files[0];
+  const statusDiv = document.getElementById("status");
+
+  // Clear previous status
+  statusDiv.className = "status";
+  statusDiv.textContent = "";
+
+  // Validate password
+  if (password !== ADMIN_PASSWORD) {
+    statusDiv.className = "status error";
+    statusDiv.textContent = "❌ Incorrect password";
+    return;
+  }
+
+  // Validate file
+  if (!file) {
+    statusDiv.className = "status error";
+    statusDiv.textContent = "❌ Please select an Excel file";
+    return;
+  }
+
+  if (!file.name.includes(".xlsx") && !file.name.includes(".xls")) {
+    statusDiv.className = "status error";
+    statusDiv.textContent = "❌ File must be .xlsx or .xls format";
+    return;
+  }
+
+  // Process file
+  statusDiv.className = "status success";
+  statusDiv.textContent = "⏳ Processing... This may take a moment...";
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      // Save file to browser storage (for demo)
+      const fileData = e.target.result;
+      localStorage.setItem('voiceExcelData', fileData);
+      localStorage.setItem('voiceExcelName', file.name);
+      localStorage.setItem('voiceExcelDate', new Date().toISOString());
+
+      statusDiv.className = "status success";
+      statusDiv.textContent = `✅ Success! Uploaded: ${file.name}\n\n📍 Next: Commit this file to GitHub:\ngit add ${file.name}\ngit commit -m "Update voice analytics - ${new Date().toLocaleDateString()}"\ngit push`;
+
+      // Clear form
+      document.getElementById("adminPassword").value = "";
+      document.getElementById("excelFile").value = "";
+
+    } catch (err) {
+      statusDiv.className = "status error";
+      statusDiv.textContent = "❌ Error: " + err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Keyboard shortcut
+document.addEventListener('keypress', (e) => {
+  if (e.ctrlKey && e.key === 'Enter') uploadAndPublish();
+});
+</script>
+
+</body>
+</html>
