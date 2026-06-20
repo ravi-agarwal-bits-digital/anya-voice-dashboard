@@ -265,24 +265,22 @@ window.addEventListener('load', ()=>{
 });
 
 function autoLoadLatestExcel(){
-  // Try to find and load latest Excel file from data/ folder
-  // This is called when dashboard loads on GitHub Pages
-  const possiblePaths=[
-    'data/voice_analytics.xlsx',
-    'data/latest.xlsx',
-    '../data/voice_analytics.xlsx'
-  ];
-  
-  // Try each path
-  Promise.all(possiblePaths.map(path=>
-    fetch(path).then(r=>r.ok?r.blob():null).catch(()=>null)
-  )).then(results=>{
-    const blob=results.find(b=>b);
-    if(blob){
+  // Load the fixed filename that admin page saves
+  fetch('data/voice_analytics.xlsx')
+    .then(r=>{
+      if(r.ok)return r.blob();
+      throw new Error('File not found');
+    })
+    .then(blob=>{
       const file=new File([blob],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
       handle(file);
-    }
-  });
+    })
+    .catch(err=>{
+      // File not found, show upload interface
+      $("uploadView").style.display="flex";
+      $("reportView").style.display="none";
+      $("err").textContent="📁 No data file found. Admin needs to upload Excel first.";
+    });
 }function handle(file){
   $("err").textContent="";
   if(typeof XLSX==="undefined"){$("err").textContent="❌ Spreadsheet engine didn't load — check your connection and refresh.";return;}
