@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>🔐 Voice Analytics Admin</title>
+  <title>🔐 Voice Analytics Admin - Upload</title>
   
   <script>
-    // ⚙️ CONFIGURATION - Change these
+    // ⚙️ CONFIGURATION
     const ADMIN_PASSWORD = "bpd";
-    const GITHUB_OWNER = "ravi-agarwal-bits-digital";  // Your GitHub username
-    const GITHUB_REPO = "anya-voice-dashboard";        // Your repo name
+    const GITHUB_OWNER = "ravi-agarwal-bits-digital";
+    const GITHUB_REPO = "anya-voice-dashboard";
     const GITHUB_BRANCH = "main";
     
     // Check password on load
@@ -28,16 +28,20 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #0a0f15 0%, #1a1f2e 100%);
       min-height: 100vh;
-      padding: 40px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
       color: #e8e8e8;
     }
     .container {
-      max-width: 600px;
-      margin: 0 auto;
       background: #0f1620;
       border: 1px solid #1a3050;
       border-radius: 12px;
       padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     }
     h1 {
       font-size: 28px;
@@ -48,45 +52,42 @@
       background-clip: text;
     }
     .subtitle {
+      font-size: 12px;
       color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
       margin-bottom: 32px;
-      font-size: 14px;
     }
-    .step {
-      background: #0a0f1f;
-      border: 1px solid #1a3050;
-      border-radius: 8px;
-      padding: 20px;
+    .form-group {
       margin-bottom: 20px;
     }
-    .step h3 {
-      color: #00d4aa;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    .step p {
+    label {
+      display: block;
+      font-size: 11px;
       color: #999;
-      line-height: 1.6;
-      font-size: 13px;
-      margin-bottom: 10px;
-    }
-    .step a {
-      color: #00d4aa;
-      text-decoration: none;
-      border-bottom: 1px dotted #00d4aa;
+      margin-bottom: 6px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    code {
-      background: #000;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: monospace;
-      font-size: 12px;
-      color: #ffd700;
+    input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0a0f15;
+      border: 1px solid #1a2332;
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #00d4aa;
+      box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
     }
     button {
       width: 100%;
-      padding: 12px;
+      padding: 11px 16px;
       background: #00d4aa;
       color: #000;
       border: none;
@@ -96,71 +97,212 @@
       cursor: pointer;
       transition: all .2s;
       text-transform: uppercase;
-      margin-top: 12px;
+      letter-spacing: 0.5px;
+      margin-top: 20px;
     }
-    button:hover {
+    button:hover:not(:disabled) {
       background: #00c59a;
       transform: translateY(-1px);
     }
-    .warning {
-      background: #1f1a0a;
-      border-left: 3px solid #ff9800;
-      padding: 12px;
-      border-radius: 4px;
-      font-size: 12px;
-      color: #ffb74d;
-      margin-top: 20px;
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
-    ol { padding-left: 20px; }
-    ol li { color: #999; margin-bottom: 8px; line-height: 1.6; }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+      border-left: 3px solid #00d4aa;
+    }
+    .status.show { display: block; }
+    .status.success {
+      background: #0a1f1a;
+      border-left-color: #00d4aa;
+      color: #00d4aa;
+    }
+    .status.error {
+      background: #1f0a0a;
+      border-left-color: #ff4444;
+      color: #ff6666;
+    }
+    .status.loading {
+      background: #0a0f1f;
+      border-left-color: #ffd700;
+      color: #ffd700;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    .info-box {
+      background: #0a0f1f;
+      border: 1px solid #1a3050;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.6;
+      margin-top: 24px;
+    }
+    .info-box b { color: #00d4aa; }
   </style>
 </head>
 <body>
 
 <div class="container">
   <h1>🔐 Admin Upload</h1>
-  <p class="subtitle">BITS Pilani Voice Analytics - Daily Excel Upload</p>
+  <p class="subtitle">Voice Analytics Excel Upload</p>
 
-  <div class="step">
-    <h3>📤 Step 1: Open GitHub Upload</h3>
-    <p>Click button below to open GitHub's file upload interface:</p>
-    <button onclick="openGitHubUpload()">📂 Go to GitHub Upload</button>
-  </div>
+  <form id="uploadForm">
+    <div class="form-group">
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" required>
+      <small style="color:#666;font-size:10px;display:block;margin-top:4px">Get from: github.com/settings/tokens</small>
+    </div>
 
-  <div class="step">
-    <h3>✅ Step 2: Upload Your Excel</h3>
-    <ol>
-      <li>You'll see GitHub's upload page</li>
-      <li>Drag your Excel file OR click to browse</li>
-      <li>Name it: <code>voice_analytics.xlsx</code></li>
-      <li>Click <code>Commit changes</code></li>
-    </ol>
-  </div>
+    <div class="form-group">
+      <label>Excel File (.xlsx)</label>
+      <input type="file" id="excelFile" accept=".xlsx,.xls" required>
+    </div>
 
-  <div class="step">
-    <h3>⏳ Step 3: Wait</h3>
-    <p>GitHub will process the file. Dashboard updates automatically in <b>2 minutes</b>.</p>
-  </div>
+    <button type="submit" id="submitBtn">📤 Upload & Publish</button>
+  </form>
 
-  <div class="step">
-    <h3>📊 View Dashboard</h3>
-    <button onclick="openDashboard()">👁️ Open Dashboard</button>
-  </div>
+  <div id="status" class="status"></div>
 
-  <div class="warning">
-    💡 <b>Password protected:</b> Only admins with password can access this page.
+  <div class="info-box">
+    <b>ℹ️ How it works:</b><br>
+    1. Get GitHub token (repo access required once)<br>
+    2. Enter token above<br>
+    3. Select Excel file<br>
+    4. Click Upload<br>
+    5. Dashboard updates in 2 minutes<br><br>
+    <b>No repo access needed for other admins!</b> Just share the token.
   </div>
 </div>
 
 <script>
-function openGitHubUpload() {
-  const url = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/upload/${GITHUB_BRANCH}/data`;
-  window.open(url, '_blank');
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  
+  const token = document.getElementById("ghToken").value;
+  const file = document.getElementById("excelFile").files[0];
+
+  if (!token) {
+    showStatus("❌ Enter GitHub token", "error");
+    return;
+  }
+
+  if (!file) {
+    showStatus("❌ Select an Excel file", "error");
+    return;
+  }
+
+  if (!file.name.includes(".xlsx") && !file.name.includes(".xls")) {
+    showStatus("❌ File must be .xlsx or .xls", "error");
+    return;
+  }
+
+  showStatus("⏳ Uploading to GitHub...", "loading");
+  document.getElementById("submitBtn").disabled = true;
+
+  try {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      // Convert to base64
+      const bytes = new Uint8Array(e.target.result);
+      let base64 = '';
+      for(let i = 0; i < bytes.length; i++){
+        base64 += String.fromCharCode(bytes[i]);
+      }
+      base64 = btoa(base64);
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Upload to both paths
+      const datedSuccess = await uploadFile(
+        `data/voice_analytics_${today}.xlsx`,
+        base64,
+        token
+      );
+      
+      const mainSuccess = await uploadFile(
+        `data/voice_analytics.xlsx`,
+        base64,
+        token
+      );
+      
+      if(datedSuccess && mainSuccess) {
+        showStatus(`✅ Success! File uploaded\n\n🚀 Dashboard will update in 2 minutes`, "success");
+        document.getElementById("ghToken").value = "";
+        document.getElementById("excelFile").value = "";
+      } else {
+        showStatus("❌ Upload failed. Check token & try again", "error");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } catch (err) {
+    showStatus("❌ Error: " + err.message, "error");
+  } finally {
+    document.getElementById("submitBtn").disabled = false;
+  }
+});
+
+async function uploadFile(path, content, token) {
+  try {
+    // First, try to get the file's SHA if it exists
+    let sha = null;
+    try {
+      const getResp = await fetch(
+        `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
+        {
+          headers: {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3.raw'
+          }
+        }
+      );
+      
+      if(getResp.status === 200) {
+        const data = await getResp.json();
+        sha = data.sha;
+      }
+    } catch(e) {}
+    
+    // Upload file
+    const body = {
+      message: `Update ${path.split('/')[1]}`,
+      content: content,
+      branch: GITHUB_BRANCH
+    };
+    
+    if(sha) body.sha = sha;
+    
+    const response = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      }
+    );
+    
+    return response.ok;
+  } catch(err) {
+    return false;
+  }
 }
 
-function openDashboard() {
-  const url = '../index.html';
-  window.open(url, '_blank');
+function showStatus(msg, type) {
+  const statusDiv = document.getElementById("status");
+  statusDiv.textContent = msg;
+  statusDiv.className = `status show ${type}`;
 }
 </script>
 
