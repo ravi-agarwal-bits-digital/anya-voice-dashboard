@@ -266,7 +266,7 @@ fi.onchange=e=>{if(e.target.files[0])handle(e.target.files[0]);};
 ["dragover","dragenter"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("over");}));
 ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("over");}));
 dz.addEventListener("drop",e=>{if(e.dataTransfer.files[0])handle(e.dataTransfer.files[0]);});
-$("reloadBtn").onclick=()=>{$("reportView").style.display="none";$("uploadView").style.display="flex";$("err").textContent="";fi.value="";};
+if($("reloadBtn"))$("reloadBtn").onclick=()=>{$("reportView").style.display="none";$("uploadView").style.display="flex";$("err").textContent="";fi.value="";};
 
 // Auto-load latest Excel from data folder on page load
 window.addEventListener('load', ()=>{
@@ -334,7 +334,6 @@ function quickFilter(type){
   const today=new Date();
   today.setHours(0,0,0,0);
   let from=new Date(today),to=new Date(today);
-  to.setHours(23,59,59,999);
   
   switch(type){
     case 'today':break;
@@ -345,8 +344,10 @@ function quickFilter(type){
     case 'all':from=new Date(1970,0,1);break;
   }
   
-  $("filterFromDate").value=from.toISOString().split('T')[0];
-  $("filterToDate").value=to.toISOString().split('T')[0];
+  // Use local date (not ISO/UTC) to avoid timezone off-by-one
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  $("filterFromDate").value=fmt(from);
+  $("filterToDate").value=fmt(to);
   $("customFilterPanel").style.display="none";
   applyFilters();
   updateFilterButtons(type);
