@@ -234,13 +234,10 @@ footer b{color:var(--muted)}
       <div class="panel"><h4>Cost Impact</h4><div class="cap">Real ₹ cost of frustrated calls at ₹5/min</div><div id="frustCost"></div></div>
     </div></section>
 
-  <section><div class="shead"><span class="n">08</span><h2>Call Cost Summary</h2></div>
-    <div class="panel"><h4>Total cost breakdown</h4><div class="cap">All calls at ₹5 per minute</div><div id="costSummary"></div></div></section>
-
-  <section><div class="shead"><span class="n">08.4</span><h2>🏆 Hottest Leads (Top 50)</h2></div>
+  <section><div class="shead"><span class="n">08</span><h2>🏆 Hottest Leads (Top 50)</h2></div>
     <div class="panel"><h4>Ranked by lead score & engagement</h4><div class="cap">Hot leads ranked by temperature, call frequency, need score & confidence. Click any lead to view full profile.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div></section>
 
-  <section><div class="shead"><span class="n">08.5</span><h2>🔥 Serial Engagers (Hot Leads)</h2></div>
+  <section><div class="shead"><span class="n">09</span><h2>🔥 Serial Engagers (Hot Leads)</h2></div>
     <div class="panel"><h4>Repeat callers with high engagement</h4><div class="cap">Phone numbers with 3+ calls — shows frustrated vs general breakdown. High engagement = strong interest signal. Click to view timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
     <div id="timelinePanel" style="display:none;margin-top:24px">
       <div class="panel">
@@ -252,7 +249,7 @@ footer b{color:var(--muted)}
       </div>
     </div></section>
 
-  <section><div class="shead"><span class="n">09</span><h2>Review band breakdown</h2></div>
+  <section><div class="shead"><span class="n">10</span><h2>Review band breakdown</h2></div>
     <div class="panel"><div class="cap">Green (quality), Amber (ok), Red (needs attention) — what share of calls passed QA?</div><div id="bandBars"></div></div></section>
 
   <footer id="foot"></footer>
@@ -418,7 +415,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
   closeUserSearch();
 }
@@ -752,7 +749,7 @@ function boot(){
   $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",totalMins+" mins"],["💰","₹"+totalCost],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintCostSummary(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Bot Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
@@ -992,17 +989,7 @@ function showSerialTimeline(idx){
   $("timelinePanel").scrollIntoView({behavior:"smooth"});
 }
 
-function paintCostSummary(o){
-  const totalMinutes=RECORDS.reduce((a,r)=>a+r.dur,0)/60;
-  const totalCost=Math.round(totalMinutes*5);
-  const frustrated=RECORDS.filter(r=>r.frustrated);
-  const frustMinutes=frustrated.reduce((a,r)=>a+r.dur,0)/60;
-  $("costSummary").innerHTML=`<div style="display:flex;justify-content:space-between;padding:12px;background:#0c1218;border-radius:6px;margin-bottom:10px;font-size:13px"><span><b>Total calls</b></span><b>${RECORDS.length}</b></div>
-    <div style="display:flex;justify-content:space-between;padding:12px;background:#0c1218;border-radius:6px;margin-bottom:10px;font-size:13px"><span><b>Total duration</b></span><b>${Math.round(totalMinutes)} min</b></div>
-    <div style="display:flex;justify-content:space-between;padding:12px;background:#0c1218;border-radius:6px;margin-bottom:10px;font-size:13px"><span><b>Total cost @ ₹5/min</b></span><b style="color:var(--teal)">₹${totalCost}</b></div>
-    <div style="display:flex;justify-content:space-between;padding:12px;background:#0c1218;border-radius:6px;margin-bottom:10px;font-size:13px"><span><b>Frustrated call cost</b></span><b style="color:var(--hot)">₹${Math.round(frustMinutes*5)} (${frustrated.length} calls)</b></div>
-    <div style="padding:12px;background:#0a1f1a;border-radius:6px;border-left:2px solid var(--green);font-size:12px;color:var(--muted)"><b>Avg cost per call:</b> ₹${Math.round(totalCost/RECORDS.length)}</div>`;
-}
+
 
 
 </script>
