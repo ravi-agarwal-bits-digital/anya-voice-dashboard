@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aanya Voice Bot Analytics</title>
+<title>Aanya Voice Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -970,9 +970,9 @@ function paintCallbacks(recs){
 
     return`<div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div>
+        <div style="display:flex;align-items:center;gap:16px">
           <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${ph}</b>
-          <div style="font-size:10px;color:var(--teal);margin-top:2px">⏳ ${totalDur} mins total</div>
+          <span style="font-size:10px;color:var(--teal);font-weight:600">⏳ ${totalDur} mins</span>
         </div>
         <span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">${calls.length} callback${calls.length>1?"s":""}</span>
       </div>
