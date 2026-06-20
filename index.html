@@ -755,11 +755,17 @@ function paintHealth(o){
 
 function paintKPIs(o){
   const pct=a=>Math.round(a/o.n*100);
+  const totalMins=Math.round(o.totalDur/60);
+  const totalCost=totalMins*5;
+  const avgDurMins=Math.floor(o.totalDur/o.n/60);
+  const avgDurSecs=Math.round((o.totalDur/o.n)%60);
   const cards=[
     ["neut",o.n,"Total calls",""],
+    ["hot",totalMins+" mins","Total duration",""],
+    ["hot","₹"+totalCost,"Total cost (@₹5/min)",""],
     ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")",""],
     ["good",Math.round(o.avgConf)+"%","Avg bot confidence",""],
-    ["good",Math.round(o.totalDur/o.n)+"s","Avg call duration",""],
+    ["good",avgDurMins+"m "+avgDurSecs+"s","Avg call duration",""],
     ["neut",Math.round(o.totalMsg/o.n),"Avg messages per call",""],
     ["good",pct(o.green)+"%","Quality pass rate (Green)",""]
   ];
