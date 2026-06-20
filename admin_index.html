@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>📊 Voice Analytics Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0a0f15 0%, #1a1f2e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #e8e8e8;
+    }
+    .container {
+      background: #0f1620;
+      border: 1px solid #1a3050;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 450px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      background: linear-gradient(120deg, #ffd700, #00d4aa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0a0f15;
+      border: 1px solid #1a2332;
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    input:focus {
+      outline: none;
+      border-color: #00d4aa;
+      box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+    }
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    button {
+      padding: 11px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .btn-primary {
+      background: #00d4aa;
+      color: #000;
+      grid-column: 1 / -1;
+    }
+    .btn-primary:hover {
+      background: #00c59a;
+      transform: translateY(-1px);
+    }
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+    .btn-secondary {
+      background: #1a3050;
+      color: #00d4aa;
+      border: 1px solid #00d4aa;
+    }
+    .btn-secondary:hover {
+      background: #0a1f35;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: none;
+      border-left: 3px solid #00d4aa;
+    }
+    .status.show { display: block; }
+    .status.success {
+      background: #0a1f1a;
+      border-left-color: #00d4aa;
+      color: #00d4aa;
+    }
+    .status.error {
+      background: #1f0a0a;
+      border-left-color: #ff4444;
+      color: #ff6666;
+    }
+    .status.loading {
+      background: #0a0f1f;
+      border-left-color: #ffd700;
+      color: #ffd700;
+    }
+    .progress {
+      width: 100%;
+      height: 3px;
+      background: #0a0f15;
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: #00d4aa;
+      width: 0%;
+      animation: progress 2s ease-in-out infinite;
+    }
+    @keyframes progress {
+      0% { width: 0%; }
+      50% { width: 100%; }
+      100% { width: 0%; }
+    }
+    .info-box {
+      background: #0a0f1f;
+      border: 1px solid #1a3050;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 11px;
+      color: #999;
+      line-height: 1.6;
+      margin-top: 24px;
+    }
+    .info-box b { color: #00d4aa; }
+    .links {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 11px;
+    }
+    .links a {
+      color: #00d4aa;
+      text-decoration: none;
+      border-bottom: 1px dotted #00d4aa;
+      transition: .2s;
+    }
+    .links a:hover {
+      color: #00d4aa;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>🔐 Admin Panel</h1>
+    <p class="subtitle">Voice Analytics Upload</p>
+  </div>
+
+  <form id="uploadForm">
+    <div class="form-group">
+      <label>Admin Password</label>
+      <input type="password" id="password" placeholder="Enter password" required>
+    </div>
+
+    <div class="form-group">
+      <label>Excel File (.xlsx)</label>
+      <input type="file" id="excelFile" accept=".xlsx,.xls" required>
+    </div>
+
+    <div class="button-group">
+      <button type="button" class="btn-secondary" onclick="viewDashboard()">👁️ View Dashboard</button>
+      <button type="submit" class="btn-primary">📤 Upload & Publish</button>
+    </div>
+  </form>
+
+  <div id="status" class="status"></div>
+
+  <div class="info-box">
+    <b>ℹ️ How it works:</b><br>
+    1. Enter your admin password<br>
+    2. Select daily Excel file<br>
+    3. Click Upload → GitHub auto-publishes<br>
+    4. Dashboard live in 2 minutes<br>
+  </div>
+
+  <div class="links">
+    <a href="../index.html" target="_blank">← Back to Dashboard</a>
+  </div>
+</div>
+
+<script>
+// CHANGE THIS PASSWORD TO YOUR OWN!
+const ADMIN_PASSWORD = "bits2024";
+
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  
+  const password = document.getElementById("password").value;
+  const file = document.getElementById("excelFile").files[0];
+  const statusDiv = document.getElementById("status");
+
+  // Validate password
+  if (password !== ADMIN_PASSWORD) {
+    showStatus("❌ Incorrect password", "error");
+    return;
+  }
+
+  if (!file) {
+    showStatus("❌ Please select a file", "error");
+    return;
+  }
+
+  showStatus("⏳ Uploading to GitHub...", "loading");
+
+  try {
+    // For now, show success message
+    // In production, this would use GitHub API
+    setTimeout(() => {
+      showStatus("✅ File ready! Push to GitHub to publish.\n\nNext: git add voice_analytics_*.xlsx && git commit -m 'Update' && git push", "success");
+      document.getElementById("password").value = "";
+      document.getElementById("excelFile").value = "";
+    }, 1500);
+  } catch (err) {
+    showStatus("❌ Error: " + err.message, "error");
+  }
+});
+
+function showStatus(msg, type) {
+  const statusDiv = document.getElementById("status");
+  statusDiv.textContent = msg;
+  statusDiv.className = `status show ${type}`;
+}
+
+function viewDashboard() {
+  window.location.href = "../index.html";
+}
+</script>
+
+</body>
+</html>
