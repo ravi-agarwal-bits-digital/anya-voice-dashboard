@@ -15,7 +15,7 @@ body{background:var(--ink);color:var(--cream);font-family:'IBM Plex Sans',sans-s
 body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;background:radial-gradient(38% 32% at 18% 12%,#1c3a4f4d,transparent 70%),radial-gradient(34% 28% at 86% 8%,#2a1f4a4d,transparent 70%),radial-gradient(44% 38% at 62% 92%,#10322c4d,transparent 70%);filter:blur(46px);animation:drift 26s ease-in-out infinite alternate}
 @keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-3%,2%) scale(1.07)}}
 .wrap{max-width:1200px;margin:0 auto;padding:0 32px 90px}
-#uploadView{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+#uploadView{display:none !important;visibility:hidden !important;pointer-events:none !important;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
 .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
 #uploadView h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(34px,6vw,62px);line-height:1.02;margin:14px 0 10px;letter-spacing:-1.5px;background:linear-gradient(120deg,var(--cream),var(--teal));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 #uploadView h1 em{font-style:italic;font-weight:500;-webkit-text-fill-color:var(--muted)}
@@ -105,7 +105,7 @@ footer b{color:var(--muted)}
 <body>
 <div class="wrap">
 
-<div id="uploadView" style="display:none">
+<div id="uploadView" style="display:none !important;visibility:hidden !important;pointer-events:none !important">
   <div class="tag">BITS Pilani Digital · Voice Bot Analytics</div>
   <h1>Aanya Voice <em>Intelligence</em></h1>
   <p class="lead">Drop in the voice call export and explore call quality, lead temperature, bot performance, and revenue impact. Everything runs in your browser; nothing is uploaded.</p>
@@ -276,10 +276,15 @@ function autoLoadLatestExcel(){
       handle(file);
     })
     .catch(err=>{
-      // File not found, show upload interface
-      $("uploadView").style.display="flex";
-      $("reportView").style.display="none";
-      $("err").textContent="📁 No data file found. Admin needs to upload Excel first.";
+      // File not found - just show a message
+      $("reportView").style.display="block";
+      $("uploadView").style.display="none";
+      $("err").textContent="⏳ Loading data... If this persists, admin may need to upload Excel file.";
+      setTimeout(()=>{
+        if(!RECORDS.length){
+          $("err").textContent="📁 No data loaded yet. Please wait or contact admin to upload Excel.";
+        }
+      }, 3000);
     });
 }function handle(file){
   $("err").textContent="";
