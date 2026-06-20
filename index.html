@@ -479,7 +479,7 @@ function searchUserByMobile(mobile){
       </div>
       <div style="font-size:10px;color:var(--muted);line-height:1.4">
         <b>Intent:</b> ${c.intent} | <b>Temp:</b> ${c.leadTemp} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
-        <b>Duration:</b> ${c.dur}s | <b>Reason:</b> ${c.cbReason}<br>
+        <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${c.cbReason}<br>
         <span style="font-size:9px;margin-top:4px;display:block">${c.summary}</span>
       </div>
     </div>`;
@@ -550,6 +550,12 @@ function formatCallTimeWithWeekday(rec){
   const displayH=rec.h%12||12;
   const displayM=String(rec.m).padStart(2,"0");
   return `${day}, ${String(displayH).padStart(2,"0")}:${displayM} ${ampm}`;
+}
+
+function formatDuration(seconds){
+  const mins=Math.floor(seconds/60);
+  const secs=Math.round(seconds%60);
+  return mins>0?`${mins}m ${secs}s`:`${secs}s`;
 }
 
 function intentOf(t){
@@ -988,7 +994,7 @@ function showSerialTimeline(idx){
       </div>
       <div style="font-size:11px;color:var(--muted);line-height:1.4">
         <b>Intent:</b> ${c.intent}<br>
-        <b>Duration:</b> ${c.dur}s | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
+        <b>Duration:</b> ${formatDuration(c.dur)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
         <span style="font-size:10px">${c.summary}</span>
       </div>
     </div>`;
