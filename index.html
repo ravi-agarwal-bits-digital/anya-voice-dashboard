@@ -226,10 +226,10 @@ footer b{color:var(--muted)}
   <section><div class="shead"><span class="n">06</span><h2>Review band breakdown</h2></div>
     <div class="panel"><div class="cap">Green (quality), Amber (ok), Red (needs attention) — what share of calls passed QA?</div><div id="bandBars"></div></div></section>
 
-  <section><div class="shead"><span class="n">07</span><h2>🏆 Hottest Leads (Top 50)</h2></div>
+  <section><div class="shead"><span class="n">07</span><h2>🏆 Hottest Leads (Top 50)</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
     <div class="panel"><h4>Ranked by lead score & engagement</h4><div class="cap">Hot leads ranked by temperature, call frequency, need score & confidence. Click any lead to view full profile.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div></section>
 
-  <section><div class="shead"><span class="n">08</span><h2>🔥 Serial Engagers (Hot Leads)</h2></div>
+  <section><div class="shead"><span class="n">08</span><h2>🔥 Serial Engagers (Hot Leads)</h2><button onclick="exportSerialEngagers()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
     <div class="panel"><h4>Repeat callers with high engagement</h4><div class="cap">Phone numbers with 3+ calls — shows frustrated vs general breakdown. High engagement = strong interest signal. Click to view timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
     <div id="timelinePanel" style="display:none;margin-top:24px">
       <div class="panel">
@@ -241,7 +241,7 @@ footer b{color:var(--muted)}
       </div>
     </div></section>
 
-  <section><div class="shead"><span class="n">09</span><h2>🔥 Callback Requests — Your Hottest Leads</h2></div>
+  <section><div class="shead"><span class="n">09</span><h2>🔥 Callback Requests — Your Hottest Leads</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
     <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number & reason. <b id="cbCount" style="color:var(--hot)"></b> calls — actionable follow-up list.</div>
     <div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
     <div id="cbList" style="max-height:600px;overflow-y:auto"></div></div></section>
@@ -1005,6 +1005,64 @@ function showSerialTimeline(idx){
   }).join("");
   $("timelinePanel").style.display="block";
   $("timelinePanel").scrollIntoView({behavior:"smooth"});
+}
+
+// === CSV EXPORT FUNCTIONS ===
+function downloadCSV(filename, csvContent){
+  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);
+  link.download=filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function escCSV(val){
+  const s=String(val||'').replace(/"/g,'""');
+  return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s}"`:s;
+}
+
+function exportHottestLeads(){
+  const byPhone={};
+  RECORDS.forEach(r=>{const ph=r.from||"unknown";if(!byPhone[ph])byPhone[ph]=[];byPhone[ph].push(r);});
+  const leads=Object.entries(byPhone).map(([ph,calls])=>{
+    const hot=calls.filter(c=>c.leadTemp==="Hot").length;
+    const warm=calls.filter(c=>c.leadTemp==="Warm").length;
+    const cold=calls.filter(c=>c.leadTemp==="Cold").length;
+    const frustrated=calls.filter(c=>c.frustrated).length;
+    const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
+    const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    const leadScore=Math.round((hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2);
+    const intents={};calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
+    const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
+    const lastCall=calls.sort((a,b)=>b.ts-a.ts)[0];
+    return{ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",lastCallTime:formatCallTime(lastCall),lastSummary:lastCall.summary};
+  }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
+  
+  let csv='Phone,Total Calls,Hot,Warm,Cold,Frustrated,Avg Confidence %,Avg Need Score,Total Duration (mins),Lead Score,Top Intent,Last Call Time,Last Summary\n';
+  leads.forEach(l=>{csv+=`${l.ph},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
+  downloadCSV('hottest_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
+function exportSerialEngagers(){
+  const serial=findSerialCallers(RECORDS);
+  let csv='Phone,Total Calls,Frustrated,General,Total Duration (mins),Total Cost (Rs),Last Call Time\n';
+  serial.forEach(s=>{
+    const lastCall=s.calls[0];
+    csv+=`${s.phone},${s.total},${s.frustrated},${s.general},${s.totalDur},${s.totalDur*5},${escCSV(formatCallTime(lastCall))}\n`;
+  });
+  downloadCSV('serial_engagers_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
+function exportCallbacks(){
+  const cbs=RECORDS.filter(r=>r.callback);
+  let csv='Phone,Call Time,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
+  cbs.sort((a,b)=>b.ts-a.ts).forEach(c=>{
+    const durMins=Math.round(c.dur/60*10)/10;
+    csv+=`${c.from},${escCSV(formatCallTime(c))},${durMins},${escCSV(c.intent)},${escCSV(c.cbReason)},${Math.round(c.conf)},${Math.round(c.need)},${escCSV(c.summary)}\n`;
+  });
+  downloadCSV('callback_requests_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
 
 </script>
