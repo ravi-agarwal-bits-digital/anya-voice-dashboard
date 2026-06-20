@@ -694,16 +694,16 @@ function paintCallbacks(recs){
         <div style="color:var(--muted);margin-bottom:4px">Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | ${c.cbReason}</div>
         ${c.summary?`<div style="color:#b0b8c4;line-height:1.5;border-top:1px solid #1a2332;padding-top:4px;margin-top:2px">📝 ${c.summary}</div>`:""}
       </div>`;
-    
-    const first4=calls.slice(0,4).map(renderCall).join("");
-    const rest=calls.slice(4).map(renderCall).join("");
-    const moreCount=calls.length>4?calls.length-4:0;
-    
+
+    const latest=calls[calls.length-1]; // most recent (calls sorted ASC so last = newest)
+    const rest=calls.slice(0,-1);       // everything except most recent
+    const moreCount=rest.length;
+
     const moreSection=moreCount>0?`
-      <div id="more_${phoneKey}" style="display:none">${rest}</div>
+      <div id="more_${phoneKey}" style="display:none">${rest.slice().reverse().map(renderCall).join("")}</div>
       <div onclick="const el=document.getElementById('more_${phoneKey}');const btn=document.getElementById('btn_${phoneKey}');if(el.style.display==='none'){el.style.display='block';btn.textContent='▲ Show less';}else{el.style.display='none';btn.textContent='▼ +${moreCount} more request${moreCount>1?'s':''}'}"
         id="btn_${phoneKey}"
-        style="padding:8px;color:var(--teal);font-size:10px;text-align:center;cursor:pointer;border-top:1px solid #1a2332;margin-top:4px;user-select:none">
+        style="padding:7px;color:var(--teal);font-size:10px;text-align:center;cursor:pointer;border-top:1px solid #1a2332;margin-top:4px;user-select:none;border-radius:4px">
         ▼ +${moreCount} more request${moreCount>1?"s":""}
       </div>`:"";
 
@@ -712,7 +712,7 @@ function paintCallbacks(recs){
         <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${ph}</b>
         <span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">${calls.length} callback${calls.length>1?"s":""}</span>
       </div>
-      ${first4}
+      ${renderCall(latest)}
       ${moreSection}
     </div>`;
   }).join("");
