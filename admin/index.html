@@ -257,7 +257,14 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
   try {
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(e.target.result)));
+      // Convert ArrayBuffer to base64 (handles large files)
+      const bytes = new Uint8Array(e.target.result);
+      let base64 = '';
+      for(let i = 0; i < bytes.length; i++){
+        base64 += String.fromCharCode(bytes[i]);
+      }
+      base64 = btoa(base64);
+      
       const filename = `voice_analytics_${new Date().toISOString().split('T')[0]}.xlsx`;
       const path = `data/${filename}`;
 
