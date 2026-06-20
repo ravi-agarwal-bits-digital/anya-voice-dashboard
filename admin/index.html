@@ -289,6 +289,34 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
       if (response.ok) {
         // Also upload as fixed filename for dashboard to load
         const dashboardPath = `data/voice_analytics.xlsx`;
+        
+        // First, try to get the SHA of existing file (if it exists)
+        let sha = null;
+        try {
+          const getResponse = await fetch(
+            `https://api.github.com/repos/${GITHUB_REPO}/contents/${dashboardPath}`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `token ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28'
+              }
+            }
+          );
+          if(getResponse.ok){
+            const data = await getResponse.json();
+            sha = data.sha;
+          }
+        } catch(e){}
+        
+        // Upload/update dashboard file
+        const body = {
+          message: `Update dashboard data`,
+          content: base64,
+          branch: GITHUB_BRANCH
+        };
+        if(sha) body.sha = sha;
+        
         await fetch(
           `https://api.github.com/repos/${GITHUB_REPO}/contents/${dashboardPath}`,
           {
@@ -298,11 +326,7 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
               'Content-Type': 'application/json',
               'X-GitHub-Api-Version': '2022-11-28'
             },
-            body: JSON.stringify({
-              message: `Update dashboard data`,
-              content: base64,
-              branch: GITHUB_BRANCH
-            })
+            body: JSON.stringify(body)
           }
         );
         
