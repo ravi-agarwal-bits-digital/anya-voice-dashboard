@@ -573,8 +573,9 @@ function rowToRecord(r){
     scheduledCB=Math.floor(defaultCB.getTime()/1000);
   }
   
-  // Use time as-is from Excel (already in IST)
-  const dateObj=dt?new Date(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h,dt.m,0):new Date();
+  // Create UTC date that represents IST time (IST = UTC+5:30)
+  // This way, when displayed with toLocaleString('en-IN'), it shows the correct IST time
+  const dateObj=dt?new Date(Date.UTC(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h-5,dt.m-30,0)):new Date();
   return{
     d:dt?dt.iso:null,h:dt?dt.h:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
     dur:Number(r["Duration (s)"])||0,msg:Number(r["Messages"])||0,
