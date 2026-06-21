@@ -212,21 +212,36 @@ async function doUpload(){
   }
 }
 
-async function uploadFile(path,content,token){
+async function uploadFile(path,content,token,_retry){
   try{
+    // Always fetch the FRESH current SHA (no cache) right before writing
     let sha=null;
-    const getResp=await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`,{
+    const getResp=await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}&t=${Date.now()}`,{
+      cache:'no-store',
       headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json'}
     });
     if(getResp.ok){const d=await getResp.json();sha=d.sha;}
+
     const body={message:`Update ${path.split('/')[1]} via admin`,content,branch:GITHUB_BRANCH};
     if(sha)body.sha=sha;
+
     const resp=await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,{
       method:'PUT',
       headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
       body:JSON.stringify(body)
     });
-    if(!resp.ok){const e=await resp.json().catch(()=>({}));return {ok:false,error:(e.message||resp.status+" "+resp.statusText)};}
+
+    if(!resp.ok){
+      const e=await resp.json().catch(()=>({}));
+      const msg=e.message||resp.status+" "+resp.statusText;
+      // SHA conflict (409/422 "does not match") — GitHub had a newer version.
+      // Re-fetch the fresh SHA and try once more.
+      if(!_retry && (resp.status===409 || resp.status===422 || /does not match|sha/i.test(msg))){
+        await new Promise(r=>setTimeout(r,600)); // let GitHub settle
+        return uploadFile(path,content,token,true);
+      }
+      return {ok:false,error:msg};
+    }
     return {ok:true};
   }catch(err){return {ok:false,error:err.message};}
 }
