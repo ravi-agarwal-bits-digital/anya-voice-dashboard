@@ -456,8 +456,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     <div class="panel">
       <div class="cap">Every call in the selected range. Search, sort, and click a row for the full profile.</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0">
-        <input type="text" id="explorerSearch" placeholder="🔍 Filter by number, intent, summary..." style="flex:1;min-width:200px;padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="renderExplorer()">
-        <select id="explorerSort" onchange="renderExplorer()" style="padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+        <input type="text" id="explorerSearch" placeholder="🔍 Filter by number, intent, summary..." style="flex:1;min-width:200px;padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="renderExplorer(true)">
+        <select id="explorerSort" onchange="renderExplorer(true)" style="padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
           <option value="time_desc">Newest first</option>
           <option value="time_asc">Oldest first</option>
           <option value="dur_desc">Longest duration</option>
@@ -465,7 +465,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <option value="conf_desc">Highest confidence</option>
           <option value="need_desc">Highest need</option>
         </select>
-        <select id="explorerFilter" onchange="renderExplorer()" style="padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+        <select id="explorerFilter" onchange="renderExplorer(true)" style="padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
           <option value="all">All calls</option>
           <option value="hot">Hot only</option>
           <option value="frustrated">Frustrated only</option>
@@ -703,9 +703,8 @@ function debouncedSearch(val){
 
 function searchUserByMobile(mobile){
   mobile=mobile.trim();
-  if(!mobile){closeUserSearch();return;}
-  // Require at least 4 digits to avoid matching everything on a single keystroke
-  if(mobile.length<4){closeUserSearch();return;}
+  // Hide results for empty/short input — but DON'T clear the input (user is still typing)
+  if(!mobile||mobile.length<4){$("userSearchResult").style.display="none";return;}
   
   const userCalls=ALL_RECORDS_BACKUP.filter(r=>String(r.from||"").includes(mobile)).sort((a,b)=>b.ts-a.ts);
   if(!userCalls.length){
@@ -1366,8 +1365,9 @@ function getExplorerRows(){
   return rows;
 }
 
-function renderExplorer(){
+function renderExplorer(resetLimit){
   if(!$("explorerList"))return;
+  if(resetLimit)EXPLORER_LIMIT=50;
   const rows=getExplorerRows();
   $("explorerCount").textContent=`${rows.length} call${rows.length!==1?'s':''}`;
   if(!rows.length){$("explorerList").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls match.</div>`;$("explorerMore").innerHTML="";return;}
