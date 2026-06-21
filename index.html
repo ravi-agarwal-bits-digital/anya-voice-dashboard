@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aanya Voice Bot Analytics</title>
+<meta name="robots" content="noindex, nofollow">
+<title>Aanya Voice Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,6 +16,7 @@ body{background:var(--ink);color:var(--cream);font-family:'IBM Plex Sans',sans-s
 body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;background:radial-gradient(38% 32% at 18% 12%,#1c3a4f4d,transparent 70%),radial-gradient(34% 28% at 86% 8%,#2a1f4a4d,transparent 70%),radial-gradient(44% 38% at 62% 92%,#10322c4d,transparent 70%);filter:blur(46px);animation:drift 26s ease-in-out infinite alternate}
 @keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-3%,2%) scale(1.07)}}
 @keyframes kpiPulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:0.8}100%{transform:scale(1);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
 .wrap{max-width:1200px;margin:0 auto;padding:0 32px 90px}
 #uploadView{display:none !important;visibility:hidden !important;pointer-events:none !important;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
 .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
@@ -26,13 +28,7 @@ body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none
 .drop b{font-size:18px;display:block;margin-bottom:6px;font-family:'Fraunces',serif;font-weight:600}
 #reportView{display:none}
 header{padding:44px 0 22px}
-.htop{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:20px}
 header h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(28px,4vw,46px);line-height:1.02;letter-spacing:-1px}
-.meta{display:flex;gap:24px;margin-top:14px;flex-wrap:wrap}
-.meta div{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--faint)}
-.meta b{color:var(--cream);font-weight:500}
-.reload{background:var(--panel2);border:1px solid var(--line);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:10px 16px;border-radius:9px;cursor:pointer;transition:.15s}
-.reload:hover{border-color:var(--teal);color:var(--teal);transform:translateY(-1px)}
 section{margin:46px 0}
 .shead{display:flex;align-items:baseline;gap:14px;margin-bottom:22px}
 .shead h2{font-family:'Fraunces',serif;font-size:25px;font-weight:600;letter-spacing:-.3px}
@@ -65,8 +61,6 @@ section{margin:46px 0}
 .fstep .fn{font-family:'Fraunces',serif;font-size:28px;font-weight:900}
 .fstep .ft{margin-left:14px;font-size:13px;font-weight:600}
 .fstep .fp{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;opacity:.7}
-.dropl{display:flex;justify-content:flex-end;padding-right:14px}
-.dropl span{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--coral)}
 .bar{margin-bottom:15px}
 .bar .top{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px}
 .bar .top b{font-family:'IBM Plex Mono',monospace;color:var(--cream)}
@@ -81,37 +75,172 @@ section{margin:46px 0}
 .intitem:last-child{border:none}
 .intitem .in{flex:1;color:var(--cream)}
 .intitem .ct{font-family:'IBM Plex Mono',monospace;color:var(--teal);font-weight:600;min-width:40px;text-align:right}
-.calc{display:grid;grid-template-columns:1fr 1.05fr;gap:26px}
-.calcin label{display:block;font-size:13px;color:var(--cream);margin:13px 0 7px;font-weight:500}
-.calcin input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--cream);padding:10px 12px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:14px}
-.calcout{background:linear-gradient(150deg,#12241f,#0f1a16);border:1px solid #2a4a40;border-radius:14px;padding:24px}
-.calcout .big{font-family:'Fraunces',serif;font-size:42px;font-weight:900;color:var(--teal);line-height:1;letter-spacing:-1.5px}
-.calcout .row{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid #ffffff12;font-size:14px}
-.calcout .row span{color:var(--muted)}.calcout .row b{font-family:'IBM Plex Mono',monospace;color:var(--cream)}
 footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint);line-height:1.7}
 footer b{color:var(--muted)}
 @media(max-width:860px){.wrap{padding:0 16px 60px}.strip{grid-template-columns:repeat(2,1fr)}.grid2,.grid3{grid-template-columns:1fr}.hero{grid-template-columns:1fr;text-align:center}.calc{grid-template-columns:1fr}}
-.cblist{max-height:600px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
-.cblist::-webkit-scrollbar{width:8px}.cblist::-webkit-scrollbar-thumb{background:#26303f;border-radius:4px}
-.cbitem{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:center;font-size:13.5px}
-.cbitem:hover{background:#0f1620}
-.cbitem:last-child{border:none}
-.cbitem .cid{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);word-break:break-all;max-width:120px}
-.cbitem .cint{font-weight:600;color:var(--cream);flex:1}
-.cbitem .cmet{display:flex;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)}
-.cbitem .cbadge{background:var(--hot);color:#fff;padding:3px 8px;border-radius:5px;font-weight:600;font-size:11px}
 .cbfilt{border:1px solid var(--line);padding:6px 12px;border-radius:6px;background:#0f1620;color:var(--teal);cursor:pointer;font-size:12px;font-family:'IBM Plex Mono',monospace;transition:.15s}
 .cbfilt:hover,.cbfilt.on{border-color:var(--teal);background:linear-gradient(135deg,#1c3a34,#16302b);font-weight:600}
 .cbempty{padding:40px 20px;text-align:center;color:var(--faint);font-family:'IBM Plex Mono',monospace;font-size:12.5px}
+#loginGate{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0a0f15,#1a1f2e);font-family:'IBM Plex Sans',sans-serif}
+#loginGate .card{text-align:center;max-width:380px;padding:40px;background:#0f1620;border:1px solid rgba(0,212,170,0.2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+#loginGate .card h1{font-size:20px;font-weight:800;color:#e8e8e8;margin:16px 0 6px}
+#loginGate .card p{font-size:12px;color:#7a8a9a;margin-bottom:24px}
+#loginGate input[type="password"]{width:100%;padding:10px 14px;background:#0a0f15;border:1px solid #1a3a3a;border-radius:6px;color:#e8e8e8;font-size:13px;margin-bottom:12px}
+#loginGate button.pwd-btn{width:100%;padding:10px;background:var(--teal);color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px}
+#loginGate .err-msg{color:#ff5555;font-size:11px;margin-top:8px}
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- ===== LOGIN GATE ===== -->
+<div id="loginGate">
+  <div class="card">
+    <div style="width:44px;height:44px;background:linear-gradient(135deg,#00d4aa,#4ec9b0);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:22px;margin:0 auto">B</div>
+    <h1>Aanya Voice Analytics</h1>
+    <p>BITS Pilani Digital — Authorized access only</p>
+
+    <input type="password" id="loginPassword" placeholder="Enter access password..." onkeyup="if(event.key==='Enter')checkPassword()">
+    <button class="pwd-btn" onclick="checkPassword()">🔓 Unlock Dashboard</button>
+    <div id="loginError" class="err-msg"></div>
+  </div>
+</div>
+
+<script>
+// ===== SECURITY CONFIG =====
+const SECURITY = {
+  // SHA-256 hash of password "Aanya@Voice-2026!BPD" — change by hashing your own (see sha256 fn below)
+  PASSWORD_HASH: "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a",
+  // Session timeout in minutes
+  SESSION_TIMEOUT_MINS: 30,
+  // Mask phone numbers in display (full numbers in CSV export)
+  MASK_PHONES: true
+};
+
+// Generate SHA-256 hash
+async function sha256(text){
+  const encoder=new TextEncoder();
+  const data=encoder.encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Password login
+async function checkPassword(){
+  const pwd=document.getElementById('loginPassword').value;
+  if(!pwd){document.getElementById('loginError').textContent='Please enter a password.';return;}
+  
+  const hash=await sha256(pwd);
+  // For first-time setup: console.log the hash and put it in SECURITY.PASSWORD_HASH
+  // console.log('Password hash:',hash);
+  
+  if(hash===SECURITY.PASSWORD_HASH){
+    sessionStorage.setItem('auth_user','password_user');
+    sessionStorage.setItem('auth_time',Date.now().toString());
+    sessionStorage.setItem('auth_method','password');
+    unlockDashboard('password_user');
+  } else {
+    document.getElementById('loginError').textContent='❌ Incorrect password.';
+    document.getElementById('loginPassword').value='';
+  }
+}
+
+// Unlock dashboard
+function unlockDashboard(user){
+  document.getElementById('loginGate').style.display='none';
+  document.getElementById('dashboardContent').style.display='block';
+  startSessionTimer();
+  // Load data only after auth (gated), and only once per session
+  if(!window.DATA_LOADED){
+    autoLoadLatestExcel();
+  }
+}
+
+// Session timeout
+let sessionTimer;
+function startSessionTimer(){
+  clearInterval(sessionTimer);
+  const timeout=SECURITY.SESSION_TIMEOUT_MINS*60*1000;
+  
+  // Reset timer on any interaction
+  const resetTimer=()=>{sessionStorage.setItem('auth_time',Date.now().toString());};
+  ['click','keydown','scroll','mousemove'].forEach(e=>document.addEventListener(e,resetTimer,{passive:true}));
+  
+  sessionTimer=setInterval(()=>{
+    const authTime=Number(sessionStorage.getItem('auth_time')||0);
+    if(Date.now()-authTime>timeout){
+      lockDashboard();
+    }
+  },30000); // check every 30s
+}
+
+function lockDashboard(){
+  clearInterval(sessionTimer);
+  sessionStorage.clear();
+  document.getElementById('loginGate').style.display='flex';
+  document.getElementById('dashboardContent').style.display='none';
+  document.getElementById('loginError').textContent='⏱️ Session expired. Please log in again.';
+}
+
+// Phone masking
+function maskPhone(phone){
+  if(!SECURITY.MASK_PHONES)return phone;
+  const p=String(phone||'');
+  if(p.length<6)return p;
+  return p.slice(0,4)+'****'+p.slice(-2);
+}
+
+// Check existing session on load
+function checkExistingSession(){
+  const authTime=Number(sessionStorage.getItem('auth_time')||0);
+  const authUser=sessionStorage.getItem('auth_user');
+  const timeout=SECURITY.SESSION_TIMEOUT_MINS*60*1000;
+  
+  if(authUser && (Date.now()-authTime)<timeout){
+    unlockDashboard(authUser);
+    return true;
+  }
+  return false;
+}
+
+// Init: check session after full page load (both script blocks parsed)
+window.addEventListener('DOMContentLoaded',()=>{
+  checkExistingSession();
+});
+</script>
+
+<!-- ===== DASHBOARD CONTENT (hidden until auth) ===== -->
+<div id="dashboardContent" style="display:none">
+
+<!-- Loading state -->
+<div id="dataLoading" style="display:none;align-items:center;justify-content:center;min-height:80vh;flex-direction:column;text-align:center">
+  <div style="width:48px;height:48px;border:4px solid rgba(0,212,170,0.2);border-top-color:#00d4aa;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <p style="margin-top:20px;color:#7a8a9a;font-size:14px">Loading latest data…</p>
+</div>
+
+<!-- No-data placeholder (swaps in safely, does NOT destroy the page) -->
+<div id="dataPlaceholder" style="display:none;align-items:center;justify-content:center;min-height:80vh;padding:20px">
+  <div style="text-align:center;color:#e8e8e8;max-width:400px">
+    <div style="font-size:64px;margin-bottom:20px">📁</div>
+    <h1 style="font-size:28px;margin-bottom:12px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">No Data Yet</h1>
+    <p style="font-size:14px;color:#999;line-height:1.8">
+      Admin has not published any data yet.<br><br>
+      Once the first Excel file is uploaded, the dashboard will automatically load with the latest data.
+    </p>
+    <div style="margin-top:30px;padding:20px;background:#0f1620;border:1px solid #1a3050;border-radius:8px;font-size:12px;color:#999">
+      <p style="margin-bottom:8px">✓ Dashboard checks for latest data on each load</p>
+      <p style="margin-bottom:8px">✓ Admin uploads = data appears on next refresh</p>
+      <p>✓ Always shows the most recent Excel file</p>
+    </div>
+    <button onclick="retryDataLoad()" style="margin-top:30px;padding:12px 24px;background:#00d4aa;color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">🔄 Check Again</button>
+  </div>
+</div>
+
+<div class="wrap" id="mainWrap">
 
 <div id="uploadView" style="display:none !important;visibility:hidden !important;pointer-events:none !important">
-  <div class="tag">BITS Pilani Digital · Voice Bot Analytics</div>
+  <div class="tag">BITS Pilani Digital · Aanya Voice Analytics</div>
   <h1>Aanya Voice <em>Intelligence</em></h1>
-  <p class="lead">Drop in the voice call export and explore call quality, lead temperature, bot performance, and revenue impact. Everything runs in your browser; nothing is uploaded.</p>
+  <p class="lead">Drop in the voice call export and explore call quality, lead temperature, Aanya's performance, and revenue impact. Everything runs in your browser; nothing is uploaded.</p>
   <div class="drop" id="dropZone">
     <div style="font-size:42px;margin-bottom:14px">🎙️</div>
     <b>Drop the Voice Export here</b>
@@ -199,12 +328,12 @@ footer b{color:var(--muted)}
   <section><div class="shead"><span class="n">01</span><h2>Lead temperature funnel</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Lead pipeline</h4><div class="cap">Hot → Warm → Cold. What share of calls generate real interest?</div><div class="funnel" id="funnel"></div></div>
-      <div class="panel"><h4>Call quality by temperature</h4><div class="cap">Avg bot confidence, need score, and review band for each tier.</div><div id="tempQual"></div></div>
+      <div class="panel"><h4>Call quality by temperature</h4><div class="cap">Avg Aanya confidence, need score, and review band for each tier.</div><div id="tempQual"></div></div>
     </div></section>
 
-  <section><div class="shead"><span class="n">02</span><h2>Bot performance metrics</h2></div>
+  <section><div class="shead"><span class="n">02</span><h2>Aanya performance metrics</h2></div>
     <div class="grid3">
-      <div class="panel"><h4>Bot confidence distribution</h4><div class="cap">Calls grouped by how confident the bot was in its answers.</div><div id="confDist"></div></div>
+      <div class="panel"><h4>Aanya confidence distribution</h4><div class="cap">Calls grouped by how confident Aanya was in its answers.</div><div id="confDist"></div></div>
       <div class="panel"><h4>Call outcomes by confidence</h4><div class="cap">Do high-confidence calls convert to hot leads?</div><div id="confImpact"></div></div>
     </div></section>
 
@@ -219,7 +348,7 @@ footer b{color:var(--muted)}
 
   <section><div class="shead"><span class="n">05</span><h2>Call efficiency & duration</h2></div>
     <div class="grid2">
-      <div class="panel"><h4>Calls by duration</h4><div class="cap">Where do most calls land? Shorter = bot resolved it; longer = escalation/interest.</div><div id="durBands"></div></div>
+      <div class="panel"><h4>Calls by duration</h4><div class="cap">Where do most calls land? Shorter = Aanya resolved it; longer = escalation/interest.</div><div id="durBands"></div></div>
       <div class="panel"><h4>Quality by messages exchanged</h4><div class="cap">Do longer conversations lead to hotter leads?</div><div id="msgImpact"></div></div>
     </div></section>
 
@@ -270,14 +399,16 @@ fi.onchange=e=>{if(e.target.files[0])handle(e.target.files[0]);};
 dz.addEventListener("drop",e=>{if(e.dataTransfer.files[0])handle(e.dataTransfer.files[0]);});
 if($("reloadBtn"))$("reloadBtn").onclick=()=>{$("reportView").style.display="none";$("uploadView").style.display="flex";$("err").textContent="";fi.value="";};
 
-// Auto-load latest Excel from data folder on page load
-window.addEventListener('load', ()=>{
-  autoLoadLatestExcel();
-});
+// NOTE: Data loads only AFTER successful auth — see unlockDashboard() → autoLoadLatestExcel()
+window.DATA_LOADED=false;
 
 function autoLoadLatestExcel(){
-  // Load the fixed filename that admin page saves
-  fetch('data/voice_analytics.xlsx')
+  // Show loading, hide others
+  $("dataLoading").style.display="flex";
+  $("dataPlaceholder").style.display="none";
+  $("mainWrap").style.display="none";
+
+  fetch('data/voice_analytics.xlsx',{cache:'no-store'})
     .then(r=>{
       if(r.ok)return r.blob();
       throw new Error('File not found');
@@ -287,27 +418,18 @@ function autoLoadLatestExcel(){
       handle(file);
     })
     .catch(err=>{
-      // File not found - show placeholder
-      document.body.innerHTML=`
-        <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0a0f15,#1a1f2e);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:20px">
-          <div style="text-align:center;color:#e8e8e8;max-width:400px">
-            <div style="font-size:64px;margin-bottom:20px">📁</div>
-            <h1 style="font-size:28px;margin-bottom:12px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">No Data Yet</h1>
-            <p style="font-size:14px;color:#999;line-height:1.8">
-              Admin has not published any data yet.<br><br>
-              Once the first Excel file is uploaded, the dashboard will automatically load and refresh with latest data.
-            </p>
-            <div style="margin-top:30px;padding:20px;background:#0f1620;border:1px solid #1a3050;border-radius:8px;font-size:12px;color:#999">
-              <p style="margin-bottom:8px">✓ Dashboard checks for latest data every page load</p>
-              <p style="margin-bottom:8px">✓ Admin uploads = Data appears instantly</p>
-              <p>✓ Always shows most recent Excel file</p>
-            </div>
-            <button onclick="location.reload()" style="margin-top:30px;padding:12px 24px;background:#00d4aa;color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">🔄 Check Again</button>
-          </div>
-        </div>
-      `;
+      // Safe placeholder swap — does NOT destroy the page
+      $("dataLoading").style.display="none";
+      $("mainWrap").style.display="none";
+      $("dataPlaceholder").style.display="flex";
     });
-}function handle(file){
+}
+
+function retryDataLoad(){
+  window.DATA_LOADED=false;
+  autoLoadLatestExcel();
+}
+function handle(file){
   $("err").textContent="";
   if(typeof XLSX==="undefined"){$("err").textContent="❌ Spreadsheet engine didn't load — check your connection and refresh.";return;}
   const rd=new FileReader();
@@ -401,7 +523,11 @@ function applyFilters(){
     return true;
   });
   
-  RECORDS=FILTERED_RECORDS.length>0?FILTERED_RECORDS:ALL_RECORDS_BACKUP;
+  RECORDS=FILTERED_RECORDS;
+  // Honest empty-state: if filter yields zero, tell the user instead of silently showing everything
+  if(RECORDS.length===0){
+    $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)">⚠️ <b>No calls in selected range</b></div>`;
+  }
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
   
@@ -455,7 +581,7 @@ function searchUserByMobile(mobile){
   const engagementScore=userCalls.length*2+frustrated*3+avgNeed*0.5;
   const engagement=engagementScore>20?"🔥 Very High":engagementScore>12?"🟠 High":"Normal";
   
-  $("userSearchPhone").innerHTML=`<span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">${userCalls[0].from}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${leadEmoji} ${leadType}</span>`;
+  $("userSearchPhone").innerHTML=`<span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">${maskPhone(userCalls[0].from)}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${leadEmoji} ${leadType}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:11px">
       <div><b>Calls:</b> ${userCalls.length} (😤${frustrated} • ✓${general})</div>
@@ -587,8 +713,8 @@ function rowToRecord(r){
   const intent=intentOf(trans);
   const callbackReq=/callback|call me|call back|please call|ring me|ring back|contact me|get back|follow.{0,5}up/i.test(trans);
   const need=Number(r["Need Score"])||0;
-  // Frustrated = has frustration keywords OR has unresolved callback request
-  const frustrated=/frustrat|angry|upset|waiting|waited|promised|multiple.*time|call.*back.*not|no.*response|problem/i.test(trans)||(callbackReq && need>50);
+  // Frustrated = genuine negative-sentiment signals only (NOT callbacks — wanting a callback ≠ being upset)
+  const frustrated=/frustrat|angry|upset|annoyed|waited|promised.*not|multiple.*time|already.*called|no.*response|not.*working|disappoint|useless|terrible|worst|complaint/i.test(trans);
   
   // Extract callback reason from transcript
   let cbReason="Follow-up needed";
@@ -600,36 +726,14 @@ function rowToRecord(r){
   else if(/technical|audio|connection|quality|issue/.test(trans))cbReason="Technical support";
   else if(/eligib|qualify|require/.test(trans))cbReason="Eligibility check";
   
-  // Extract scheduled callback time from transcript
-  let scheduledCB=null;
-  const tmMatch=trans.match(/(?:call|callback|ring|contact).*?(?:today|tomorrow|morning|afternoon|evening|next day|after|later|at\s+(\d{1,2}(?::?\d{2})?))/i);
-  const dayMatch=trans.match(/(tomorrow|next day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|in\s+(\d+)\s+(?:hours?|days?))/i);
-  if(dayMatch||tmMatch){
-    const callDateObj=dt?new Date(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h,dt.m,0):new Date();
-    if(/tomorrow|next\s+day/.test(trans)){callDateObj.setDate(callDateObj.getDate()+1);callDateObj.setHours(10,0,0,0);}
-    else if(/in\s+(\d+)\s+hours?/.test(trans)){const h=parseInt(trans.match(/in\s+(\d+)\s+hours?/)[1]);callDateObj.setHours(callDateObj.getHours()+h);}
-    else if(/in\s+(\d+)\s+days?/.test(trans)){const d=parseInt(trans.match(/in\s+(\d+)\s+days?/)[1]);callDateObj.setDate(callDateObj.getDate()+d);callDateObj.setHours(10,0,0,0);}
-    else if(/morning|early/.test(trans)){callDateObj.setHours(9,30,0,0);}
-    else if(/afternoon/.test(trans)){callDateObj.setHours(14,0,0,0);}
-    else if(/evening/.test(trans)){callDateObj.setHours(18,0,0,0);}
-    else{callDateObj.setDate(callDateObj.getDate()+1);callDateObj.setHours(10,0,0,0);}
-    scheduledCB=Math.floor(callDateObj.getTime()/1000);
-  }else{
-    // Default: suggest callback next business day at 10 AM
-    const defaultCB=new Date(dt?new Date(`${dt.iso}T${String(dt.h).padStart(2,"0")}:00:00Z`):new Date());
-    defaultCB.setDate(defaultCB.getDate()+1);defaultCB.setHours(10,0,0,0);
-    scheduledCB=Math.floor(defaultCB.getTime()/1000);
-  }
-  
   // Create date object from IST values (h, m are already IST)
-  // This way timestamps are correct, and when formatted with IST timezone, show correctly
   const dateObj=dt?new Date(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h,dt.m,0):new Date();
   return{
     d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
     dur:Number(r["Duration (s)"])||0,msg:Number(r["Messages"])||0,
     status:String(r["Status"]||"").toLowerCase(),leadTemp:String(r["Lead Temp."]||"").trim(),
     conf:Number(r["Bot Conf."])||0,need,
-    band:String(r["Review Band"]||"").trim(),intent,callback:callbackReq,cbReason,scheduledCB,frustrated,summary,
+    band:String(r["Review Band"]||"").trim(),intent,callback:callbackReq,cbReason,frustrated,summary,
     from:String(r["From"]||"unknown"),trans
   };
 }
@@ -654,13 +758,14 @@ function aggregate(recs){
     if(r.leadTemp in confQual){confQual[r.leadTemp].conf+=r.conf;confQual[r.leadTemp].need+=r.need;confQual[r.leadTemp].n++;}
     if(r.msg<5)msgQual[0].push(r.leadTemp);else if(r.msg<=20)msgQual[1].push(r.leadTemp);else msgQual[2].push(r.leadTemp);
   });
-  o.avgConf/=o.n;o.avgNeed/=o.n;
+  o.avgConf=o.n?o.avgConf/o.n:0;o.avgNeed=o.n?o.avgNeed/o.n:0;
   o.confQual=confQual;
-  o.msgQual=msgQual.map(m=>{const h=(m.filter(x=>x==="Hot").length/m.length)*100||0;return{hot:h,n:m.length};});
+  o.msgQual=msgQual.map(m=>{const h=m.length?(m.filter(x=>x==="Hot").length/m.length)*100:0;return{hot:h,n:m.length};});
   return o;
 }
 
 function healthScore(o){
+  if(!o.n)return 0;
   const hotPct=(o.hot/o.n)*100,confPct=o.avgConf,greenPct=(o.green/o.n)*100;
   return Math.round(.4*hotPct+.3*confPct+.3*greenPct);
 }
@@ -668,9 +773,9 @@ function healthScore(o){
 function gradeOf(s){
   if(s>=80)return["A",C.green,"Excellent — calls convert to hot leads, high confidence, quality holds."];
   if(s>=70)return["B",C.teal,"Strong — solid conversion to hot leads with good QA."];
-  if(s>=60)return["C",C.gold,"Mixed — decent bot confidence but conversion could improve."];
-  if(s>=50)return["D",C.amber,"Needs work — bot confidence is decent but lead capture is weak."];
-  return["F",C.coral,"Critical — low conversion or bot confidence issues."];
+  if(s>=60)return["C",C.gold,"Mixed — decent Aanya confidence but conversion could improve."];
+  if(s>=50)return["D",C.amber,"Needs work — Aanya confidence is decent but lead capture is weak."];
+  return["F",C.coral,"Critical — low conversion or Aanya confidence issues."];
 }
 
 let CB_FILTER="all";
@@ -681,12 +786,7 @@ function paintCallbacks(recs){
   if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=`<div class="cbempty">No callback requests detected in this range.<br>When callers ask for callbacks, they'll appear here.</div>`;cbFilters.innerHTML="";return;}
   
   // Group by phone number
-  const byPhone={};
-  cbs.forEach(r=>{
-    const ph=r.from||"unknown";
-    if(!byPhone[ph])byPhone[ph]=[];
-    byPhone[ph].push(r);
-  });
+  const byPhone=groupByPhone(cbs);
   
   // Apply intent filter
   const intents=new Set(cbs.map(r=>r.intent));
@@ -733,7 +833,7 @@ function paintCallbacks(recs){
     return`<div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:16px">
-          <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${ph}</b>
+          <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${maskPhone(ph)}</b>
           <span style="font-size:10px;color:var(--teal);font-weight:600">⏳ ${totalDur} mins</span>
         </div>
         <span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">${calls.length} callback${calls.length>1?"s":""}</span>
@@ -746,6 +846,10 @@ function paintCallbacks(recs){
 
 function boot(){
   if(!RECORDS.length){$("err").textContent="❌ No valid call records found. Check your file format.";return;}
+  window.DATA_LOADED=true;
+  $("dataLoading").style.display="none";
+  $("dataPlaceholder").style.display="none";
+  $("mainWrap").style.display="block";
   $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);
   const datesAll=RECORDS.map(r=>r.d).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
   
@@ -765,7 +869,7 @@ function boot(){
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
   paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
-  $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Bot Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
+  $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Aanya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
 
 function paintHealth(o){
@@ -776,23 +880,24 @@ function paintHealth(o){
     <circle cx="85" cy="85" r="${R}" fill="none" stroke="${col}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${val}" style="transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1)"/></g>
     <text x="85" y="83" text-anchor="middle" fill="${C.cream}" font-family="Fraunces" font-size="42" font-weight="900">${s}</text>
     <text x="85" y="105" text-anchor="middle" fill="${C.muted}" font-family="IBM Plex Mono" font-size="10">CALL QUALITY</text></svg>`;
-  $("heroText").innerHTML=`<h3>Call Quality Score</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:500px;margin-top:8px">Blends hot-lead conversion (${Math.round(o.hot/o.n*100)}%), bot confidence (${Math.round(o.avgConf)}%), and QA pass rate (${Math.round(o.green/o.n*100)}%).</p>`;
+  $("heroText").innerHTML=`<h3>Call Quality Score</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:500px;margin-top:8px">Blends hot-lead conversion (${o.n?Math.round(o.hot/o.n*100):0}%), Aanya confidence (${Math.round(o.avgConf)}%), and QA pass rate (${o.n?Math.round(o.green/o.n*100):0}%).</p>`;
 }
 
 function paintKPIs(o){
-  const pct=a=>Math.round(a/o.n*100);
+  const pct=a=>o.n?Math.round(a/o.n*100):0;
   const totalMins=Math.round(o.totalDur/60);
   const totalCost=totalMins*5;
-  const avgDurMins=Math.floor(o.totalDur/o.n/60);
-  const avgDurSecs=Math.round((o.totalDur/o.n)%60);
+  const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
+  const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
+  const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
   const cards=[
     ["neut",o.n,"Total calls",""],
     ["hot",totalMins+" mins","Total duration",""],
     ["hot","₹"+totalCost,"Total cost (@₹5/min)",""],
     ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")",""],
-    ["good",Math.round(o.avgConf)+"%","Avg bot confidence",""],
+    ["good",Math.round(o.avgConf)+"%","Avg Aanya confidence",""],
     ["good",avgDurMins+"m "+avgDurSecs+"s","Avg call duration",""],
-    ["neut",Math.round(o.totalMsg/o.n),"Avg messages per call",""],
+    ["neut",avgMsg,"Avg messages per call",""],
     ["good",pct(o.green)+"%","Quality pass rate (Green)",""]
   ];
   $("kpis").innerHTML=cards.map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
@@ -893,13 +998,19 @@ function paintFrustCost(o){
   $("frustCost").innerHTML=`<div style="font-size:32px;font-weight:900;color:var(--hot);margin-bottom:12px">₹${frustCost}</div><div style="font-size:12px;color:var(--muted);line-height:1.6"><b>${Math.round(frustMinutes)} minutes</b> of frustrated calls<br>${frustrated.length} calls × avg ${Math.round(frustrated[0]?.dur||0)}s<br><br><span style="color:var(--faint)">At ₹5/min cost</span></div>`;
 }
 
-function findSerialCallers(records){
+// Shared helper: group records by phone number (built once, reused by all sections)
+function groupByPhone(records){
   const byPhone={};
   records.forEach(r=>{
     const ph=r.from||"unknown";
     if(!byPhone[ph])byPhone[ph]=[];
     byPhone[ph].push(r);
   });
+  return byPhone;
+}
+
+function findSerialCallers(records){
+  const byPhone=groupByPhone(records);
   const serial=Object.entries(byPhone).map(([ph,calls])=>{
     const frustrated=calls.filter(c=>c.frustrated);
     const general=calls.filter(c=>!c.frustrated);
@@ -910,12 +1021,7 @@ function findSerialCallers(records){
 }
 
 function paintHottestLeads(records){
-  const byPhone={};
-  records.forEach(r=>{
-    const ph=r.from||"unknown";
-    if(!byPhone[ph])byPhone[ph]=[];
-    byPhone[ph].push(r);
-  });
+  const byPhone=groupByPhone(records);
   
   const leads=Object.entries(byPhone).map(([ph,calls])=>{
     const hot=calls.filter(c=>c.leadTemp==="Hot").length;
@@ -945,7 +1051,7 @@ function paintHottestLeads(records){
     
     return`<div style="padding:14px;background:#0c1218;border-radius:8px;border:1px solid var(--line);cursor:pointer;transition:.2s" onclick="document.getElementById('searchMobile').value='${l.phone}';searchUserByMobile('${l.phone}');document.querySelector('.wrap').scrollIntoView({behavior:'smooth'})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-        <b style="font-family:'IBM Plex Mono',monospace;font-size:12px">${l.phone}</b>
+        <b style="font-family:'IBM Plex Mono',monospace;font-size:12px">${maskPhone(l.phone)}</b>
         <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
@@ -969,7 +1075,7 @@ function paintSerialCallers(records){
   $("serialCallers").innerHTML=serial.map((s,i)=>`
     <div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="showSerialTimeline(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-        <b style="font-family:'IBM Plex Mono',monospace;font-size:13px">${s.phone}</b>
+        <b style="font-family:'IBM Plex Mono',monospace;font-size:13px">${maskPhone(s.phone)}</b>
         <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">🔥 ${s.total} calls</span>
       </div>
       <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
@@ -985,7 +1091,7 @@ function paintSerialCallers(records){
 
 function showSerialTimeline(idx){
   const s=window.SERIAL_CALLERS[idx];
-  $("timelineLabel").textContent=s.phone;
+  $("timelineLabel").textContent=maskPhone(s.phone);
   $("timelineMeta").innerHTML=`<span style="font-size:12px">🔥 ${s.total} calls • <b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated • <b style="color:var(--green)">✓ ${s.general}</b> general • <b style="color:var(--teal)">⏳ ${s.totalDur} mins</b> | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</span>`;
   $("timeline").innerHTML=s.calls.map((c,i)=>{
     const date=formatCallTimeWithWeekday(c);
@@ -1023,8 +1129,7 @@ function escCSV(val){
 }
 
 function exportHottestLeads(){
-  const byPhone={};
-  RECORDS.forEach(r=>{const ph=r.from||"unknown";if(!byPhone[ph])byPhone[ph]=[];byPhone[ph].push(r);});
+  const byPhone=groupByPhone(RECORDS);
   const leads=Object.entries(byPhone).map(([ph,calls])=>{
     const hot=calls.filter(c=>c.leadTemp==="Hot").length;
     const warm=calls.filter(c=>c.leadTemp==="Warm").length;
@@ -1066,5 +1171,6 @@ function exportCallbacks(){
 }
 
 </script>
+</div><!-- /dashboardContent -->
 </body>
 </html>
