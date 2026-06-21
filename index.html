@@ -447,8 +447,6 @@ let FILTERED_RECORDS=[];
 let ALL_RECORDS_BACKUP=[];
 
 function quickFilter(type){
-  // Anchor to the LATEST date in the data, not the browser's clock —
-  // the data may be historical, so "today/this week" must mean relative to the dataset.
   const dataMin=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort()[0]:null;
   const dataMax=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort().slice(-1)[0]:null;
   if(!dataMax){return;}
@@ -456,15 +454,16 @@ function quickFilter(type){
   const parseISO=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);};
   const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
-  const anchor=parseISO(dataMax); // "today" = latest data day
-  let from=new Date(anchor),to=new Date(anchor);
+  // Real calendar "now" — quick ranges are relative to the actual current date.
+  // If a range has no data (e.g. Today but data ends earlier), the empty-state shows honestly.
+  const today=new Date();today.setHours(0,0,0,0);
+  let from=new Date(today),to=new Date(today);
 
   switch(type){
     case 'today':break;
     case 'yesterday':from.setDate(from.getDate()-1);to.setDate(to.getDate()-1);break;
-    case 'week':from.setDate(from.getDate()-6);break;        // last 7 days of data
-    case 'month':from.setDate(from.getDate()-29);break;      // last 30 days of data
-    case 'ytd':from=new Date(anchor.getFullYear(),0,1);break;
+    case 'week':from.setDate(from.getDate()-6);break;        // last 7 calendar days
+    case 'month':from.setDate(from.getDate()-29);break;      // last 30 calendar days
     case 'all':from=parseISO(dataMin);to=parseISO(dataMax);break;
   }
 
@@ -805,7 +804,7 @@ function gradeOf(s){
   return["F",C.coral,"Critical — low conversion or Aanya confidence issues."];
 }
 
-let CB_FILTER="all";
+let CB_FILTERS=new Set(); // empty = show all; otherwise show only selected intents
 function paintCallbacks(recs){
   const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
@@ -815,15 +814,26 @@ function paintCallbacks(recs){
   // Group by phone number
   const byPhone=groupByPhone(cbs);
   
-  // Apply intent filter
-  const intents=new Set(cbs.map(r=>r.intent));
-  cbFilters.innerHTML=[...intents].sort().map(i=>`<button class="cbfilt ${CB_FILTER==="all"||CB_FILTER===i?"on":""}" data-filt="${i}">${i}</button>`).join("");
-  document.querySelectorAll(".cbfilt").forEach(b=>b.onclick=()=>{CB_FILTER=b.dataset.filt;paintCallbacks(recs);});
+  // Build multi-select intent filter chips (All + each intent)
+  const intents=[...new Set(cbs.map(r=>r.intent))].sort();
+  const showAll=CB_FILTERS.size===0;
+  const allChip=`<button class="cbfilt ${showAll?"on":""}" data-filt="__all__">All</button>`;
+  const intentChips=intents.map(i=>`<button class="cbfilt ${CB_FILTERS.has(i)?"on":""}" data-filt="${esc(i)}">${esc(i)}</button>`).join("");
+  cbFilters.innerHTML=allChip+intentChips;
+  document.querySelectorAll(".cbfilt").forEach(b=>b.onclick=()=>{
+    const f=b.dataset.filt;
+    if(f==="__all__"){
+      CB_FILTERS.clear(); // reset to show everything
+    }else{
+      if(CB_FILTERS.has(f))CB_FILTERS.delete(f);else CB_FILTERS.add(f); // toggle this intent
+    }
+    paintCallbacks(recs);
+  });
   
-  // Filter and sort
+  // Filter and sort — empty set = all, otherwise match any selected intent
   const filtered={};
   Object.entries(byPhone).forEach(([ph,calls])=>{
-    const filtered_calls=CB_FILTER==="all"?calls:calls.filter(r=>r.intent===CB_FILTER);
+    const filtered_calls=CB_FILTERS.size===0?calls:calls.filter(r=>CB_FILTERS.has(r.intent));
     if(filtered_calls.length>0){
       filtered[ph]=filtered_calls.sort((a,b)=>a.ts-b.ts);
     }
