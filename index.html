@@ -275,6 +275,16 @@ window.addEventListener('DOMContentLoaded',()=>{
 <!-- ===== DASHBOARD CONTENT (hidden until auth) ===== -->
 <div id="dashboardContent" style="display:none">
 
+<!-- KPI drill-down sidebar -->
+<div id="kpiOverlay" onclick="closeKpiPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200"></div>
+<div id="kpiPanel" style="position:fixed;top:0;right:0;height:100vh;width:min(460px,92vw);background:#0c1218;border-left:1px solid var(--teal);z-index:201;transform:translateX(100%);transition:transform .28s ease;overflow-y:auto;box-shadow:-12px 0 40px rgba(0,0,0,.5)">
+  <div style="position:sticky;top:0;background:#0c1218;border-bottom:1px solid var(--line);padding:18px 20px;display:flex;justify-content:space-between;align-items:center;z-index:1">
+    <h3 id="kpiPanelTitle" style="font-family:'Fraunces',serif;font-size:18px;margin:0"></h3>
+    <button onclick="closeKpiPanel()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;width:auto;padding:0;margin:0">✕</button>
+  </div>
+  <div id="kpiPanelBody" style="padding:18px 20px"></div>
+</div>
+
 <!-- Loading state -->
 <div id="dataLoading" style="display:none;align-items:center;justify-content:center;min-height:80vh;flex-direction:column;text-align:center">
   <div style="width:48px;height:48px;border:4px solid rgba(0,212,170,0.2);border-top-color:#00d4aa;border-radius:50%;animation:spin 0.8s linear infinite"></div>
@@ -440,6 +450,32 @@ window.addEventListener('DOMContentLoaded',()=>{
     <div class="grid2">
       <div class="panel"><h4>Frustrated call breakdown</h4><div class="cap">Why are callers frustrated? Common patterns.</div><div id="frustBreak"></div></div>
       <div class="panel"><h4>Cost Impact</h4><div class="cap">Real ₹ cost of frustrated calls at ₹5/min</div><div id="frustCost"></div></div>
+    </div></section>
+
+  <section id="sec-explorer"><div class="shead"><span class="n">11</span><h2>🔎 Call Explorer</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export All</button></div>
+    <div class="panel">
+      <div class="cap">Every call in the selected range. Search, sort, and click a row for the full profile.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0">
+        <input type="text" id="explorerSearch" placeholder="🔍 Filter by number, intent, summary..." style="flex:1;min-width:200px;padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="renderExplorer()">
+        <select id="explorerSort" onchange="renderExplorer()" style="padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+          <option value="time_desc">Newest first</option>
+          <option value="time_asc">Oldest first</option>
+          <option value="dur_desc">Longest duration</option>
+          <option value="dur_asc">Shortest duration</option>
+          <option value="conf_desc">Highest confidence</option>
+          <option value="need_desc">Highest need</option>
+        </select>
+        <select id="explorerFilter" onchange="renderExplorer()" style="padding:8px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+          <option value="all">All calls</option>
+          <option value="hot">Hot only</option>
+          <option value="frustrated">Frustrated only</option>
+          <option value="callback">Callbacks only</option>
+          <option value="intl">International only</option>
+        </select>
+      </div>
+      <div id="explorerCount" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+      <div id="explorerList" style="max-height:600px;overflow-y:auto"></div>
+      <div id="explorerMore" style="text-align:center;margin-top:12px"></div>
     </div></section>
 
     <footer id="foot"></footer>
@@ -654,7 +690,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);renderExplorer();
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
   closeUserSearch();
 }
@@ -1020,7 +1056,7 @@ function boot(){
   $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",totalMins+" mins"],["💰","₹"+totalCost],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);renderExplorer();
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Aanya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
@@ -1043,20 +1079,20 @@ function paintKPIs(o){
   const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
   const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
   const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
-  // 4th field = scroll-target section id (empty = not clickable)
+  // 4th field = drill-down key (empty = not clickable). Only count/set-based KPIs drill down.
   const cards=[
-    ["neut",o.n,"Total calls","sec-volume"],
+    ["neut",o.n,"Total calls","all"],
     ["hot",totalMins+" mins","Total duration",""],
     ["hot","₹"+totalCost,"Total cost (@₹5/min)",""],
-    ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")","sec-hottest"],
-    ["good","🇮🇳 "+o.india+" · 🌍 "+o.intl,"India / International","sec-geo"],
-    ["good",Math.round(o.avgConf)+"%","Avg Aanya confidence","sec-perf"],
+    ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")","hot"],
+    ["good","🇮🇳 "+o.india+" · 🌍 "+o.intl,"India / International","geo"],
+    ["good",Math.round(o.avgConf)+"%","Avg Aanya confidence","conf"],
     ["good",avgDurMins+"m "+avgDurSecs+"s","Avg call duration",""],
-    ["good",pct(o.green)+"%","Quality pass rate (Green)","sec-bands"]
+    ["good",pct(o.green)+"%","Quality pass rate (Green)","green"]
   ];
   $("kpis").innerHTML=cards.map(c=>{
-    const clickable=c[3]?`onclick="jumpToSection('${c[3]}')" style="cursor:pointer" title="Click to view details"`:"";
-    const arrow=c[3]?`<span style="position:absolute;top:8px;right:10px;font-size:10px;color:var(--faint)">→</span>`:"";
+    const clickable=c[3]?`onclick="openKpiPanel('${c[3]}')" style="cursor:pointer" title="Click for details"`:"";
+    const arrow=c[3]?`<span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span>`:"";
     return `<div class="kpi ${c[0]}" ${clickable}><div class="b"></div>${arrow}<div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`;
   }).join("");
 }
@@ -1069,6 +1105,66 @@ function jumpToSection(id){
   el.style.transition='box-shadow .3s';
   el.style.boxShadow='0 0 0 2px var(--teal)';
   setTimeout(()=>{el.style.boxShadow='';},1500);
+}
+
+// ===== KPI DRILL-DOWN SIDEBAR =====
+function closeKpiPanel(){
+  $("kpiPanel").style.transform='translateX(100%)';
+  $("kpiOverlay").style.display='none';
+}
+function openKpiPanel(key){
+  // Build the record set + title for each drill-down key
+  let title="",rows=[],stats=[];
+  if(key==="all"){title="All Calls";rows=RECORDS.slice();}
+  else if(key==="hot"){title="🔥 Hot Leads";rows=RECORDS.filter(r=>r.leadTemp==="Hot");}
+  else if(key==="green"){title="✅ Quality-Pass Calls (Green)";rows=RECORDS.filter(r=>r.band==="Green");}
+  else if(key==="geo"){title="🌍 Lead Geography";rows=RECORDS.filter(r=>classifyPhone(r.from).intl);} // intl records listed; india summarized in stats
+  else if(key==="conf"){title="🎯 Aanya Confidence";rows=RECORDS.slice();}
+
+  const n=RECORDS.length||1;
+  // Stat blocks per key
+  if(key==="all"){
+    const mins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+    stats=[["Total calls",RECORDS.length],["Total minutes",mins],["Hot",RECORDS.filter(r=>r.leadTemp==="Hot").length],["Frustrated",RECORDS.filter(r=>r.frustrated).length],["Callbacks",RECORDS.filter(r=>r.callback).length],["International",RECORDS.filter(r=>classifyPhone(r.from).intl).length]];
+  }else if(key==="hot"){
+    const h=rows;const avgC=h.length?Math.round(h.reduce((a,r)=>a+r.conf,0)/h.length):0;
+    stats=[["Hot leads",h.length],["% of all calls",Math.round(h.length/n*100)+"%"],["Avg confidence",avgC+"%"],["With callback",h.filter(r=>r.callback).length],["International",h.filter(r=>classifyPhone(r.from).intl).length]];
+  }else if(key==="green"){
+    stats=[["Green (pass)",RECORDS.filter(r=>r.band==="Green").length],["Amber",RECORDS.filter(r=>r.band==="Amber").length],["Red",RECORDS.filter(r=>r.band==="Red").length],["Pass rate",Math.round(RECORDS.filter(r=>r.band==="Green").length/n*100)+"%"]];
+  }else if(key==="geo"){
+    const india=RECORDS.filter(r=>!classifyPhone(r.from).intl).length;
+    const intl=rows.length;
+    const byC={};rows.forEach(r=>{const c=classifyPhone(r.from);byC[c.flag+" "+c.country]=(byC[c.flag+" "+c.country]||0)+1;});
+    stats=[["🇮🇳 India",india],["🌍 International",intl],...Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v])];
+  }else if(key==="conf"){
+    const cc={low:0,mid:0,high:0};RECORDS.forEach(r=>{cc[r.conf<50?"low":r.conf<80?"mid":"high"]++;});
+    const avgC=Math.round(RECORDS.reduce((a,r)=>a+r.conf,0)/n);
+    stats=[["Avg confidence",avgC+"%"],["High (≥80%)",cc.high],["Mid (50-79%)",cc.mid],["Low (<50%)",cc.low]];
+  }
+
+  $("kpiPanelTitle").textContent=title;
+  const statsHtml=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">${stats.map(s=>`<div style="background:#0f1620;border:1px solid var(--line);border-radius:8px;padding:12px"><div style="font-size:20px;font-weight:800;font-family:'Fraunces',serif;color:var(--teal)">${s[1]}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(String(s[0]))}</div></div>`).join("")}</div>`;
+
+  // Record list (cap to keep panel snappy)
+  let listHtml="";
+  if(key!=="conf"){
+    const sorted=rows.sort((a,b)=>b.ts-a.ts).slice(0,100);
+    listHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${rows.length} record${rows.length!==1?'s':''}${rows.length>100?' (showing latest 100)':''}</div>`+
+      sorted.map(r=>{
+        const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
+        return `<div onclick="closeKpiPanel();explorerOpen('${esc(r.from)}')" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#0f1620'" onmouseout="this.style.background=''">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'IBM Plex Mono',monospace;color:var(--cream)">${maskPhone(r.from)}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
+          <div style="color:var(--muted);font-size:10px">${esc(r.intent)} · ${formatDuration(r.dur)} · Conf ${Math.round(r.conf)}% · ${formatCallTime(r)}</div>
+          ${r.summary?`<div style="color:var(--faint);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.summary)}</div>`:""}
+        </div>`;
+      }).join("");
+  }else{
+    listHtml=`<p style="font-size:12px;color:var(--muted);line-height:1.6">Aanya's confidence is the model's certainty in its answers. Higher confidence strongly correlates with hot leads — see the "Call outcomes by confidence" panel in Section 02 for the conversion breakdown.</p>`;
+  }
+
+  $("kpiPanelBody").innerHTML=statsHtml+listHtml;
+  $("kpiOverlay").style.display='block';
+  $("kpiPanel").style.transform='translateX(0)';
 }
 
 function paintFunnel(o){
@@ -1210,6 +1306,91 @@ function exportGeo(){
   });
   downloadCSV('international_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
+
+// ===== CALL EXPLORER =====
+let EXPLORER_LIMIT=50;
+function getExplorerRows(){
+  const q=($("explorerSearch")?.value||"").trim().toLowerCase();
+  const sort=$("explorerSort")?.value||"time_desc";
+  const filt=$("explorerFilter")?.value||"all";
+  let rows=RECORDS.slice();
+  // Filter
+  if(filt==="hot")rows=rows.filter(r=>r.leadTemp==="Hot");
+  else if(filt==="frustrated")rows=rows.filter(r=>r.frustrated);
+  else if(filt==="callback")rows=rows.filter(r=>r.callback);
+  else if(filt==="intl")rows=rows.filter(r=>classifyPhone(r.from).intl);
+  // Search
+  if(q)rows=rows.filter(r=>{
+    return String(r.from||"").toLowerCase().includes(q)
+      ||String(r.intent||"").toLowerCase().includes(q)
+      ||String(r.summary||"").toLowerCase().includes(q)
+      ||String(r.leadTemp||"").toLowerCase().includes(q);
+  });
+  // Sort
+  const sorters={
+    time_desc:(a,b)=>b.ts-a.ts, time_asc:(a,b)=>a.ts-b.ts,
+    dur_desc:(a,b)=>b.dur-a.dur, dur_asc:(a,b)=>a.dur-b.dur,
+    conf_desc:(a,b)=>b.conf-a.conf, need_desc:(a,b)=>b.need-a.need
+  };
+  rows.sort(sorters[sort]||sorters.time_desc);
+  return rows;
+}
+
+function renderExplorer(){
+  if(!$("explorerList"))return;
+  const rows=getExplorerRows();
+  $("explorerCount").textContent=`${rows.length} call${rows.length!==1?'s':''}`;
+  if(!rows.length){$("explorerList").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls match.</div>`;$("explorerMore").innerHTML="";return;}
+  const shown=rows.slice(0,EXPLORER_LIMIT);
+  $("explorerList").innerHTML=shown.map(r=>{
+    const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
+    const tags=[];
+    if(r.frustrated)tags.push(`<span style="background:rgba(231,76,60,.15);color:${C.hot};padding:1px 6px;border-radius:3px;font-size:9px">😤 frustrated</span>`);
+    if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">📞 callback</span>`);
+    return `<div onclick="explorerOpen('${esc(r.from)}')" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#0c1218'" onmouseout="this.style.background=''">
+      <div style="min-width:0">
+        <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--cream);margin-bottom:3px">${maskPhone(r.from)}</div>
+        <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.intent)} · ${esc(r.summary||"—")}</div>
+        <div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap">${tags.join("")}</div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--muted);white-space:nowrap">
+        <div style="color:${tempCol};font-weight:600;font-size:11px">${esc(r.leadTemp||"—")}</div>
+        <div>${formatDuration(r.dur)}</div>
+        <div>Conf ${Math.round(r.conf)}%</div>
+        <div style="color:var(--faint)">${formatCallTime(r)}</div>
+      </div>
+    </div>`;
+  }).join("");
+  $("explorerMore").innerHTML=rows.length>EXPLORER_LIMIT
+    ?`<button onclick="EXPLORER_LIMIT+=50;renderExplorer()" style="padding:8px 18px;background:#0f1620;border:1px solid var(--line);border-radius:6px;color:var(--teal);font-size:11px;cursor:pointer">Show more (${rows.length-EXPLORER_LIMIT} remaining)</button>`
+    :"";
+}
+
+function explorerOpen(phone){
+  $("searchMobile").value=maskPhone(phone);
+  searchUserByMobile(phone);
+  setTimeout(()=>{
+    const el=$("userSearchResult");
+    if(el){
+      const y=el.getBoundingClientRect().top+window.pageYOffset-70;
+      window.scrollTo({top:y,behavior:'smooth'});
+      el.style.transition='box-shadow .3s';el.style.boxShadow='0 0 0 2px var(--teal)';
+      setTimeout(()=>{el.style.boxShadow='';},1500);
+    }
+  },80);
+}
+
+function exportExplorer(){
+  const rows=getExplorerRows();
+  if(!rows.length){alert("No calls to export in the current view.");return;}
+  let csv='Phone,Country,Call Time,Duration (mins),Lead Temp,Intent,Confidence %,Need Score,Frustrated,Callback,Summary\n';
+  rows.forEach(r=>{
+    const c=classifyPhone(r.from);
+    csv+=`${fullPhone(r.from)},${escCSV(c.country)},${escCSV(formatCallTime(r))},${Math.round(r.dur/60*10)/10},${escCSV(r.leadTemp)},${escCSV(r.intent)},${Math.round(r.conf)},${Math.round(r.need)},${r.frustrated?'Yes':'No'},${r.callback?'Yes':'No'},${escCSV(r.summary)}\n`;
+  });
+  downloadCSV('call_explorer_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
 
 
 function paintFrustBreak(o){
