@@ -771,10 +771,40 @@ function searchUserByMobile(mobile){
         <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${esc(c.cbReason)}<br>
         <span style="font-size:9px;margin-top:4px;display:block">${esc(c.summary)}</span>
       </div>
+      ${transcriptToggle(c,'prof'+i)}
     </div>`;
   }).join("");
   
   $("userSearchResult").style.display="block";
+}
+
+// Collapsible transcript — hidden by default (PII), one tap to read
+function transcriptToggle(c,uid){
+  if(!c.trans||!c.trans.trim())return "";
+  const tid="tr_"+uid;
+  return `<div style="margin-top:6px">
+    <span onclick="toggleTranscript('${tid}')" id="${tid}_btn" style="font-size:10px;color:var(--teal);cursor:pointer;user-select:none">📄 View transcript</span>
+    <div id="${tid}" style="display:none;margin-top:6px;background:#0a0f15;border:1px solid var(--line);border-radius:6px;padding:10px;max-height:280px;overflow-y:auto;font-size:10px;line-height:1.6;font-family:'IBM Plex Mono',monospace">${formatTranscript(c.trans)}</div>
+  </div>`;
+}
+function toggleTranscript(tid){
+  const el=document.getElementById(tid),btn=document.getElementById(tid+"_btn");
+  if(!el)return;
+  if(el.style.display==="none"){el.style.display="block";btn.textContent="📄 Hide transcript";}
+  else{el.style.display="none";btn.textContent="📄 View transcript";}
+}
+// Format the turn-by-turn transcript with colored speaker labels
+function formatTranscript(t){
+  return esc(t).split(/\n+/).map(line=>{
+    const m=line.match(/^(Assistant|User|Aanya|Bot|Caller|Customer)\s*(\[[^\]]*\])?\s*:?(.*)$/i);
+    if(m){
+      const who=m[1],time=m[2]||"",rest=m[3]||"";
+      const isUser=/user|caller|customer/i.test(who);
+      const col=isUser?"var(--gold)":"var(--teal)";
+      return `<div style="margin-bottom:5px"><b style="color:${col}">${who}</b> <span style="color:var(--faint)">${time}</span>${rest?":"+rest:""}</div>`;
+    }
+    return line.trim()?`<div style="margin-bottom:5px;color:var(--muted)">${line}</div>`:"";
+  }).join("");
 }
 
 function closeUserSearch(){
