@@ -70,6 +70,12 @@
   </div>
 
   <div class="form-group">
+    <label>Encryption Password</label>
+    <input type="password" id="encPass" placeholder="Same as dashboard password">
+    <span class="hint">The data is encrypted with this before upload. Must match the <b>dashboard login password</b> so viewers can decrypt.</span>
+  </div>
+
+  <div class="form-group">
     <label>Excel File (.xlsx)</label>
     <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="validateFile()">
     <span class="hint">Must contain a "Voice Export" sheet.</span>
@@ -104,7 +110,7 @@ const GITHUB_BRANCH = "main";
 const REQUIRED_SHEET = "Voice Export";
 const REQUIRED_COLS = ["Created At (IST)","Call ID","Duration (s)","Lead Temp.","Bot Conf."];
 
-let VALIDATED_BASE64 = null;
+let VALIDATED_BYTES = null;
 
 async function sha256(text){
   const data=new TextEncoder().encode(text);
@@ -143,7 +149,7 @@ function forgetToken(){
 }
 
 function validateFile(){
-  VALIDATED_BASE64=null;
+  VALIDATED_BYTES=null;
   document.getElementById('submitBtn').disabled=true;
   document.getElementById('preview').className="preview";
   const file=document.getElementById('excelFile').files[0];
@@ -163,9 +169,8 @@ function validateFile(){
       const headers=Object.keys(rows[0]);
       const missing=REQUIRED_COLS.filter(c=>!headers.includes(c));
       if(missing.length){showPreview(`\u274c Missing required column(s):\n${missing.join(", ")}`,"error");return;}
-      let b='';for(let i=0;i<bytes.length;i++)b+=String.fromCharCode(bytes[i]);
-      VALIDATED_BASE64=btoa(b);
-      showPreview(`\u2705 Valid file \u2014 ${rows.length} call records found.\nReady to publish.`,"ok");
+      VALIDATED_BYTES=bytes;
+      showPreview(`\u2705 Valid file \u2014 ${rows.length} call records found.\nReady to encrypt & publish.`,"ok");
       document.getElementById('submitBtn').disabled=false;
     }catch(err){showPreview("\u274c Could not read file: "+err.message,"error");}
   };
@@ -182,27 +187,65 @@ function showPreview(msg,type){
   p.style.color=type==="error"?"#ff6666":"#00d4aa";
 }
 
+// ===== AES-256-GCM encryption (matches dashboard decryption) =====
+const ENC_MAGIC="AANYAENC1";
+async function deriveKey(passphrase,salt){
+  const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},
+    baseKey,{name:'AES-GCM',length:256},false,['encrypt']
+  );
+}
+async function encryptData(bytes,passphrase){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(passphrase,salt);
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes));
+  // Layout: [9 magic][16 salt][12 iv][ciphertext]
+  const magic=new TextEncoder().encode(ENC_MAGIC);
+  const out=new Uint8Array(magic.length+salt.length+iv.length+ct.length);
+  out.set(magic,0);
+  out.set(salt,magic.length);
+  out.set(iv,magic.length+salt.length);
+  out.set(ct,magic.length+salt.length+iv.length);
+  return out;
+}
+
 async function doUpload(){
   const token=document.getElementById('ghToken').value.trim();
+  const encPass=document.getElementById('encPass').value;
   if(!token){showStatus("\u274c Enter your GitHub token.","error");return;}
-  if(!VALIDATED_BASE64){showStatus("\u274c Select a valid Excel file first.","error");return;}
+  if(!encPass){showStatus("\u274c Enter the encryption password (same as dashboard).","error");return;}
+  if(!VALIDATED_BYTES){showStatus("\u274c Select a valid Excel file first.","error");return;}
 
-  showStatus("\u23f3 Uploading to GitHub...","loading");
+  showStatus("\u23f3 Encrypting & uploading...","loading");
   document.getElementById('submitBtn').disabled=true;
+
+  let encBase64;
+  try{
+    const encBytes=await encryptData(VALIDATED_BYTES,encPass);
+    // base64 the encrypted blob (chunked to avoid call-stack limits)
+    let b='';const CH=8192;
+    for(let i=0;i<encBytes.length;i+=CH){b+=String.fromCharCode.apply(null,encBytes.subarray(i,i+CH));}
+    encBase64=btoa(b);
+  }catch(err){
+    showStatus("\u274c Encryption failed: "+err.message,"error");
+    document.getElementById('submitBtn').disabled=false;return;
+  }
 
   const today=new Date().toLocaleDateString('en-CA');
   const datedPath=`data/voice_analytics_${today}.xlsx`;
   const livePath=`data/voice_analytics.xlsx`;
 
-  const r1=await uploadFile(datedPath,VALIDATED_BASE64,token);
-  const r2=await uploadFile(livePath,VALIDATED_BASE64,token);
+  const r1=await uploadFile(datedPath,encBase64,token);
+  const r2=await uploadFile(livePath,encBase64,token);
 
   if(r1.ok && r2.ok){
-    showStatus(`\u2705 Published successfully!\n\n\u2022 Backup saved: ${datedPath.split('/')[1]}\n\u2022 Live file updated\n\n\ud83d\ude80 Dashboard refreshes in ~1-2 minutes.`,"success");
+    showStatus(`\u2705 Encrypted & published!\n\n\u2022 Backup saved: ${datedPath.split('/')[1]}\n\u2022 Live file updated\n\n\ud83d\ude80 Dashboard refreshes in ~1-2 minutes.`,"success");
     document.getElementById('excelFile').value="";
+    document.getElementById('encPass').value="";
     document.getElementById('preview').className="preview";
-    VALIDATED_BASE64=null;
-    // Token intentionally kept in session for the next upload (use "Forget token" to clear)
+    VALIDATED_BYTES=null;
   }else{
     const errs=[];
     if(!r1.ok)errs.push(`Backup (${datedPath.split('/')[1]}): ${r1.error}`);
