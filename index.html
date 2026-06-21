@@ -187,11 +187,63 @@ function lockDashboard(){
 }
 
 // Phone masking
-function maskPhone(phone){
-  if(!SECURITY.MASK_PHONES)return phone;
-  const p=String(phone||'');
+// ===== Phone classification & country-aware formatting =====
+// Common international dialing codes (after the 00 prefix) → country
+const COUNTRY_CODES=[
+  ["1","🇺🇸","US/Canada"],["44","🇬🇧","UK"],["971","🇦🇪","UAE"],["65","🇸🇬","Singapore"],
+  ["61","🇦🇺","Australia"],["49","🇩🇪","Germany"],["33","🇫🇷","France"],["60","🇲🇾","Malaysia"],
+  ["966","🇸🇦","Saudi Arabia"],["974","🇶🇦","Qatar"],["973","🇧🇭","Bahrain"],["968","🇴🇲","Oman"],
+  ["64","🇳🇿","New Zealand"],["81","🇯🇵","Japan"],["86","🇨🇳","China"],["852","🇭🇰","Hong Kong"],
+  ["353","🇮🇪","Ireland"],["31","🇳🇱","Netherlands"],["41","🇨🇭","Switzerland"],["46","🇸🇪","Sweden"],
+  ["7","🇷🇺","Russia"],["27","🇿🇦","South Africa"],["254","🇰🇪","Kenya"],["234","🇳🇬","Nigeria"]
+];
+// Returns {intl:bool, flag, country, cc, national}
+function classifyPhone(raw){
+  const p=String(raw||'').trim();
+  // Bare 10-digit Indian mobile (starts 6/7/8/9)
+  if(/^[6-9]\d{9}$/.test(p)) return {intl:false,flag:"🇮🇳",country:"India",cc:"91",national:p};
+  // 12-digit starting 91 (India with code, no +)
+  if(/^91[6-9]\d{9}$/.test(p)) return {intl:false,flag:"🇮🇳",country:"India",cc:"91",national:p.slice(2)};
+  // +91...
+  if(/^\+?91[6-9]\d{9}$/.test(p)) return {intl:false,flag:"🇮🇳",country:"India",cc:"91",national:p.replace(/^\+?91/,'')};
+  // 00-prefixed international
+  if(/^00\d+/.test(p)){
+    const rest=p.slice(2);
+    for(const [cc,flag,country] of COUNTRY_CODES){
+      if(rest.startsWith(cc)) return {intl:true,flag,country,cc,national:rest.slice(cc.length)};
+    }
+    return {intl:true,flag:"🌍",country:"International",cc:"",national:rest};
+  }
+  // +<code> international
+  if(/^\+\d+/.test(p)){
+    const rest=p.slice(1);
+    for(const [cc,flag,country] of COUNTRY_CODES){
+      if(rest.startsWith(cc) && cc!=="91") return {intl:true,flag,country,cc,national:rest.slice(cc.length)};
+    }
+    return {intl:true,flag:"🌍",country:"International",cc:"",national:rest};
+  }
+  // Unknown shape — treat as international/unknown, don't guess India
+  return {intl:true,flag:"🌍",country:"Unknown",cc:"",national:p};
+}
+
+function maskNational(n){
+  const p=String(n||'');
+  if(!SECURITY.MASK_PHONES)return p;
   if(p.length<6)return p;
   return p.slice(0,4)+'****'+p.slice(-2);
+}
+
+// Display with country code + flag, masked national part
+function maskPhone(phone){
+  const c=classifyPhone(phone);
+  const cc=c.cc?("+"+c.cc+" "):"";
+  return `${c.flag} ${cc}${maskNational(c.national)}`;
+}
+// Full (unmasked) display for CSV — country code + full number, with flag stripped
+function fullPhone(phone){
+  const c=classifyPhone(phone);
+  const cc=c.cc?("+"+c.cc):"";
+  return `${cc}${c.national}`;
 }
 
 // Check existing session on load
@@ -328,7 +380,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div class="panel"><h4>Call quality by temperature</h4><div class="cap">Avg Aanya confidence, need score, and review band for each tier.</div><div id="tempQual"></div></div>
     </div></section>
 
-  <section><div class="shead"><span class="n">02</span><h2>Aanya performance metrics</h2></div>
+  <section id="sec-perf"><div class="shead"><span class="n">02</span><h2>Aanya performance metrics</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Aanya confidence distribution</h4><div class="cap">Calls grouped by how confident Aanya was in its answers.</div><div id="confDist"></div></div>
       <div class="panel"><h4>Call outcomes by confidence</h4><div class="cap">Do high-confidence calls convert to hot leads?</div><div id="confImpact"></div></div>
@@ -337,7 +389,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   <section><div class="shead"><span class="n">03</span><h2>What callers ask about</h2></div>
     <div class="panel"><h4>Intent distribution</h4><div class="cap" style="margin-bottom:14px">Mined from transcripts — what brings callers to Aanya.</div><div class="intlist" id="intents"></div></div></section>
 
-  <section><div class="shead"><span class="n">04</span><h2>Call volume trends</h2></div>
+  <section id="sec-volume"><div class="shead"><span class="n">04</span><h2>Call volume trends</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Daily volume</h4><div class="cap">Calls per day — where does traffic peak?</div><div id="dayChart"></div></div>
       <div class="panel"><h4>Hourly patterns</h4><div class="cap">What time of day do most calls come in?</div><div id="hourChart"></div></div>
@@ -349,10 +401,16 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div class="panel"><h4>Quality by messages exchanged</h4><div class="cap">Do longer conversations lead to hotter leads?</div><div id="msgImpact"></div></div>
     </div></section>
 
-  <section><div class="shead"><span class="n">06</span><h2>Review band breakdown</h2></div>
+  <section id="sec-bands"><div class="shead"><span class="n">06</span><h2>Review band breakdown</h2></div>
     <div class="panel"><div class="cap">Green (quality), Amber (ok), Red (needs attention) — what share of calls passed QA?</div><div id="bandBars"></div></div></section>
 
-  <section><div class="shead"><span class="n">07</span><h2>🏆 Hottest Leads (Top 50)</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
+  <section id="sec-geo"><div class="shead"><span class="n">06.5</span><h2>🌍 Lead Geography</h2><button onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export Intl</button></div>
+    <div class="grid2">
+      <div class="panel"><h4>India vs International</h4><div class="cap">Where are your leads calling from? International leads may need different follow-up.</div><div id="geoSplit"></div></div>
+      <div class="panel"><h4>International breakdown by country</h4><div class="cap">Overseas leads grouped by country code.</div><div id="geoCountries"></div></div>
+    </div></section>
+
+  <section id="sec-hottest"><div class="shead"><span class="n">07</span><h2>🏆 Hottest Leads (Top 50)</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
     <div class="panel"><h4>Ranked by lead score & engagement</h4><div class="cap">Hot leads ranked by temperature, call frequency, need score & confidence. Click any lead to view full profile.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div></section>
 
   <section><div class="shead"><span class="n">08</span><h2>🔥 Serial Engagers (Hot Leads)</h2><button onclick="exportSerialEngagers()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
@@ -590,7 +648,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
   closeUserSearch();
 }
@@ -812,7 +870,7 @@ function rowToRecord(r){
 
 function aggregate(recs){
   const o={n:recs.length,hot:0,warm:0,cold:0,
-    totalDur:0,totalMsg:0,avgConf:0,avgNeed:0,green:0,amber:0,red:0,
+    totalDur:0,totalMsg:0,avgConf:0,avgNeed:0,green:0,amber:0,red:0,india:0,intl:0,
     hourly:{},daily:{},intent:{},durBands:{},confBands:{}};
   const confQual={Hot:{conf:0,need:0,n:0},Warm:{conf:0,need:0,n:0},Cold:{conf:0,need:0,n:0}};
   const msgQual=[[],[],[]]; // <5msg, 5-20msg, >20msg
@@ -820,6 +878,7 @@ function aggregate(recs){
   const confConv={low:{hot:0,n:0},mid:{hot:0,n:0},high:{hot:0,n:0}};
   recs.forEach(r=>{
     if(r.leadTemp==="Hot")o.hot++;else if(r.leadTemp==="Warm")o.warm++;else o.cold++;
+    if(classifyPhone(r.from).intl)o.intl++;else o.india++;
     o.totalDur+=r.dur;o.totalMsg+=r.msg;o.avgConf+=r.conf;o.avgNeed+=r.need;
     if(r.band==="Green")o.green++;else if(r.band==="Amber")o.amber++;else if(r.band==="Red")o.red++;
     o.hourly[r.h]=(o.hourly[r.h]||0)+1;
@@ -955,7 +1014,7 @@ function boot(){
   $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",totalMins+" mins"],["💰","₹"+totalCost],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Aanya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
@@ -978,17 +1037,32 @@ function paintKPIs(o){
   const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
   const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
   const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
+  // 4th field = scroll-target section id (empty = not clickable)
   const cards=[
-    ["neut",o.n,"Total calls",""],
+    ["neut",o.n,"Total calls","sec-volume"],
     ["hot",totalMins+" mins","Total duration",""],
     ["hot","₹"+totalCost,"Total cost (@₹5/min)",""],
-    ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")",""],
-    ["good",Math.round(o.avgConf)+"%","Avg Aanya confidence",""],
+    ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")","sec-hottest"],
+    ["good","🇮🇳 "+o.india+" · 🌍 "+o.intl,"India / International","sec-geo"],
+    ["good",Math.round(o.avgConf)+"%","Avg Aanya confidence","sec-perf"],
     ["good",avgDurMins+"m "+avgDurSecs+"s","Avg call duration",""],
-    ["neut",avgMsg,"Avg messages per call",""],
-    ["good",pct(o.green)+"%","Quality pass rate (Green)",""]
+    ["good",pct(o.green)+"%","Quality pass rate (Green)","sec-bands"]
   ];
-  $("kpis").innerHTML=cards.map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
+  $("kpis").innerHTML=cards.map(c=>{
+    const clickable=c[3]?`onclick="jumpToSection('${c[3]}')" style="cursor:pointer" title="Click to view details"`:"";
+    const arrow=c[3]?`<span style="position:absolute;top:8px;right:10px;font-size:10px;color:var(--faint)">→</span>`:"";
+    return `<div class="kpi ${c[0]}" ${clickable}><div class="b"></div>${arrow}<div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`;
+  }).join("");
+}
+
+// Smooth-scroll to a section and briefly highlight it
+function jumpToSection(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.scrollIntoView({behavior:'smooth',block:'start'});
+  el.style.transition='box-shadow .3s';
+  el.style.boxShadow='0 0 0 2px var(--teal)';
+  setTimeout(()=>{el.style.boxShadow='';},1500);
 }
 
 function paintFunnel(o){
@@ -1071,6 +1145,36 @@ function paintBandBars(o){
   const data=[{l:"Green (pass)",v:o.green,c:C.green},{l:"Amber (review)",v:o.amber,c:C.amber},{l:"Red (fail)",v:o.red,c:C.hot}];
   $("bandBars").innerHTML=data.map(d=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
 }
+
+function paintGeo(o){
+  const tot=o.india+o.intl;
+  if(!tot){$("geoSplit").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No data in this range.</div>`;$("geoCountries").innerHTML="";return;}
+  const split=[{l:"🇮🇳 India",v:o.india,c:C.teal},{l:"🌍 International",v:o.intl,c:C.warm}];
+  $("geoSplit").innerHTML=split.map(d=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
+
+  // International leads grouped by country
+  const byCountry={};
+  RECORDS.forEach(r=>{
+    const c=classifyPhone(r.from);
+    if(c.intl){const k=`${c.flag} ${esc(c.country)}`;byCountry[k]=(byCountry[k]||0)+1;}
+  });
+  const entries=Object.entries(byCountry).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){$("geoCountries").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No international leads in this range.</div>`;return;}
+  const max=Math.max(...entries.map(e=>e[1]),1);
+  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v}</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
+}
+
+function exportGeo(){
+  const intl=RECORDS.filter(r=>classifyPhone(r.from).intl);
+  if(!intl.length){alert("No international leads to export in this range.");return;}
+  let csv='Phone,Country,Call Time,Duration (mins),Intent,Lead Temp,Confidence %,Need Score,Summary\n';
+  intl.sort((a,b)=>b.ts-a.ts).forEach(r=>{
+    const c=classifyPhone(r.from);
+    csv+=`${fullPhone(r.from)},${escCSV(c.country)},${escCSV(formatCallTime(r))},${Math.round(r.dur/60*10)/10},${escCSV(r.intent)},${escCSV(r.leadTemp)},${Math.round(r.conf)},${Math.round(r.need)},${escCSV(r.summary)}\n`;
+  });
+  downloadCSV('international_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
 
 function paintFrustBreak(o){
   const frustrated=RECORDS.filter(r=>r.frustrated);
@@ -1251,7 +1355,7 @@ function exportHottestLeads(){
   }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
   
   let csv='Phone,Total Calls,Hot,Warm,Cold,Frustrated,Avg Confidence %,Avg Need Score,Total Duration (mins),Lead Score,Top Intent,Last Call Time,Last Summary\n';
-  leads.forEach(l=>{csv+=`${l.ph},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
+  leads.forEach(l=>{csv+=`${fullPhone(l.ph)},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
   downloadCSV('hottest_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
 
@@ -1261,7 +1365,7 @@ function exportSerialEngagers(){
   let csv='Phone,Total Calls,Frustrated,General,Total Duration (mins),Total Cost (Rs),Last Call Time\n';
   serial.forEach(s=>{
     const lastCall=s.calls[0];
-    csv+=`${s.phone},${s.total},${s.frustrated},${s.general},${s.totalDur},${s.totalDur*5},${escCSV(formatCallTime(lastCall))}\n`;
+    csv+=`${fullPhone(s.phone)},${s.total},${s.frustrated},${s.general},${s.totalDur},${s.totalDur*5},${escCSV(formatCallTime(lastCall))}\n`;
   });
   downloadCSV('serial_engagers_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
@@ -1272,7 +1376,7 @@ function exportCallbacks(){
   let csv='Phone,Call Time,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
   cbs.sort((a,b)=>b.ts-a.ts).forEach(c=>{
     const durMins=Math.round(c.dur/60*10)/10;
-    csv+=`${c.from},${escCSV(formatCallTime(c))},${durMins},${escCSV(c.intent)},${escCSV(c.cbReason)},${Math.round(c.conf)},${Math.round(c.need)},${escCSV(c.summary)}\n`;
+    csv+=`${fullPhone(c.from)},${escCSV(formatCallTime(c))},${durMins},${escCSV(c.intent)},${escCSV(c.cbReason)},${Math.round(c.conf)},${Math.round(c.need)},${escCSV(c.summary)}\n`;
   });
   downloadCSV('callback_requests_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
