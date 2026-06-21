@@ -70,15 +70,9 @@
   </div>
 
   <div class="form-group">
-    <label>Encryption Password</label>
-    <input type="password" id="encPass" placeholder="Same as dashboard password">
-    <span class="hint">The data is encrypted with this before upload. Must match the <b>dashboard login password</b> so viewers can decrypt.</span>
-  </div>
-
-  <div class="form-group">
     <label>Excel File (.xlsx)</label>
     <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="validateFile()">
-    <span class="hint">Must contain a "Voice Export" sheet.</span>
+    <span class="hint">Must contain a "Voice Export" sheet. Data is encrypted with your login password before upload.</span>
   </div>
 
   <div id="preview" class="preview"></div>
@@ -111,6 +105,7 @@ const REQUIRED_SHEET = "Voice Export";
 const REQUIRED_COLS = ["Created At (IST)","Call ID","Duration (s)","Lead Temp.","Bot Conf."];
 
 let VALIDATED_BYTES = null;
+let ENC_PASSPHRASE = null; // set from the gate password, reused for encryption
 
 async function sha256(text){
   const data=new TextEncoder().encode(text);
@@ -123,6 +118,7 @@ async function checkGate(){
   const err=document.getElementById('gateErr');
   if(!pwd){err.textContent="Enter the password.";return;}
   if((await sha256(pwd))===ADMIN_PASSWORD_HASH){
+    ENC_PASSPHRASE=pwd; // reuse the gate password as the encryption key
     document.getElementById('gate').style.display='none';
     document.getElementById('app').style.display='block';
     restoreToken();
@@ -213,9 +209,8 @@ async function encryptData(bytes,passphrase){
 
 async function doUpload(){
   const token=document.getElementById('ghToken').value.trim();
-  const encPass=document.getElementById('encPass').value;
   if(!token){showStatus("\u274c Enter your GitHub token.","error");return;}
-  if(!encPass){showStatus("\u274c Enter the encryption password (same as dashboard).","error");return;}
+  if(!ENC_PASSPHRASE){showStatus("\u274c Session error — please reload and log in again.","error");return;}
   if(!VALIDATED_BYTES){showStatus("\u274c Select a valid Excel file first.","error");return;}
 
   showStatus("\u23f3 Encrypting & uploading...","loading");
@@ -223,7 +218,7 @@ async function doUpload(){
 
   let encBase64;
   try{
-    const encBytes=await encryptData(VALIDATED_BYTES,encPass);
+    const encBytes=await encryptData(VALIDATED_BYTES,ENC_PASSPHRASE);
     // base64 the encrypted blob (chunked to avoid call-stack limits)
     let b='';const CH=8192;
     for(let i=0;i<encBytes.length;i+=CH){b+=String.fromCharCode.apply(null,encBytes.subarray(i,i+CH));}
@@ -243,7 +238,6 @@ async function doUpload(){
   if(r1.ok && r2.ok){
     showStatus(`\u2705 Encrypted & published!\n\n\u2022 Backup saved: ${datedPath.split('/')[1]}\n\u2022 Live file updated\n\n\ud83d\ude80 Dashboard refreshes in ~1-2 minutes.`,"success");
     document.getElementById('excelFile').value="";
-    document.getElementById('encPass').value="";
     document.getElementById('preview').className="preview";
     VALIDATED_BYTES=null;
   }else{
