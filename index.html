@@ -78,7 +78,8 @@ section{margin:46px 0}
 .intitem .ct{font-family:'IBM Plex Mono',monospace;color:var(--teal);font-weight:600;min-width:40px;text-align:right}
 footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint);line-height:1.7}
 footer b{color:var(--muted)}
-@media(max-width:860px){.wrap{padding:0 16px 60px}.strip{grid-template-columns:repeat(2,1fr)}.grid2,.grid3{grid-template-columns:1fr}.hero{grid-template-columns:1fr;text-align:center}}
+@media(max-width:860px){.wrap{padding:0 16px 60px}.strip{grid-template-columns:repeat(2,1fr)}.grid2,.grid3{grid-template-columns:1fr}.hero{grid-template-columns:1fr;text-align:center}.kpi .v{font-size:22px}.kpi{padding:14px 12px}}
+@media(max-width:420px){.kpi .v{font-size:19px}}
 .cbfilt{border:1px solid var(--line);padding:6px 12px;border-radius:6px;background:#0f1620;color:var(--teal);cursor:pointer;font-size:12px;font-family:'IBM Plex Mono',monospace;transition:.15s}
 .cbfilt:hover,.cbfilt.on{border-color:var(--teal);background:linear-gradient(135deg,#1c3a34,#16302b);font-weight:600}
 .cbempty{padding:40px 20px;text-align:center;color:var(--faint);font-family:'IBM Plex Mono',monospace;font-size:12.5px}
@@ -199,7 +200,10 @@ const COUNTRY_CODES=[
 ];
 // Returns {intl:bool, flag, country, cc, national}
 function classifyPhone(raw){
-  const p=String(raw||'').trim();
+  // Strip spaces, dashes, parens, dots — keep leading + and digits
+  let p=String(raw||'').trim().replace(/[\s\-().]/g,'');
+  // A single leading 0 before a 10-digit Indian mobile (STD style: 09876543210)
+  if(/^0[6-9]\d{9}$/.test(p)) p=p.slice(1);
   // Bare 10-digit Indian mobile (starts 6/7/8/9)
   if(/^[6-9]\d{9}$/.test(p)) return {intl:false,flag:"🇮🇳",country:"India",cc:"91",national:p};
   // 12-digit starting 91 (India with code, no +)
@@ -209,6 +213,8 @@ function classifyPhone(raw){
   // 00-prefixed international
   if(/^00\d+/.test(p)){
     const rest=p.slice(2);
+    // 0091... = India dialed internationally
+    if(/^91[6-9]\d{9}$/.test(rest)) return {intl:false,flag:"🇮🇳",country:"India",cc:"91",national:rest.slice(2)};
     for(const [cc,flag,country] of COUNTRY_CODES){
       if(rest.startsWith(cc)) return {intl:true,flag,country,cc,national:rest.slice(cc.length)};
     }
@@ -1068,7 +1074,12 @@ function jumpToSection(id){
 function paintFunnel(o){
   if(!o.n){$("funnel").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls in this range.</div>`;return;}
   const pct=a=>Math.round(a/o.n*100);
-  const F=[[o.n,"Calls started","#5a9bd8",100],[o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*70)+15],[o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+8]];
+  const F=[
+    [o.n,"Calls started","#5a9bd8",100],
+    [o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*60)+30],
+    [o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+20],
+    [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",Math.round(o.cold/o.n*40)+12]
+  ];
   let h="";F.forEach((f,i)=>{h+=`<div class="fstep" style="background:${f[2]};width:${f[3]}%"><span class="fn">${f[0]}</span><span class="ft">${f[1]}</span><span class="fp">${pct(f[0])}%</span></div>`;});
   $("funnel").innerHTML=h;
 }
@@ -1103,10 +1114,13 @@ function paintIntents(o){
 }
 
 function paintDurBands(o){
-  const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>b[1]-a[1]);
+  // Sort by duration band, longest first (180s+ → 90-180s → 30-90s → <30s)
+  const order={"180s+":0,"90-180s":1,"30-90s":2,"<30s":3};
+  const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>(order[a[0]]??9)-(order[b[0]]??9));
   if(!sorted.length){$("durBands").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px">No duration data.</div>`;return;}
   const max=Math.max(...sorted.map(d=>d[1]),1);
-  $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${d[0]==="<30s"?C.teal:d[0]==="30-90s"?C.green:C.amber};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
+  const col={"<30s":C.teal,"30-90s":C.green,"90-180s":C.amber,"180s+":C.hot};
+  $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
 }
 
 function paintMsgImpact(o){
@@ -1120,12 +1134,20 @@ function paintMsgImpact(o){
 }
 
 function dayChart(daily){
-  const entries=Object.entries(daily).sort((a,b)=>a[0]<b[0]?-1:1);const W=520,H=240,P={l:30,r:14,t:18,b:28};
+  const entries=Object.entries(daily).sort((a,b)=>a[0]<b[0]?-1:1);const W=520,H=260,P={l:30,r:14,t:18,b:46};
   if(!entries.length){$("dayChart").innerHTML=`<div style="color:var(--faint);text-align:center;padding:40px;font-size:12.5px">No call data in this range.</div>`;return;}
   const max=Math.max(...entries.map(e=>e[1]),5);const bw=(W-P.l-P.r)/entries.length,y=v=>H-P.b-(v/max)*(H-P.t-P.b);
   let gy="";for(let i=0;i<=max;i+=Math.ceil(max/4)){gy+=`<line x1="${P.l}" y1="${y(i)}" x2="${W-P.r}" y2="${y(i)}" stroke="${C.line}"/><text x="${P.l-6}" y="${y(i)+3}" fill="${C.muted}" font-size="9" text-anchor="end" font-family="IBM Plex Mono">${i}</text>`;}
-  const bars=entries.map((d,i)=>{const bx=P.l+i*bw+bw*0.2,w=Math.max(4,bw*0.6),h=(d[1]/max)*(H-P.t-P.b);return `<rect x="${bx}" y="${y(d[1])}" width="${w}" height="${h}" rx="3" fill="${C.teal}"><title>${d[0]}: ${d[1]}</title></rect><text x="${bx+w/2}" y="${y(d[1])-7}" fill="${C.cream}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono">${d[1]}</text><text x="${bx+w/2}" y="${H-10}" fill="${C.muted}" font-size="9" text-anchor="middle" font-family="IBM Plex Mono">${entries.length<=7?d[0].slice(5):""}</text>`;}).join("");
-  $("dayChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${bars}</svg>`;
+  // Smart x-labels: for long ranges, label every Nth day so they don't overlap or vanish
+  const step=entries.length<=7?1:entries.length<=14?2:entries.length<=31?Math.ceil(entries.length/8):Math.ceil(entries.length/6);
+  const bars=entries.map((d,i)=>{
+    const bx=P.l+i*bw+bw*0.15,w=Math.max(3,bw*0.7),h=(d[1]/max)*(H-P.t-P.b);
+    const showLbl=(i%step===0)||i===entries.length-1;
+    const lbl=showLbl?`<text x="${bx+w/2}" y="${H-P.b+14}" fill="${C.muted}" font-size="8.5" text-anchor="middle" font-family="IBM Plex Mono" transform="rotate(35 ${bx+w/2} ${H-P.b+14})">${d[0].slice(5)}</text>`:"";
+    const valLbl=entries.length<=14?`<text x="${bx+w/2}" y="${y(d[1])-6}" fill="${C.cream}" font-size="9.5" text-anchor="middle" font-family="IBM Plex Mono">${d[1]}</text>`:"";
+    return `<rect x="${bx}" y="${y(d[1])}" width="${w}" height="${Math.max(0,h)}" rx="2" fill="${C.teal}" style="cursor:pointer" onclick="showChartDetail('day','${d[0]}',${d[1]})"><title>${d[0]}: ${d[1]} calls</title></rect>${valLbl}${lbl}`;
+  }).join("");
+  $("dayChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${bars}</svg><div id="dayDetail" style="margin-top:8px;font-size:11px;color:var(--teal);min-height:16px;text-align:center"></div>`;
 }
 
 function hourChart(hourly){
@@ -1135,8 +1157,22 @@ function hourChart(hourly){
   const pts=vals.map((v,h)=>`${x(h)},${y(v)}`).join(" ");const area=`M${x(0)},${H-P.b} L${pts} L${x(23)},${H-P.b} Z`;
   let gy="";for(let i=0;i<=max;i+=Math.ceil(max/4)){gy+=`<line x1="${P.l}" y1="${y(i)}" x2="${W-P.r}" y2="${y(i)}" stroke="${C.line}"/><text x="${P.l-6}" y="${y(i)+3}" fill="${C.muted}" font-size="9" text-anchor="end" font-family="IBM Plex Mono">${i}</text>`;}
   let gx="";[0,4,8,12,16,20,23].forEach(h=>{gx+=`<text x="${x(h)}" y="${H-10}" fill="${C.muted}" font-size="9" text-anchor="middle" font-family="IBM Plex Mono">${h===0?'12a':h<12?h+'a':h===12?'12p':(h-12)+'p'}</text>`;});
-  const dots=vals.map((v,h)=>`<circle cx="${x(h)}" cy="${y(v)}" r="3" fill="${C.teal}"><title>${h%12||12}${h<12?'AM':'PM'}: ${v}</title></circle>`).join("");
-  $("hourChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${gx}<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.teal}" stop-opacity="0.35"/><stop offset="1" stop-color="${C.teal}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#hg)"/><polyline points="${pts}" fill="none" stroke="${C.teal}" stroke-width="2"/>${dots}</svg>`;
+  // Larger tappable hit-areas (invisible) over each point for mobile
+  const dots=vals.map((v,h)=>`<circle cx="${x(h)}" cy="${y(v)}" r="14" fill="transparent" style="cursor:pointer" onclick="showChartDetail('hour',${h},${v})"></circle><circle cx="${x(h)}" cy="${y(v)}" r="3.5" fill="${C.teal}" style="pointer-events:none"><title>${h%12||12}${h<12?'AM':'PM'}: ${v} calls</title></circle>`).join("");
+  $("hourChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${gx}<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.teal}" stop-opacity="0.35"/><stop offset="1" stop-color="${C.teal}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#hg)"/><polyline points="${pts}" fill="none" stroke="${C.teal}" stroke-width="2" style="pointer-events:none"/>${dots}</svg><div id="hourDetail" style="margin-top:8px;font-size:11px;color:var(--teal);min-height:16px;text-align:center"></div>`;
+}
+
+// Tap-to-reveal detail under the charts
+function showChartDetail(type,key,val){
+  if(type==='day'){
+    const el=$("dayDetail");if(!el)return;
+    const dt=new Date(key);const wd=isNaN(dt)?"":dt.toLocaleDateString('en-IN',{weekday:'long'});
+    el.innerHTML=`📅 <b>${key}</b>${wd?" ("+wd+")":""} — <b>${val}</b> call${val!==1?'s':''}`;
+  }else{
+    const el=$("hourDetail");if(!el)return;
+    const h=key;const label=`${h%12||12}:00 ${h<12?'AM':'PM'} – ${(h+1)%12||12}:00 ${(h+1)<12||(h+1)===24?'AM':'PM'}`;
+    el.innerHTML=`🕐 <b>${label}</b> — <b>${val}</b> call${val!==1?'s':''}`;
+  }
 }
 
 function paintBandBars(o){
@@ -1273,7 +1309,17 @@ function openLeadProfile(i){
   if(!l)return;
   $("searchMobile").value=maskPhone(l.phone);
   searchUserByMobile(l.phone);
-  document.querySelector('.wrap').scrollIntoView({behavior:'smooth'});
+  // Scroll to the profile panel itself (not page top). Delay lets it render+display first.
+  setTimeout(()=>{
+    const el=$("userSearchResult");
+    if(el){
+      const y=el.getBoundingClientRect().top+window.pageYOffset-70; // offset for sticky header
+      window.scrollTo({top:y,behavior:'smooth'});
+      el.style.transition='box-shadow .3s';
+      el.style.boxShadow='0 0 0 2px var(--teal)';
+      setTimeout(()=>{el.style.boxShadow='';},1500);
+    }
+  },80);
 }
 
 function paintSerialCallers(records){
