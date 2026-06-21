@@ -3,321 +3,238 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>🔐 Voice Analytics Admin - Upload</title>
-  
-  <script>
-    // ⚙️ CONFIGURATION
-    const ADMIN_PASSWORD = "bpd";
-    const GITHUB_OWNER = "ravi-agarwal-bits-digital";
-    const GITHUB_REPO = "anya-voice-dashboard";
-    const GITHUB_BRANCH = "main";
-    
-    // Check password on load
-    window.addEventListener('DOMContentLoaded', function() {
-      const pwd = prompt("🔐 Enter admin password:");
-      if(pwd !== ADMIN_PASSWORD) {
-        document.body.innerHTML = "<div style='display:flex;align-items:center;justify-content:center;height:100vh;font-size:24px;color:#ff4444'>❌ Access Denied</div>";
-        throw new Error('Access denied');
-      }
-    });
-  </script>
-  
+  <meta name="robots" content="noindex, nofollow">
+  <title>Aanya Voice — Admin Upload</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #0a0f15 0%, #1a1f2e 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      color: #e8e8e8;
-    }
-    .container {
-      background: #0f1620;
-      border: 1px solid #1a3050;
-      border-radius: 12px;
-      padding: 40px;
-      max-width: 500px;
-      width: 100%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 8px;
-      background: linear-gradient(120deg, #ffd700, #00d4aa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .subtitle {
-      font-size: 12px;
-      color: #666;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 32px;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      font-size: 11px;
-      color: #999;
-      margin-bottom: 6px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    input, textarea {
-      width: 100%;
-      padding: 10px 12px;
-      background: #0a0f15;
-      border: 1px solid #1a2332;
-      border-radius: 6px;
-      color: #e8e8e8;
-      font-size: 13px;
-      font-family: inherit;
-    }
-    input:focus, textarea:focus {
-      outline: none;
-      border-color: #00d4aa;
-      box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
-    }
-    button {
-      width: 100%;
-      padding: 11px 16px;
-      background: #00d4aa;
-      color: #000;
-      border: none;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all .2s;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 20px;
-    }
-    button:hover:not(:disabled) {
-      background: #00c59a;
-      transform: translateY(-1px);
-    }
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .status {
-      margin-top: 20px;
-      padding: 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      display: none;
-      border-left: 3px solid #00d4aa;
-    }
-    .status.show { display: block; }
-    .status.success {
-      background: #0a1f1a;
-      border-left-color: #00d4aa;
-      color: #00d4aa;
-    }
-    .status.error {
-      background: #1f0a0a;
-      border-left-color: #ff4444;
-      color: #ff6666;
-    }
-    .status.loading {
-      background: #0a0f1f;
-      border-left-color: #ffd700;
-      color: #ffd700;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-    .info-box {
-      background: #0a0f1f;
-      border: 1px solid #1a3050;
-      border-radius: 6px;
-      padding: 12px;
-      font-size: 11px;
-      color: #999;
-      line-height: 1.6;
-      margin-top: 24px;
-    }
-    .info-box b { color: #00d4aa; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#0a0f15 0%,#1a1f2e 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;color:#e8e8e8}
+    .container{background:#0f1620;border:1px solid #1a3050;border-radius:12px;padding:36px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+    .logo{width:44px;height:44px;background:linear-gradient(135deg,#00d4aa,#4ec9b0);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:22px;margin-bottom:16px}
+    h1{font-size:24px;margin-bottom:6px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .subtitle{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:28px}
+    .form-group{margin-bottom:18px}
+    label{display:block;font-size:11px;color:#999;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    input{width:100%;padding:10px 12px;background:#0a0f15;border:1px solid #1a2332;border-radius:6px;color:#e8e8e8;font-size:13px;font-family:inherit}
+    input:focus{outline:none;border-color:#00d4aa;box-shadow:0 0 0 3px rgba(0,212,170,.1)}
+    .hint{color:#666;font-size:10px;display:block;margin-top:4px;line-height:1.5}
+    .hint a{color:#00d4aa}
+    button{width:100%;padding:11px 16px;background:#00d4aa;color:#000;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;text-transform:uppercase;letter-spacing:.5px;margin-top:8px}
+    button:hover:not(:disabled){background:#00c59a;transform:translateY(-1px)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .status{margin-top:18px;padding:12px;border-radius:6px;font-size:12px;display:none;border-left:3px solid #00d4aa;white-space:pre-line;line-height:1.6}
+    .status.show{display:block}
+    .status.success{background:#0a1f1a;border-left-color:#00d4aa;color:#00d4aa}
+    .status.error{background:#1f0a0a;border-left-color:#ff4444;color:#ff6666}
+    .status.loading{background:#0a0f1f;border-left-color:#ffd700;color:#ffd700;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
+    .preview{margin-top:14px;padding:12px;border-radius:6px;font-size:12px;display:none;white-space:pre-line;line-height:1.6}
+    .preview.show{display:block}
+    .info-box{background:#0a0f1f;border:1px solid #1a3050;border-radius:6px;padding:14px;font-size:11px;color:#999;line-height:1.7;margin-top:24px}
+    .info-box b{color:#00d4aa}
+    .warn-box{background:#1f1a0a;border:1px solid #4a3a1a;border-radius:6px;padding:12px;font-size:11px;color:#d4b86a;line-height:1.6;margin-top:12px}
+    .warn-box b{color:#ffd700}
+    #gate{position:fixed;inset:0;background:linear-gradient(135deg,#0a0f15,#1a1f2e);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+    #gate .card{background:#0f1620;border:1px solid #1a3050;border-radius:12px;padding:36px;max-width:380px;width:100%;text-align:center}
+    #gate input{width:100%;padding:10px 14px;background:#0a0f15;border:1px solid #1a3a3a;border-radius:6px;color:#e8e8e8;font-size:13px;margin:16px 0 12px}
+    #gateErr{color:#ff6666;font-size:12px;min-height:18px;margin-top:8px}
+    #app{display:none}
   </style>
 </head>
 <body>
 
+<div id="gate">
+  <div class="card">
+    <div class="logo" style="margin:0 auto 16px">B</div>
+    <h1 style="font-size:20px">Admin Access</h1>
+    <p class="subtitle" style="margin-bottom:0">Aanya Voice Analytics</p>
+    <input type="password" id="gatePwd" placeholder="Enter admin password..." onkeyup="if(event.key==='Enter')checkGate()">
+    <button onclick="checkGate()">🔓 Unlock</button>
+    <div id="gateErr"></div>
+  </div>
+</div>
+
+<div id="app">
 <div class="container">
-  <h1>🔐 Admin Upload</h1>
-  <p class="subtitle">Voice Analytics Excel Upload</p>
+  <div class="logo">B</div>
+  <h1>Admin Upload</h1>
+  <p class="subtitle">Publish Voice Analytics data</p>
 
-  <form id="uploadForm">
-    <div class="form-group">
-      <label>GitHub Personal Access Token</label>
-      <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxx" required>
-      <small style="color:#666;font-size:10px;display:block;margin-top:4px">Get from: github.com/settings/tokens</small>
+  <div class="form-group">
+    <label>GitHub Token (fine-grained)</label>
+    <input type="password" id="ghToken" placeholder="github_pat_xxxxxxxx" oninput="rememberToken()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+      <span class="hint" style="margin:0">Create a <b>fine-grained</b> token scoped to <b>only this repo</b> with <b>Contents: Read and write</b>:<br><a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens/new</a></span>
+      <button type="button" id="forgetBtn" onclick="forgetToken()" style="width:auto;margin:0;padding:4px 10px;font-size:9px;background:transparent;border:1px solid #1a3050;color:#888;text-transform:none;letter-spacing:0;display:none">Forget token</button>
     </div>
+  </div>
 
-    <div class="form-group">
-      <label>Excel File (.xlsx)</label>
-      <input type="file" id="excelFile" accept=".xlsx,.xls" required>
-    </div>
+  <div class="form-group">
+    <label>Excel File (.xlsx)</label>
+    <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="validateFile()">
+    <span class="hint">Must contain a "Voice Export" sheet.</span>
+  </div>
 
-    <button type="submit" id="submitBtn">📤 Upload & Publish</button>
-  </form>
+  <div id="preview" class="preview"></div>
+
+  <button id="submitBtn" onclick="doUpload()" disabled>📤 Upload &amp; Publish</button>
 
   <div id="status" class="status"></div>
 
   <div class="info-box">
-    <b>ℹ️ How it works:</b><br>
-    1. Get GitHub token (repo access required once)<br>
-    2. Enter token above<br>
-    3. Select Excel file<br>
-    4. Click Upload<br>
-    5. Dashboard updates in 2 minutes<br><br>
-    <b>No repo access needed for other admins!</b> Just share the token.
+    <b>How it works:</b><br>
+    1. Paste your fine-grained GitHub token<br>
+    2. Select the Excel export — it's validated automatically<br>
+    3. Click Upload &amp; Publish<br>
+    4. Dashboard updates in ~1-2 minutes<br>
+    Each upload saves a dated backup + updates the live file.
   </div>
+
+  <div class="warn-box">
+    <b>⚠️ Token safety:</b> Use a <b>fine-grained</b> token limited to this one repository. Do not paste a classic token (those grant access to all your repos). Treat the token like a password — don't share it in chats or docs.
+  </div>
+</div>
 </div>
 
 <script>
-document.getElementById("uploadForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  
-  const token = document.getElementById("ghToken").value;
-  const file = document.getElementById("excelFile").files[0];
+const ADMIN_PASSWORD_HASH = "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a";
+const GITHUB_OWNER = "ravi-agarwal-bits-digital";
+const GITHUB_REPO  = "anya-voice-dashboard";
+const GITHUB_BRANCH = "main";
+const REQUIRED_SHEET = "Voice Export";
+const REQUIRED_COLS = ["Created At (IST)","Call ID","Duration (s)","Lead Temp.","Bot Conf."];
 
-  if (!token) {
-    showStatus("❌ Enter GitHub token", "error");
-    return;
-  }
+let VALIDATED_BASE64 = null;
 
-  if (!file) {
-    showStatus("❌ Select an Excel file", "error");
-    return;
-  }
+async function sha256(text){
+  const data=new TextEncoder().encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 
-  if (!file.name.includes(".xlsx") && !file.name.includes(".xls")) {
-    showStatus("❌ File must be .xlsx or .xls", "error");
-    return;
-  }
-
-  showStatus("⏳ Uploading to GitHub...", "loading");
-  document.getElementById("submitBtn").disabled = true;
-
-  try {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      // Convert to base64
-      const bytes = new Uint8Array(e.target.result);
-      let base64 = '';
-      for(let i = 0; i < bytes.length; i++){
-        base64 += String.fromCharCode(bytes[i]);
-      }
-      base64 = btoa(base64);
-      
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Upload to both paths
-      const datedSuccess = await uploadFile(
-        `data/voice_analytics_${today}.xlsx`,
-        base64,
-        token
-      );
-      
-      const mainSuccess = await uploadFile(
-        `data/voice_analytics.xlsx`,
-        base64,
-        token
-      );
-      
-      if(datedSuccess && mainSuccess) {
-        showStatus(`✅ Success! File uploaded\n\n🚀 Dashboard will update in 2 minutes`, "success");
-        document.getElementById("ghToken").value = "";
-        document.getElementById("excelFile").value = "";
-      } else {
-        showStatus("❌ Upload failed. Check token & try again", "error");
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  } catch (err) {
-    showStatus("❌ Error: " + err.message, "error");
-  } finally {
-    document.getElementById("submitBtn").disabled = false;
-  }
-});
-
-async function uploadFile(path, content, token) {
-  try {
-    // Step 1: Get existing file's SHA (if it exists)
-    let sha = null;
-    try {
-      const getResp = await fetch(
-        `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `token ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      if(getResp.ok) {
-        const data = await getResp.json();
-        if(data.sha) {
-          sha = data.sha;
-        }
-      }
-    } catch(e) {
-      // File doesn't exist yet, that's fine
-    }
-    
-    // Step 2: Upload/Update file with SHA if we have it
-    const body = {
-      message: `Update ${path.split('/')[1]}`,
-      content: content,
-      branch: GITHUB_BRANCH
-    };
-    
-    // If file exists, include SHA
-    if(sha) {
-      body.sha = sha;
-    }
-    
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `token ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      }
-    );
-    
-    if(!response.ok) {
-      const error = await response.json();
-      console.error(`Upload failed for ${path}:`, error);
-      return false;
-    }
-    
-    return true;
-  } catch(err) {
-    console.error('Upload error:', err);
-    return false;
+async function checkGate(){
+  const pwd=document.getElementById('gatePwd').value;
+  const err=document.getElementById('gateErr');
+  if(!pwd){err.textContent="Enter the password.";return;}
+  if((await sha256(pwd))===ADMIN_PASSWORD_HASH){
+    document.getElementById('gate').style.display='none';
+    document.getElementById('app').style.display='block';
+    restoreToken();
+  }else{
+    err.textContent="\u274c Incorrect password.";
+    document.getElementById('gatePwd').value="";
   }
 }
 
-function showStatus(msg, type) {
-  const statusDiv = document.getElementById("status");
-  statusDiv.textContent = msg;
-  statusDiv.className = `status show ${type}`;
+// Session token storage — kept while browser open, cleared on close
+function rememberToken(){
+  const t=document.getElementById('ghToken').value.trim();
+  if(t){sessionStorage.setItem('gh_token',t);document.getElementById('forgetBtn').style.display='block';}
+  else{sessionStorage.removeItem('gh_token');document.getElementById('forgetBtn').style.display='none';}
+}
+function restoreToken(){
+  const t=sessionStorage.getItem('gh_token');
+  if(t){document.getElementById('ghToken').value=t;document.getElementById('forgetBtn').style.display='block';}
+}
+function forgetToken(){
+  sessionStorage.removeItem('gh_token');
+  document.getElementById('ghToken').value='';
+  document.getElementById('forgetBtn').style.display='none';
+}
+
+function validateFile(){
+  VALIDATED_BASE64=null;
+  document.getElementById('submitBtn').disabled=true;
+  document.getElementById('preview').className="preview";
+  const file=document.getElementById('excelFile').files[0];
+  if(!file)return;
+  if(!/\.(xlsx|xls)$/i.test(file.name)){showPreview("\u274c File must be .xlsx or .xls","error");return;}
+
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      const bytes=new Uint8Array(e.target.result);
+      const wb=XLSX.read(bytes,{type:'array'});
+      if(!wb.SheetNames.includes(REQUIRED_SHEET)){
+        showPreview(`\u274c Missing "${REQUIRED_SHEET}" sheet.\nFound: ${wb.SheetNames.join(", ")||"(none)"}`,"error");return;
+      }
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[REQUIRED_SHEET],{defval:""});
+      if(!rows.length){showPreview(`\u274c "${REQUIRED_SHEET}" sheet is empty.`,"error");return;}
+      const headers=Object.keys(rows[0]);
+      const missing=REQUIRED_COLS.filter(c=>!headers.includes(c));
+      if(missing.length){showPreview(`\u274c Missing required column(s):\n${missing.join(", ")}`,"error");return;}
+      let b='';for(let i=0;i<bytes.length;i++)b+=String.fromCharCode(bytes[i]);
+      VALIDATED_BASE64=btoa(b);
+      showPreview(`\u2705 Valid file \u2014 ${rows.length} call records found.\nReady to publish.`,"ok");
+      document.getElementById('submitBtn').disabled=false;
+    }catch(err){showPreview("\u274c Could not read file: "+err.message,"error");}
+  };
+  reader.onerror=()=>showPreview("\u274c Failed to read file.","error");
+  reader.readAsArrayBuffer(file);
+}
+
+function showPreview(msg,type){
+  const p=document.getElementById('preview');
+  p.textContent=msg;
+  p.className="preview show";
+  p.style.background=type==="error"?"#1f0a0a":"#0a1f1a";
+  p.style.borderLeft="3px solid "+(type==="error"?"#ff4444":"#00d4aa");
+  p.style.color=type==="error"?"#ff6666":"#00d4aa";
+}
+
+async function doUpload(){
+  const token=document.getElementById('ghToken').value.trim();
+  if(!token){showStatus("\u274c Enter your GitHub token.","error");return;}
+  if(!VALIDATED_BASE64){showStatus("\u274c Select a valid Excel file first.","error");return;}
+
+  showStatus("\u23f3 Uploading to GitHub...","loading");
+  document.getElementById('submitBtn').disabled=true;
+
+  const today=new Date().toLocaleDateString('en-CA');
+  const datedPath=`data/voice_analytics_${today}.xlsx`;
+  const livePath=`data/voice_analytics.xlsx`;
+
+  const r1=await uploadFile(datedPath,VALIDATED_BASE64,token);
+  const r2=await uploadFile(livePath,VALIDATED_BASE64,token);
+
+  if(r1.ok && r2.ok){
+    showStatus(`\u2705 Published successfully!\n\n\u2022 Backup saved: ${datedPath.split('/')[1]}\n\u2022 Live file updated\n\n\ud83d\ude80 Dashboard refreshes in ~1-2 minutes.`,"success");
+    document.getElementById('excelFile').value="";
+    document.getElementById('preview').className="preview";
+    VALIDATED_BASE64=null;
+    // Token intentionally kept in session for the next upload (use "Forget token" to clear)
+  }else{
+    const errs=[];
+    if(!r1.ok)errs.push(`Backup (${datedPath.split('/')[1]}): ${r1.error}`);
+    if(!r2.ok)errs.push(`Live file: ${r2.error}`);
+    showStatus("\u274c Upload failed:\n\n"+errs.join("\n")+"\n\nCheck your token has Contents: write on this repo.","error");
+    document.getElementById('submitBtn').disabled=false;
+  }
+}
+
+async function uploadFile(path,content,token){
+  try{
+    let sha=null;
+    const getResp=await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`,{
+      headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json'}
+    });
+    if(getResp.ok){const d=await getResp.json();sha=d.sha;}
+    const body={message:`Update ${path.split('/')[1]} via admin`,content,branch:GITHUB_BRANCH};
+    if(sha)body.sha=sha;
+    const resp=await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`,{
+      method:'PUT',
+      headers:{'Authorization':`Bearer ${token}`,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    if(!resp.ok){const e=await resp.json().catch(()=>({}));return {ok:false,error:(e.message||resp.status+" "+resp.statusText)};}
+    return {ok:true};
+  }catch(err){return {ok:false,error:err.message};}
+}
+
+function showStatus(msg,type){
+  const s=document.getElementById('status');
+  s.textContent=msg;
+  s.className=`status show ${type}`;
 }
 </script>
 
