@@ -34,7 +34,7 @@ section{margin:46px 0}
 .shead{display:flex;align-items:baseline;gap:14px;margin-bottom:22px}
 .shead h2{font-family:'Fraunces',serif;font-size:25px;font-weight:600;letter-spacing:-.3px}
 .shead .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);border:1px solid var(--line);padding:3px 8px;border-radius:5px}
-.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .kpi{background:linear-gradient(160deg,#18212f,#121925);border:1px solid var(--line);border-radius:13px;padding:18px 16px;position:relative;overflow:hidden;transition:transform .18s ease}
 .kpi.pulse{animation:kpiPulse 0.6s ease}
 .kpi:hover{transform:translateY(-2px)}
@@ -268,43 +268,29 @@ window.addEventListener('DOMContentLoaded',()=>{
 
     <!-- FILTER BAR -->
     <div style="border-top:1px solid rgba(0,212,170,0.12);padding:12px 0">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px">
-        <label style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">Filter by Date:</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <label style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">Filter:</label>
         <button onclick="quickFilter('today')" id="btn-today" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Today</button>
         <button onclick="quickFilter('yesterday')" id="btn-yesterday" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Yesterday</button>
-        <button onclick="quickFilter('week')" id="btn-week" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">This Week</button>
-        <button onclick="quickFilter('month')" id="btn-month" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">This Month</button>
-        <button onclick="quickFilter('ytd')" id="btn-ytd" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">YTD</button>
+        <button onclick="quickFilter('week')" id="btn-week" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 7 Days</button>
+        <button onclick="quickFilter('month')" id="btn-month" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 30 Days</button>
         <button onclick="quickFilter('all')" id="btn-all" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">All</button>
-        <button onclick="toggleCustomFilter()" id="btn-custom" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Custom</button>
-        
-        <!-- Selected Date Range - INLINE with buttons -->
-        <div id="selectedDateRange" style="padding:6px 12px;background:#0f1620;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600;margin-left:auto">
-          📅 <span id="dateRangeText" style="font-family:'IBM Plex Mono',monospace;font-size:11px"></span>
+        <button onclick="toggleCustomFilter()" id="btn-custom" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">📆 Custom</button>
+
+        <!-- Inline custom date range (compact, appears in same row) -->
+        <div id="customFilterPanel" style="display:none;align-items:center;gap:8px;background:#0a1118;border:1px solid rgba(0,212,170,0.3);border-radius:6px;padding:5px 8px">
+          <input type="date" id="filterFromDate" style="padding:5px 8px;background:#0a0f15;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer">
+          <span style="color:var(--faint);font-size:13px">→</span>
+          <input type="date" id="filterToDate" style="padding:5px 8px;background:#0a0f15;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer">
+          <button onclick="applyCustomFilter()" style="padding:5px 14px;background:var(--teal);border:none;border-radius:5px;color:#000;font-size:12px;font-weight:700;cursor:pointer">Apply</button>
         </div>
-      </div>
-      
-      <div style="display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px">
-        <input type="text" id="searchMobile" placeholder="🔍 Search mobile number..." style="padding:6px 10px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;width:220px" oninput="debouncedSearch(this.value)">
-      </div>
-      
-      <div id="customFilterPanel" style="display:none;margin-top:14px;padding:18px;background:linear-gradient(135deg,#0f1620,#0a1118);border-radius:10px;border:1px solid rgba(0,212,170,0.25);box-shadow:0 8px 24px rgba(0,0,0,0.3)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-          <span style="font-size:13px;color:var(--teal);font-weight:600">📆 Custom Date Range</span>
-          <span style="font-size:11px;color:var(--faint)">— pick a start and end date</span>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
-          <div style="flex:1;min-width:140px">
-            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">From</label>
-            <input type="date" id="filterFromDate" style="width:100%;padding:9px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:7px;color:var(--text);font-size:13px;font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:border-color .2s" onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--line)'">
+
+        <!-- Selected Date Range pill + Search (pushed right) -->
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+          <div id="selectedDateRange" style="padding:6px 12px;background:#0f1620;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
+            📅 <span id="dateRangeText" style="font-family:'IBM Plex Mono',monospace;font-size:11px"></span>
           </div>
-          <div style="color:var(--faint);font-size:16px;padding-bottom:8px">→</div>
-          <div style="flex:1;min-width:140px">
-            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">To</label>
-            <input type="date" id="filterToDate" style="width:100%;padding:9px 12px;background:#0a0f15;border:1px solid var(--line);border-radius:7px;color:var(--text);font-size:13px;font-family:'IBM Plex Mono',monospace;cursor:pointer;transition:border-color .2s" onfocus="this.style.borderColor='var(--teal)'" onblur="this.style.borderColor='var(--line)'">
-          </div>
-          <button onclick="applyCustomFilter()" style="padding:9px 22px;background:var(--teal);border:none;border-radius:7px;color:#000;font-size:13px;font-weight:700;cursor:pointer;transition:transform .15s;white-space:nowrap" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">Apply →</button>
-          <button onclick="toggleCustomFilter()" style="padding:9px 14px;background:transparent;border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:13px;cursor:pointer;white-space:nowrap">Cancel</button>
+          <input type="text" id="searchMobile" placeholder="🔍 Search mobile..." style="padding:6px 10px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;width:180px" oninput="debouncedSearch(this.value)">
         </div>
       </div>
     </div>
@@ -461,21 +447,27 @@ let FILTERED_RECORDS=[];
 let ALL_RECORDS_BACKUP=[];
 
 function quickFilter(type){
-  const today=new Date();
-  today.setHours(0,0,0,0);
-  let from=new Date(today),to=new Date(today);
-  
+  // Anchor to the LATEST date in the data, not the browser's clock —
+  // the data may be historical, so "today/this week" must mean relative to the dataset.
+  const dataMin=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort()[0]:null;
+  const dataMax=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort().slice(-1)[0]:null;
+  if(!dataMax){return;}
+
+  const parseISO=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);};
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  const anchor=parseISO(dataMax); // "today" = latest data day
+  let from=new Date(anchor),to=new Date(anchor);
+
   switch(type){
     case 'today':break;
     case 'yesterday':from.setDate(from.getDate()-1);to.setDate(to.getDate()-1);break;
-    case 'week':from.setDate(from.getDate()-from.getDay());break;
-    case 'month':from=new Date(today.getFullYear(),today.getMonth(),1);break;
-    case 'ytd':from=new Date(today.getFullYear(),0,1);break;
-    case 'all':from=new Date(1970,0,1);break;
+    case 'week':from.setDate(from.getDate()-6);break;        // last 7 days of data
+    case 'month':from.setDate(from.getDate()-29);break;      // last 30 days of data
+    case 'ytd':from=new Date(anchor.getFullYear(),0,1);break;
+    case 'all':from=parseISO(dataMin);to=parseISO(dataMax);break;
   }
-  
-  // Use local date (not ISO/UTC) to avoid timezone off-by-one
-  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
   $("filterFromDate").value=fmt(from);
   $("filterToDate").value=fmt(to);
   $("customFilterPanel").style.display="none";
@@ -485,16 +477,17 @@ function quickFilter(type){
 
 function toggleCustomFilter(){
   const panel=$("customFilterPanel");
-  panel.style.display=panel.style.display==="none"?"block":"none";
+  panel.style.display=panel.style.display==="none"?"flex":"none";
 }
 
 function applyCustomFilter(){
   applyFilters();
   $("customFilterPanel").style.display="none";
+  updateFilterButtons("custom");
 }
 
 function updateFilterButtons(active){
-  ["today","yesterday","week","month","ytd","all","custom"].forEach(b=>{
+  ["today","yesterday","week","month","all","custom"].forEach(b=>{
     const btn=$("btn-"+b);
     if(btn)btn.style.background=b===active?"var(--teal)":"#0f1620",btn.style.color=b===active?"#000":"var(--text)";
   });
@@ -530,9 +523,13 @@ function applyFilters(){
   });
   
   RECORDS=FILTERED_RECORDS;
-  // Honest empty-state: if filter yields zero, tell the user instead of silently showing everything
+  // Rebuild meta pills for the current filtered set (or honest empty-state)
   if(RECORDS.length===0){
     $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)">⚠️ <b>No calls in selected range</b></div>`;
+  }else{
+    const dts=RECORDS.map(r=>r.d).sort();const dmn=dts[0],dmx=dts[dts.length-1];
+    const tMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+    $("meta").innerHTML=[["📅",dmn+" – "+dmx],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",tMins+" mins"],["💰","₹"+tMins*5],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   }
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
@@ -934,6 +931,7 @@ function paintKPIs(o){
 }
 
 function paintFunnel(o){
+  if(!o.n){$("funnel").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls in this range.</div>`;return;}
   const pct=a=>Math.round(a/o.n*100);
   const F=[[o.n,"Calls started","#5a9bd8",100],[o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*70)+15],[o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+8]];
   let h="";F.forEach((f,i)=>{h+=`<div class="fstep" style="background:${f[2]};width:${f[3]}%"><span class="fn">${f[0]}</span><span class="ft">${f[1]}</span><span class="fp">${pct(f[0])}%</span></div>`;});
@@ -1164,6 +1162,7 @@ function escCSV(val){
 }
 
 function exportHottestLeads(){
+  if(!RECORDS.length){alert("No data to export in the current filter range.");return;}
   const byPhone=groupByPhone(RECORDS);
   const leads=Object.entries(byPhone).map(([ph,calls])=>{
     const hot=calls.filter(c=>c.leadTemp==="Hot").length;
@@ -1187,6 +1186,7 @@ function exportHottestLeads(){
 
 function exportSerialEngagers(){
   const serial=findSerialCallers(RECORDS);
+  if(!serial.length){alert("No serial engagers (3+ calls) to export in this range.");return;}
   let csv='Phone,Total Calls,Frustrated,General,Total Duration (mins),Total Cost (Rs),Last Call Time\n';
   serial.forEach(s=>{
     const lastCall=s.calls[0];
@@ -1197,6 +1197,7 @@ function exportSerialEngagers(){
 
 function exportCallbacks(){
   const cbs=RECORDS.filter(r=>r.callback);
+  if(!cbs.length){alert("No callback requests to export in this range.");return;}
   let csv='Phone,Call Time,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
   cbs.sort((a,b)=>b.ts-a.ts).forEach(c=>{
     const durMins=Math.round(c.dur/60*10)/10;
