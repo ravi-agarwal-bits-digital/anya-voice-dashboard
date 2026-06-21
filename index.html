@@ -131,13 +131,13 @@ async function checkPassword(){
   if(!pwd){document.getElementById('loginError').textContent='Please enter a password.';return;}
   
   const hash=await sha256(pwd);
-  // For first-time setup: console.log the hash and put it in SECURITY.PASSWORD_HASH
-  // console.log('Password hash:',hash);
   
   if(hash===SECURITY.PASSWORD_HASH){
+    window.DECRYPT_PASSPHRASE=pwd;
     sessionStorage.setItem('auth_user','password_user');
     sessionStorage.setItem('auth_time',Date.now().toString());
     sessionStorage.setItem('auth_method','password');
+    sessionStorage.setItem('dk',pwd); // session-only, for decryption on this device while browser open
     unlockDashboard('password_user');
   } else {
     document.getElementById('loginError').textContent='❌ Incorrect password.';
@@ -197,6 +197,7 @@ function checkExistingSession(){
   const timeout=SECURITY.SESSION_TIMEOUT_MINS*60*1000;
   
   if(authUser && (Date.now()-authTime)<timeout){
+    window.DECRYPT_PASSPHRASE=sessionStorage.getItem('dk')||'';
     unlockDashboard(authUser);
     return true;
   }
@@ -402,19 +403,1325 @@ function autoLoadLatestExcel(){
 
   fetch('data/voice_analytics.xlsx',{cache:'no-store'})
     .then(r=>{
-      if(r.ok)return r.blob();
+      if(r.ok)return r.arrayBuffer();
       throw new Error('File not found');
     })
-    .then(blob=>{
-      const file=new File([blob],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
+    .then(async buf=>{
+      const bytes=new Uint8Array(buf);
+      let fileBytes=bytes;
+      // Detect encryption magic header "AANYAENC1"
+      if(isEncrypted(bytes)){
+        try{
+          fileBytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');
+        }catch(e){
+          $("dataLoading").style.display="none";
+          $("mainWrap").style.display="none";
+          $("dataPlaceholder").style.display="none";
+          // Wrong passphrase → lock back to login with a clear message
+          $("loginError").textContent="❌ Could not decrypt data — wrong password. Please re-enter.";
+          $("loginGate").style.display="flex";
+          $("dashboardContent").style.display="none";
+          sessionStorage.removeItem('dk');sessionStorage.removeItem('auth_user');
+          return;
+        }
+      }
+      const file=new File([fileBytes],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
       handle(file);
     })
     .catch(err=>{
-      // Safe placeholder swap — does NOT destroy the page
       $("dataLoading").style.display="none";
       $("mainWrap").style.display="none";
       $("dataPlaceholder").style.display="flex";
     });
+}
+
+// ===== AES-256-GCM decryption (matches admin encryption) =====
+const ENC_MAGIC="AANYAENC1";
+function isEncrypted(bytes){
+  if(bytes.length<ENC_MAGIC.length)return false;
+  for(let i=0;i<ENC_MAGIC.length;i++){if(bytes[i]!==ENC_MAGIC.charCodeAt(i))return false;}
+  return true;
+}
+async function deriveKey(passphrase,salt){
+  const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},
+    baseKey,{name:'AES-GCM',length:256},false,['decrypt']
+  );
+}
+async function decryptData(bytes,passphrase){
+  // Layout: [9 magic][16 salt][12 iv][...ciphertext]
+  const off=ENC_MAGIC.length;
+  const salt=bytes.slice(off,off+16);
+  const iv=bytes.slice(off+16,off+28);
+  const ct=bytes.slice(off+28);
+  const key=await deriveKey(passphrase,salt);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  return new Uint8Array(plain);
+}
+
+function retryDataLoad(){
+  window.DATA_LOADED=false;
+  autoLoadLatestExcel();
+}
+function handle(file){
+  $("err").textContent="";
+  if(typeof XLSX==="undefined"){$("err").textContent="❌ Spreadsheet engine didn't load — check your connection and refresh.";return;}
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      let name=wb.SheetNames.find(n=>n.toLowerCase().includes("voice export"))||wb.SheetNames.find(n=>n.toLowerCase().includes("export"));
+      if(!name){$("err").textContent='❌ No "Voice Export" sheet found. Sheets: '+wb.SheetNames.join(", ");return;}
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:""});
+      if(!rows.length){$("err").textContent="❌ That sheet is empty.";return;}
+      RECORDS=rows.map((r,i)=>{
+        const rec=rowToRecord(r);
+        return rec;
+      }).filter(r=>r && r.d);
+      SRC=file.name;
+      boot();
+    }catch(err){$("err").textContent="❌ Couldn't read that file: "+err.message;}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+let FILTERED_RECORDS=[];
+let ALL_RECORDS_BACKUP=[];
+
+function quickFilter(type){
+  const dataMin=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort()[0]:null;
+  const dataMax=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort().slice(-1)[0]:null;
+  if(!dataMax){return;}
+
+  const parseISO=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);};
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  // Real calendar "now" — quick ranges are relative to the actual current date.
+  // If a range has no data (e.g. Today but data ends earlier), the empty-state shows honestly.
+  const today=new Date();today.setHours(0,0,0,0);
+  let from=new Date(today),to=new Date(today);
+
+  switch(type){
+    case 'today':break;
+    case 'yesterday':from.setDate(from.getDate()-1);to.setDate(to.getDate()-1);break;
+    case 'week':from.setDate(from.getDate()-6);break;        // last 7 calendar days
+    case 'month':from.setDate(from.getDate()-29);break;      // last 30 calendar days
+    case 'all':from=parseISO(dataMin);to=parseISO(dataMax);break;
+  }
+
+  $("filterFromDate").value=fmt(from);
+  $("filterToDate").value=fmt(to);
+  $("customFilterPanel").style.display="none";
+  applyFilters();
+  updateFilterButtons(type);
+}
+
+function toggleCustomFilter(){
+  const panel=$("customFilterPanel");
+  panel.style.display=panel.style.display==="none"?"flex":"none";
+}
+
+function applyCustomFilter(){
+  applyFilters();
+  $("customFilterPanel").style.display="none";
+  updateFilterButtons("custom");
+}
+
+function updateFilterButtons(active){
+  ["today","yesterday","week","month","all","custom"].forEach(b=>{
+    const btn=$("btn-"+b);
+    if(btn)btn.style.background=b===active?"var(--teal)":"#0f1620",btn.style.color=b===active?"#000":"var(--text)";
+  });
+}
+
+function applyFilters(){
+  const fromDate=$("filterFromDate").value;
+  const toDate=$("filterToDate").value;
+  
+  // Show selected date range
+  if(fromDate && toDate){
+    const from=new Date(fromDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    const to=new Date(toDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    $("dateRangeText").textContent=`${from} → ${to}`;
+    $("selectedDateRange").style.display="block";
+  }else if(fromDate){
+    const from=new Date(fromDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    $("dateRangeText").textContent=`From ${from}`;
+    $("selectedDateRange").style.display="block";
+  }else if(toDate){
+    const to=new Date(toDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    $("dateRangeText").textContent=`Until ${to}`;
+    $("selectedDateRange").style.display="block";
+  }else{
+    $("selectedDateRange").style.display="none";
+  }
+  
+  FILTERED_RECORDS=ALL_RECORDS_BACKUP.filter(r=>{
+    if(!r.d) return false;
+    if(fromDate && r.d<fromDate) return false;
+    if(toDate && r.d>toDate) return false;
+    return true;
+  });
+  
+  RECORDS=FILTERED_RECORDS;
+  // Rebuild meta pills for the current filtered set (or honest empty-state)
+  if(RECORDS.length===0){
+    $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)">⚠️ <b>No calls in selected range</b></div>`;
+  }else{
+    const dts=RECORDS.map(r=>r.d).sort();const dmn=dts[0],dmx=dts[dts.length-1];
+    const tMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+    $("meta").innerHTML=[["📅",dmn+" – "+dmx],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",tMins+" mins"],["💰","₹"+tMins*5],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+  }
+  const o=aggregate(RECORDS);
+  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
+  
+  // Trigger KPI and verdict animations
+  document.querySelectorAll('.kpi').forEach(kpi=>{
+    kpi.classList.remove('pulse');
+    setTimeout(()=>kpi.classList.add('pulse'),10);
+  });
+  const verdict=document.querySelector('.verdict');
+  if(verdict){
+    verdict.classList.remove('pulse');
+    setTimeout(()=>verdict.classList.add('pulse'),10);
+  }
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
+  closeUserSearch();
+}
+
+let searchTimer;
+function debouncedSearch(val){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>searchUserByMobile(val),250);
+}
+
+function searchUserByMobile(mobile){
+  mobile=mobile.trim();
+  if(!mobile){closeUserSearch();return;}
+  // Require at least 4 digits to avoid matching everything on a single keystroke
+  if(mobile.length<4){closeUserSearch();return;}
+  
+  const userCalls=ALL_RECORDS_BACKUP.filter(r=>String(r.from||"").includes(mobile)).sort((a,b)=>b.ts-a.ts);
+  if(!userCalls.length){
+    $("userSearchResult").style.display="block";
+    $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">No calls found for "${esc(mobile)}"</span>`;
+    $("userSearchStats").innerHTML="";
+    $("userSearchTimeline").innerHTML="";
+    return;
+  }
+  
+  // Calculate stats
+  const frustrated=userCalls.filter(c=>c.frustrated).length;
+  const general=userCalls.length-frustrated;
+  const avgConf=Math.round(userCalls.reduce((a,c)=>a+c.conf,0)/userCalls.length);
+  const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
+  const totalDur=Math.round(userCalls.reduce((a,c)=>a+c.dur,0)/60);
+  const totalCost=totalDur*5;
+  
+  // Lead temperature breakdown
+  const hot=userCalls.filter(c=>c.leadTemp==="Hot").length;
+  const warm=userCalls.filter(c=>c.leadTemp==="Warm").length;
+  const cold=userCalls.filter(c=>c.leadTemp==="Cold").length;
+  
+  // Determine overall lead type
+  const hotRatio=hot/userCalls.length;
+  let leadType="Cold", leadEmoji="❄️", leadColor="var(--cold)";
+  if(hotRatio>=0.6){leadType="Hot";leadEmoji="🔥";leadColor="var(--hot)";}
+  else if(hotRatio>=0.3){leadType="Warm";leadEmoji="🌡️";leadColor="var(--warm)";}
+  
+  // Intent breakdown
+  const intents={};
+  userCalls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
+  const intentList=Object.entries(intents).sort((a,b)=>b[1]-a[1]).map(([i,cnt])=>`${esc(i)} (${cnt})`).join(" • ");
+  
+  // Engagement score
+  const engagementScore=userCalls.length*2+frustrated*3+avgNeed*0.5;
+  const engagement=engagementScore>20?"🔥 Very High":engagementScore>12?"🟠 High":"Normal";
+  
+  $("userSearchPhone").innerHTML=`<span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">${maskPhone(userCalls[0].from)}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${leadEmoji} ${leadType}</span>`;
+  $("userSearchStats").innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:11px">
+      <div><b>Calls:</b> ${userCalls.length} (😤${frustrated} • ✓${general})</div>
+      <div><b>Engagement:</b> ${engagement}</div>
+      <div><b>Duration:</b> ⏳ ${totalDur} mins</div>
+      <div><b>Total Cost:</b> 💰 ₹${totalCost}</div>
+      <div><b>Avg Confidence:</b> ${avgConf}%</div>
+      <div><b>Avg Need Score:</b> ${avgNeed}</div>
+      <div style="grid-column:1/-1"><b>Lead Temperature:</b> 🔥${hot} | 🌡️${warm} | ❄️${cold}</div>
+      <div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>
+    </div>
+  `;
+  
+  $("userSearchTimeline").innerHTML=userCalls.map((c,i)=>{
+    const date=formatCallTime(c);
+    const tag=c.frustrated?`<b style="color:var(--hot)">😤 FRUSTRATED</b>`:` <b style="color:var(--green)">✓ GENERAL</b>`;
+    return`<div style="padding:10px;border-left:2px solid ${c.frustrated?'var(--hot)':'var(--green)'};margin-bottom:8px;background:#0f1620;border-radius:4px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
+        <b>Call ${i+1} ${tag}</b>
+        <span style="color:var(--muted)">${date}</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);line-height:1.4">
+        <b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
+        <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${esc(c.cbReason)}<br>
+        <span style="font-size:9px;margin-top:4px;display:block">${esc(c.summary)}</span>
+      </div>
+    </div>`;
+  }).join("");
+  
+  $("userSearchResult").style.display="block";
+}
+
+function closeUserSearch(){
+  $("userSearchResult").style.display="none";
+  $("searchMobile").value="";
+}
+
+function parseDateFull(v){
+  const s=String(v||"").trim();
+  if(!s)return null;
+
+  // Format 1: DD Mon YYYY HH:MM:SS AM/PM IST (12 Jun 2026, 06:22:01 PM IST)
+  let dm2=s.match(/(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/);
+  if(dm2){
+    const mo={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11}[dm2[2].toLowerCase()];
+    if(mo==null)return null;
+    
+    let h=0,m=0;
+    const tm=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)\s*(?:IST)?/i);
+    if(tm){
+      h=Number(tm[1])%12;
+      m=Number(tm[2])||0;
+      if(/pm/i.test(tm[3]))h+=12;
+    }
+    return{iso:`${dm2[3]}-${String(mo+1).padStart(2,"0")}-${dm2[1].padStart(2,"0")}`,h,m};
+  }
+
+  // Format 2: DD/MM/YYYY HH:MM:SS AM/PM
+  dm2=s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if(dm2){
+    let h=Number(dm2[4])%12;
+    const m=Number(dm2[5])||0;
+    if(/pm/i.test(s))h+=12;
+    return{iso:`${dm2[3]}-${String(Number(dm2[2])).padStart(2,"0")}-${dm2[1].padStart(2,"0")}`,h,m};
+  }
+
+  // Format 3: YYYY-MM-DD
+  dm2=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(dm2){
+    let h=0,m=0;
+    const tm=s.match(/(\d{1,2}):(\d{2})/);
+    if(tm){h=Number(tm[1]);m=Number(tm[2]);}
+    return{iso:`${dm2[1]}-${String(Number(dm2[2])).padStart(2,"0")}-${String(Number(dm2[3])).padStart(2,"0")}`,h,m};
+  }
+
+  return null;
+}
+
+function formatCallTime(rec){
+  if(!rec.d)return "";
+  const ampm=rec.h<12?"AM":"PM";
+  const displayH=rec.h%12||12;
+  const displayM=String(rec.m).padStart(2,"0");
+  return `${rec.d}, ${String(displayH).padStart(2,"0")}:${displayM} ${ampm}`;
+}
+
+function formatCallTimeWithWeekday(rec){
+  if(!rec.d)return "";
+  const dateObj=new Date(rec.d);
+  const day=dateObj.toLocaleDateString('en-IN',{weekday:'short',month:'short',day:'numeric'});
+  const ampm=rec.h<12?"AM":"PM";
+  const displayH=rec.h%12||12;
+  const displayM=String(rec.m).padStart(2,"0");
+  return `${day}, ${String(displayH).padStart(2,"0")}:${displayM} ${ampm}`;
+}
+
+function formatDuration(seconds){
+  const mins=Math.floor(seconds/60);
+  const secs=Math.round(seconds%60);
+  return mins>0?`${mins}m ${secs}s`:`${secs}s`;
+}
+
+// XSS protection — escape any Excel-sourced string before injecting via innerHTML
+function esc(s){
+  return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function intentOf(t){
+  t=t.toLowerCase();
+  if(/payment|booking fee|block|cost|fee|emi|installment/.test(t))return "Payment";
+  if(/admission|apply|application|enroll|registration/.test(t))return "Admission";
+  if(/eligib|qualif|criteria|requirement|prerequisite/.test(t))return "Eligibility";
+  if(/curriculum|syllabus|module|course content|subject/.test(t))return "Curriculum";
+  if(/duration|how long|timeline|batch|start/.test(t))return "Duration";
+  if(/placement|job|career|internship/.test(t))return "Career";
+  if(/support|help|issue|problem|not working/.test(t))return "Support";
+  return "General";
+}
+
+function rowToRecord(r){
+  const dtStr=r["Created At (IST)"]||"";
+  const dt=parseDateFull(dtStr);
+  const trans=String(r["Full Transcript"]||"");
+  const excelSummary=String(r["Summary"]||"").trim();
+  
+  // Build summary: prefer Excel summary, fallback to transcript extraction
+  let summary=excelSummary;
+  if(!summary){
+    // Extract first 100 chars from transcript as fallback
+    const cleanTrans=trans.replace(/\s+/g, ' ').trim();
+    summary=cleanTrans.length>120?cleanTrans.slice(0,120)+"...":cleanTrans;
+  }
+  
+  const intent=intentOf(trans);
+  const callbackReq=/callback|call me|call back|please call|ring me|ring back|contact me|get back|follow.{0,5}up/i.test(trans);
+  const need=Number(r["Need Score"])||0;
+  // Frustrated = genuine negative-sentiment signals only (NOT callbacks — wanting a callback ≠ being upset)
+  const frustrated=/frustrat|angry|upset|annoyed|waited|promised.*not|multiple.*time|already.*called|no.*response|not.*working|disappoint|useless|terrible|worst|complaint/i.test(trans);
+  
+  // Extract callback reason from transcript
+  let cbReason="Follow-up needed";
+  if(/payment|fee|cost|emi|installment/.test(trans))cbReason="Payment clarification";
+  else if(/admission|apply|process|enrol|form/.test(trans))cbReason="Admission assistance";
+  else if(/programme|course|curriculum|batch/.test(trans))cbReason="Programme info";
+  else if(/result|mark|grade|certificate/.test(trans))cbReason="Results/Certificate";
+  else if(/access|login|portal|enrolled|student/.test(trans))cbReason="Account access";
+  else if(/technical|audio|connection|quality|issue/.test(trans))cbReason="Technical support";
+  else if(/eligib|qualify|require/.test(trans))cbReason="Eligibility check";
+  
+  // Create date object from IST values (h, m are already IST)
+  const dateObj=dt?new Date(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h,dt.m,0):new Date();
+  return{
+    d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
+    dur:Number(r["Duration (s)"])||0,msg:Number(r["Messages"])||0,
+    status:String(r["Status"]||"").toLowerCase(),leadTemp:String(r["Lead Temp."]||"").trim(),
+    conf:Number(r["Bot Conf."])||0,need,
+    band:String(r["Review Band"]||"").trim(),intent,callback:callbackReq,cbReason,frustrated,summary,
+    from:String(r["From"]||"unknown"),trans
+  };
+}
+
+function aggregate(recs){
+  const o={n:recs.length,hot:0,warm:0,cold:0,
+    totalDur:0,totalMsg:0,avgConf:0,avgNeed:0,green:0,amber:0,red:0,
+    hourly:{},daily:{},intent:{},durBands:{},confBands:{}};
+  const confQual={Hot:{conf:0,need:0,n:0},Warm:{conf:0,need:0,n:0},Cold:{conf:0,need:0,n:0}};
+  const msgQual=[[],[],[]]; // <5msg, 5-20msg, >20msg
+  // Hot-lead conversion grouped by Aanya confidence band (low/mid/high)
+  const confConv={low:{hot:0,n:0},mid:{hot:0,n:0},high:{hot:0,n:0}};
+  recs.forEach(r=>{
+    if(r.leadTemp==="Hot")o.hot++;else if(r.leadTemp==="Warm")o.warm++;else o.cold++;
+    o.totalDur+=r.dur;o.totalMsg+=r.msg;o.avgConf+=r.conf;o.avgNeed+=r.need;
+    if(r.band==="Green")o.green++;else if(r.band==="Amber")o.amber++;else if(r.band==="Red")o.red++;
+    o.hourly[r.h]=(o.hourly[r.h]||0)+1;
+    o.daily[r.d]=(o.daily[r.d]||0)+1;
+    o.intent[r.intent]=(o.intent[r.intent]||0)+1;
+    const db=r.dur<=30?"<30s":r.dur<=90?"30-90s":r.dur<=180?"90-180s":"180s+";
+    o.durBands[db]=(o.durBands[db]||0)+1;
+    const cb=Math.round(r.conf/20)*20;o.confBands[cb]=(o.confBands[cb]||0)+1;
+    if(r.leadTemp in confQual){confQual[r.leadTemp].conf+=r.conf;confQual[r.leadTemp].need+=r.need;confQual[r.leadTemp].n++;}
+    if(r.msg<5)msgQual[0].push(r.leadTemp);else if(r.msg<=20)msgQual[1].push(r.leadTemp);else msgQual[2].push(r.leadTemp);
+    // Confidence conversion bands
+    const cband=r.conf<50?"low":r.conf<80?"mid":"high";
+    confConv[cband].n++;if(r.leadTemp==="Hot")confConv[cband].hot++;
+  });
+  o.avgConf=o.n?o.avgConf/o.n:0;o.avgNeed=o.n?o.avgNeed/o.n:0;
+  o.confQual=confQual;
+  o.confConv=confConv;
+  o.msgQual=msgQual.map(m=>{const h=m.length?(m.filter(x=>x==="Hot").length/m.length)*100:0;return{hot:h,n:m.length};});
+  return o;
+}
+
+function healthScore(o){
+  if(!o.n)return 0;
+  const hotPct=(o.hot/o.n)*100,confPct=o.avgConf,greenPct=(o.green/o.n)*100;
+  return Math.round(.4*hotPct+.3*confPct+.3*greenPct);
+}
+
+function gradeOf(s){
+  if(s>=80)return["A",C.green,"Excellent — calls convert to hot leads, high confidence, quality holds."];
+  if(s>=70)return["B",C.teal,"Strong — solid conversion to hot leads with good QA."];
+  if(s>=60)return["C",C.gold,"Mixed — decent Aanya confidence but conversion could improve."];
+  if(s>=50)return["D",C.amber,"Needs work — Aanya confidence is decent but lead capture is weak."];
+  return["F",C.coral,"Critical — low conversion or Aanya confidence issues."];
+}
+
+let CB_FILTERS=new Set(); // empty = show all; otherwise show only selected intents
+function paintCallbacks(recs){
+  const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
+  if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
+  const cbs=recs.filter(r=>r.callback);
+  if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=`<div class="cbempty">No callback requests detected in this range.<br>When callers ask for callbacks, they'll appear here.</div>`;cbFilters.innerHTML="";return;}
+  
+  // Group by phone number
+  const byPhone=groupByPhone(cbs);
+  
+  // Build multi-select intent filter chips (All + each intent)
+  const intents=[...new Set(cbs.map(r=>r.intent))].sort();
+  const showAll=CB_FILTERS.size===0;
+  const allChip=`<button class="cbfilt ${showAll?"on":""}" data-filt="__all__">All</button>`;
+  const intentChips=intents.map(i=>`<button class="cbfilt ${CB_FILTERS.has(i)?"on":""}" data-filt="${esc(i)}">${esc(i)}</button>`).join("");
+  cbFilters.innerHTML=allChip+intentChips;
+  document.querySelectorAll(".cbfilt").forEach(b=>b.onclick=()=>{
+    const f=b.dataset.filt;
+    if(f==="__all__"){
+      CB_FILTERS.clear(); // reset to show everything
+    }else{
+      if(CB_FILTERS.has(f))CB_FILTERS.delete(f);else CB_FILTERS.add(f); // toggle this intent
+    }
+    paintCallbacks(recs);
+  });
+  
+  // Filter and sort — empty set = all, otherwise match any selected intent
+  const filtered={};
+  Object.entries(byPhone).forEach(([ph,calls])=>{
+    const filtered_calls=CB_FILTERS.size===0?calls:calls.filter(r=>CB_FILTERS.has(r.intent));
+    if(filtered_calls.length>0){
+      filtered[ph]=filtered_calls.sort((a,b)=>a.ts-b.ts);
+    }
+  });
+  
+  cbCount.textContent=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
+  
+  cbList.innerHTML=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length).map(([ph,calls])=>{
+    const phoneKey=ph.replace(/\W/g,'_');
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    
+    const renderCall=(c)=>`
+      <div style="padding:10px;background:#0a0f15;border-radius:6px;border-left:2px solid var(--teal);margin-bottom:6px;font-size:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <b style="color:var(--teal)">${formatCallTime(c)}</b>
+          <span style="color:var(--muted)">${formatDuration(c.dur)}</span>
+        </div>
+        <div style="color:var(--muted);margin-bottom:4px">Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | ${esc(c.cbReason)}</div>
+        ${c.summary?`<div style="color:#b0b8c4;line-height:1.5;border-top:1px solid #1a2332;padding-top:4px;margin-top:2px">📝 ${esc(c.summary)}</div>`:""}
+      </div>`;
+
+    const latest=calls[calls.length-1]; // most recent (calls sorted ASC so last = newest)
+    const rest=calls.slice(0,-1);       // everything except most recent
+    const moreCount=rest.length;
+
+    const moreSection=moreCount>0?`
+      <div id="more_${phoneKey}" style="display:none">${rest.slice().reverse().map(renderCall).join("")}</div>
+      <div onclick="const el=document.getElementById('more_${phoneKey}');const btn=document.getElementById('btn_${phoneKey}');if(el.style.display==='none'){el.style.display='block';btn.textContent='▲ Show less';}else{el.style.display='none';btn.textContent='▼ +${moreCount} more request${moreCount>1?'s':''}'}"
+        id="btn_${phoneKey}"
+        style="padding:7px;color:var(--teal);font-size:10px;text-align:center;cursor:pointer;border-top:1px solid #1a2332;margin-top:4px;user-select:none;border-radius:4px">
+        ▼ +${moreCount} more request${moreCount>1?"s":""}
+      </div>`:"";
+
+    return`<div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:16px">
+          <b style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--cream)">📞 ${maskPhone(ph)}</b>
+          <span style="font-size:10px;color:var(--teal);font-weight:600">⏳ ${totalDur} mins</span>
+        </div>
+        <span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700">${calls.length} callback${calls.length>1?"s":""}</span>
+      </div>
+      ${renderCall(latest)}
+      ${moreSection}
+    </div>`;
+  }).join("");
+}
+
+function boot(){
+  if(!RECORDS.length){$("err").textContent="❌ No valid call records found. Check your file format.";return;}
+  window.DATA_LOADED=true;
+  $("dataLoading").style.display="none";
+  $("dataPlaceholder").style.display="none";
+  $("mainWrap").style.display="block";
+  $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);
+  const datesAll=RECORDS.map(r=>r.d).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
+  
+  // Backup all records for filtering
+  ALL_RECORDS_BACKUP=[...RECORDS];
+  FILTERED_RECORDS=[...RECORDS];
+  
+  // Set date filter defaults
+  $("filterFromDate").value=dmin;
+  $("filterToDate").value=dmax;
+  updateFilterButtons("all");
+  
+  const totalMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+  const totalCost=totalMins*5;
+  $("meta").innerHTML=[["📅",dmin+" – "+dmax],["📞",RECORDS.length+" calls"],["⏱",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["⏳",totalMins+" mins"],["💰","₹"+totalCost],["📁",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+  const o=aggregate(RECORDS);
+  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);
+  try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}
+  $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Aanya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
+}
+
+function paintHealth(o){
+  const s=healthScore(o);const[g,col,verdict]=gradeOf(s);
+  const R=66,circ=2*Math.PI*R,frac=.75,track=`${frac*circ} ${circ}`,val=`${s/100*frac*circ} ${circ}`;
+  $("gauge").innerHTML=`<svg viewBox="0 0 170 170" width="170" height="170">
+    <g transform="rotate(135 85 85)"><circle cx="85" cy="85" r="${R}" fill="none" stroke="#1f2935" stroke-width="13" stroke-linecap="round" stroke-dasharray="${track}"/>
+    <circle cx="85" cy="85" r="${R}" fill="none" stroke="${col}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${val}" style="transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1)"/></g>
+    <text x="85" y="83" text-anchor="middle" fill="${C.cream}" font-family="Fraunces" font-size="42" font-weight="900">${s}</text>
+    <text x="85" y="105" text-anchor="middle" fill="${C.muted}" font-family="IBM Plex Mono" font-size="10">CALL QUALITY</text></svg>`;
+  $("heroText").innerHTML=`<h3>Call Quality Score</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:500px;margin-top:8px">Blends hot-lead conversion (${o.n?Math.round(o.hot/o.n*100):0}%), Aanya confidence (${Math.round(o.avgConf)}%), and QA pass rate (${o.n?Math.round(o.green/o.n*100):0}%).</p>`;
+}
+
+function paintKPIs(o){
+  const pct=a=>o.n?Math.round(a/o.n*100):0;
+  const totalMins=Math.round(o.totalDur/60);
+  const totalCost=totalMins*5;
+  const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
+  const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
+  const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
+  const cards=[
+    ["neut",o.n,"Total calls",""],
+    ["hot",totalMins+" mins","Total duration",""],
+    ["hot","₹"+totalCost,"Total cost (@₹5/min)",""],
+    ["hot",pct(o.hot)+"%","Hot leads ("+o.hot+")",""],
+    ["good",Math.round(o.avgConf)+"%","Avg Aanya confidence",""],
+    ["good",avgDurMins+"m "+avgDurSecs+"s","Avg call duration",""],
+    ["neut",avgMsg,"Avg messages per call",""],
+    ["good",pct(o.green)+"%","Quality pass rate (Green)",""]
+  ];
+  $("kpis").innerHTML=cards.map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
+}
+
+function paintFunnel(o){
+  if(!o.n){$("funnel").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls in this range.</div>`;return;}
+  const pct=a=>Math.round(a/o.n*100);
+  const F=[[o.n,"Calls started","#5a9bd8",100],[o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*70)+15],[o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+8]];
+  let h="";F.forEach((f,i)=>{h+=`<div class="fstep" style="background:${f[2]};width:${f[3]}%"><span class="fn">${f[0]}</span><span class="ft">${f[1]}</span><span class="fp">${pct(f[0])}%</span></div>`;});
+  $("funnel").innerHTML=h;
+}
+
+function paintTempQual(o){
+  const temps=[["Hot",o.confQual.Hot],["Warm",o.confQual.Warm],["Cold",o.confQual.Cold]];
+  $("tempQual").innerHTML=temps.map(t=>{const e=t[1];const c=e.n?Math.round(e.conf/e.n):0,n=e.n?Math.round(e.need/e.n):0;return `<div style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span><b>${t[0]}</b> (${e.n} calls)</span><span style="color:var(--muted)">Conf <b>${c}%</b> · Need <b>${n}</b></span></div><div style="background:#0c121b;border-radius:5px;height:12px;overflow:hidden"><div style="background:${C.teal};height:100%;width:${Math.min(c/100*100,100)}%"></div></div></div>`;}).join("");
+}
+
+function paintConfDist(o){
+  const sorted=Object.entries(o.confBands).sort((a,b)=>Number(a[0])-Number(b[0]));
+  if(!sorted.length){$("confDist").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No confidence data in this range.</div>`;return;}
+  const max=Math.max(...sorted.map(d=>d[1]),1);
+  $("confDist").innerHTML=sorted.map(d=>`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${d[0]}% confidence</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:linear-gradient(90deg,${C.teal},${C.green});height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
+}
+
+function paintConfImpact(o){
+  const cc=o.confConv;
+  if(!cc||(cc.low.n+cc.mid.n+cc.high.n)===0){$("confImpact").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px">No data in this range.</div>`;return;}
+  const pct=b=>b.n?Math.round(b.hot/b.n*100):0;
+  const row=(label,band,col)=>`<div style="padding:11px 0;border-bottom:1px solid var(--line)">
+    <div style="font-size:13.5px;display:flex;justify-content:space-between;margin-bottom:5px"><span>${label} <span style="color:var(--faint)">(${band.n} calls)</span></span><b style="color:${col}">${pct(band)}% hot</b></div>
+    <div style="background:#0c121b;border-radius:5px;height:6px"><div style="background:${col};height:100%;border-radius:5px;width:${pct(band)}%"></div></div>
+  </div>`;
+  $("confImpact").innerHTML=row("Low confidence (&lt;50%)",cc.low,C.muted)+row("Mid confidence (50-80%)",cc.mid,C.teal)+row("High confidence (&gt;80%)",cc.high,C.green);
+}
+
+function paintIntents(o){
+  const sorted=Object.entries(o.intent).filter(d=>d[1]>0).sort((a,b)=>b[1]-a[1]);
+  if(!sorted.length){$("intents").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No intent data in this range.</div>`;return;}
+  $("intents").innerHTML=sorted.map(d=>`<div class="intitem"><span class="in">${esc(d[0])}</span><span class="ct">${d[1]}</span></div>`).join("");
+}
+
+function paintDurBands(o){
+  const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>b[1]-a[1]);
+  if(!sorted.length){$("durBands").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px">No duration data.</div>`;return;}
+  const max=Math.max(...sorted.map(d=>d[1]),1);
+  $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${d[0]==="<30s"?C.teal:d[0]==="30-90s"?C.green:C.amber};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
+}
+
+function paintMsgImpact(o){
+  if(!o.msgQual||!o.msgQual[0]||!o.msgQual[0].n){$("msgImpact").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px">Insufficient data in this range.</div>`;return;}
+  const h0=o.msgQual[0].hot||0;
+  const h1=o.msgQual[1]?.hot||0;
+  const h2=o.msgQual[2]?.hot||0;
+  $("msgImpact").innerHTML=`<div style="padding:11px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between"><span style="font-size:13px">Short (&lt;5 msg)</span><b style="color:${C.muted}">${Math.round(h0)}% hot</b></div>
+    <div style="padding:11px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between"><span style="font-size:13px">Medium (5-20 msg)</span><b style="color:${C.teal}">${Math.round(h1)}% hot</b></div>
+    <div style="padding:11px 0;display:flex;justify-content:space-between"><span style="font-size:13px">Long (&gt;20 msg)</span><b style="color:${C.hot}">${Math.round(h2)}% hot</b></div>`;
+}
+
+function dayChart(daily){
+  const entries=Object.entries(daily).sort((a,b)=>a[0]<b[0]?-1:1);const W=520,H=240,P={l:30,r:14,t:18,b:28};
+  if(!entries.length){$("dayChart").innerHTML=`<div style="color:var(--faint);text-align:center;padding:40px;font-size:12.5px">No call data in this range.</div>`;return;}
+  const max=Math.max(...entries.map(e=>e[1]),5);const bw=(W-P.l-P.r)/entries.length,y=v=>H-P.b-(v/max)*(H-P.t-P.b);
+  let gy="";for(let i=0;i<=max;i+=Math.ceil(max/4)){gy+=`<line x1="${P.l}" y1="${y(i)}" x2="${W-P.r}" y2="${y(i)}" stroke="${C.line}"/><text x="${P.l-6}" y="${y(i)+3}" fill="${C.muted}" font-size="9" text-anchor="end" font-family="IBM Plex Mono">${i}</text>`;}
+  const bars=entries.map((d,i)=>{const bx=P.l+i*bw+bw*0.2,w=Math.max(4,bw*0.6),h=(d[1]/max)*(H-P.t-P.b);return `<rect x="${bx}" y="${y(d[1])}" width="${w}" height="${h}" rx="3" fill="${C.teal}"><title>${d[0]}: ${d[1]}</title></rect><text x="${bx+w/2}" y="${y(d[1])-7}" fill="${C.cream}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono">${d[1]}</text><text x="${bx+w/2}" y="${H-10}" fill="${C.muted}" font-size="9" text-anchor="middle" font-family="IBM Plex Mono">${entries.length<=7?d[0].slice(5):""}</text>`;}).join("");
+  $("dayChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${bars}</svg>`;
+}
+
+function hourChart(hourly){
+  const W=520,H=240,P={l:30,r:14,t:16,b:28};const vals=[];for(let h=0;h<24;h++)vals.push(hourly[h]||0);
+  if(vals.every(v=>v===0)){$("hourChart").innerHTML=`<div style="color:var(--faint);text-align:center;padding:40px;font-size:12.5px">No call data in this range.</div>`;return;}
+  const max=Math.max(...vals,4);const x=h=>P.l+(h/23)*(W-P.l-P.r),y=v=>H-P.b-(v/max)*(H-P.t-P.b);
+  const pts=vals.map((v,h)=>`${x(h)},${y(v)}`).join(" ");const area=`M${x(0)},${H-P.b} L${pts} L${x(23)},${H-P.b} Z`;
+  let gy="";for(let i=0;i<=max;i+=Math.ceil(max/4)){gy+=`<line x1="${P.l}" y1="${y(i)}" x2="${W-P.r}" y2="${y(i)}" stroke="${C.line}"/><text x="${P.l-6}" y="${y(i)+3}" fill="${C.muted}" font-size="9" text-anchor="end" font-family="IBM Plex Mono">${i}</text>`;}
+  let gx="";[0,4,8,12,16,20,23].forEach(h=>{gx+=`<text x="${x(h)}" y="${H-10}" fill="${C.muted}" font-size="9" text-anchor="middle" font-family="IBM Plex Mono">${h===0?'12a':h<12?h+'a':h===12?'12p':(h-12)+'p'}</text>`;});
+  const dots=vals.map((v,h)=>`<circle cx="${x(h)}" cy="${y(v)}" r="3" fill="${C.teal}"><title>${h%12||12}${h<12?'AM':'PM'}: ${v}</title></circle>`).join("");
+  $("hourChart").innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${gy}${gx}<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.teal}" stop-opacity="0.35"/><stop offset="1" stop-color="${C.teal}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#hg)"/><polyline points="${pts}" fill="none" stroke="${C.teal}" stroke-width="2"/>${dots}</svg>`;
+}
+
+function paintBandBars(o){
+  const tot=o.green+o.amber+o.red;
+  if(!tot){$("bandBars").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No review band data in this range.</div>`;return;}
+  const data=[{l:"Green (pass)",v:o.green,c:C.green},{l:"Amber (review)",v:o.amber,c:C.amber},{l:"Red (fail)",v:o.red,c:C.hot}];
+  $("bandBars").innerHTML=data.map(d=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
+}
+
+function paintFrustBreak(o){
+  const frustrated=RECORDS.filter(r=>r.frustrated);
+  if(!frustrated.length){$("frustBreak").innerHTML="No frustrated calls detected.";return;}
+  const causes={high_need:frustrated.filter(r=>r.need>75).length,callback_issue:frustrated.filter(r=>/callback|call.*back/i.test(r.trans)).length,access_issue:frustrated.filter(r=>/access|enrolled|student/i.test(r.trans)).length,technical:frustrated.filter(r=>/audio|technical|connection/i.test(r.trans)).length,other:0};
+  causes.other=frustrated.length-(causes.high_need+causes.callback_issue+causes.access_issue+causes.technical);
+  const labels={high_need:"High Intent/Need",callback_issue:"Callback/Follow-up",access_issue:"Access/Enrollment",technical:"Technical Issue",other:"Other"};
+  const colors={high_need:C.hot,callback_issue:C.warm,access_issue:C.amber,technical:C.coral,other:C.muted};
+  $("frustBreak").innerHTML=Object.entries(causes).filter(e=>e[1]>0).map(e=>{
+    const pct=Math.round(e[1]/frustrated.length*100);
+    return`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[e[0]]}</span><b>${e[1]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[e[0]]};height:100%;width:${e[1]/frustrated.length*100}%"></div></div></div>`;
+  }).join("");
+}
+
+function paintFrustCost(o){
+  const frustrated=RECORDS.filter(r=>r.frustrated);
+  const frustMinutes=frustrated.reduce((a,r)=>a+r.dur,0)/60;
+  const frustCost=Math.round(frustMinutes*5);
+  $("frustCost").innerHTML=`<div style="font-size:32px;font-weight:900;color:var(--hot);margin-bottom:12px">₹${frustCost}</div><div style="font-size:12px;color:var(--muted);line-height:1.6"><b>${Math.round(frustMinutes)} minutes</b> of frustrated calls<br>${frustrated.length} calls × avg ${Math.round(frustrated[0]?.dur||0)}s<br><br><span style="color:var(--faint)">At ₹5/min cost</span></div>`;
+}
+
+// Shared helper: group records by phone number (built once, reused by all sections)
+function groupByPhone(records){
+  const byPhone={};
+  records.forEach(r=>{
+    const ph=r.from||"unknown";
+    if(!byPhone[ph])byPhone[ph]=[];
+    byPhone[ph].push(r);
+  });
+  return byPhone;
+}
+
+function findSerialCallers(records){
+  const byPhone=groupByPhone(records);
+  const serial=Object.entries(byPhone).map(([ph,calls])=>{
+    const frustrated=calls.filter(c=>c.frustrated);
+    const general=calls.filter(c=>!c.frustrated);
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    return{phone:ph,total:calls.length,frustrated:frustrated.length,general:general.length,totalDur,calls:calls.sort((a,b)=>b.ts-a.ts)};
+  }).filter(s=>s.total>=3).sort((a,b)=>b.total-a.total);
+  return serial;
+}
+
+function paintHottestLeads(records){
+  const byPhone=groupByPhone(records);
+  
+  const leads=Object.entries(byPhone).map(([ph,calls])=>{
+    const hot=calls.filter(c=>c.leadTemp==="Hot").length;
+    const warm=calls.filter(c=>c.leadTemp==="Warm").length;
+    const cold=calls.filter(c=>c.leadTemp==="Cold").length;
+    const frustrated=calls.filter(c=>c.frustrated).length;
+    const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
+    const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    
+    // Lead score: Hot=3, Warm=2, Cold=1 + call frequency + need + confidence
+    const leadScore=(hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2;
+    
+    const intents={};
+    calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
+    const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
+    
+    return{phone:ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",calls:calls.sort((a,b)=>b.ts-a.ts)};
+  }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
+  
+  if(!leads.length){$("hottestLeads").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No leads found.</div>";return;}
+  
+  $("hottestLeads").innerHTML=leads.map((l,i)=>{
+    let typeEmoji="❄️",typeCol="var(--cold)";
+    if(l.hot>=Math.ceil(l.total*0.6)){typeEmoji="🔥";typeCol="var(--hot)";}
+    else if(l.hot>=Math.ceil(l.total*0.3)){typeEmoji="🌡️";typeCol="var(--warm)";}
+    
+    return`<div style="padding:14px;background:#0c1218;border-radius:8px;border:1px solid var(--line);cursor:pointer;transition:.2s" onclick="document.getElementById('searchMobile').value='${l.phone}';searchUserByMobile('${l.phone}');document.querySelector('.wrap').scrollIntoView({behavior:'smooth'})">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <b style="font-family:'IBM Plex Mono',monospace;font-size:12px">${maskPhone(l.phone)}</b>
+        <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
+        <div><b>Lead:</b> ${typeEmoji} ${l.hot}H|${l.warm}W|${l.cold}C</div>
+        <div><b>Calls:</b> ${l.total} (😤${l.frustrated})</div>
+        <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
+        <div><b>Avg Conf:</b> ${l.avgConf}%</div>
+        <div><b>Avg Need:</b> ${l.avgNeed}</div>
+        <div style="grid-column:1/-1"><b>Top Intent:</b> ${esc(l.topIntent)}</div>
+        <div style="grid-column:1/-1"><b>Score:</b> <span style="color:var(--teal)">${Math.round(l.leadScore)}</span> | <b>Cost:</b> <span style="color:var(--hot)">₹${l.totalDur*5}</span></div>
+      </div>
+      <div style="font-size:9px;color:var(--faint)">Click to view full profile →</div>
+    </div>`;
+  }).join("");
+}
+
+function paintSerialCallers(records){
+  const serial=findSerialCallers(records);
+  if(!serial.length){$("serialCallers").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No serial engagers (3+ calls).</div>";return;}
+  
+  $("serialCallers").innerHTML=serial.map((s,i)=>`
+    <div style="background:#0c1218;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="showSerialTimeline(${i})">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <b style="font-family:'IBM Plex Mono',monospace;font-size:13px">${maskPhone(s.phone)}</b>
+        <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">🔥 ${s.total} calls</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+        <div><b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated</div>
+        <div><b style="color:var(--green)">✓ ${s.general}</b> general</div>
+        <div style="grid-column:1/-1"><b style="color:var(--teal)">⏳ ${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
+      </div>
+      <div style="font-size:11px;color:var(--faint);margin-top:6px">High engagement • View timeline →</div>
+    </div>
+  `).join("");
+  window.SERIAL_CALLERS=serial;
+}
+
+function showSerialTimeline(idx){
+  const s=window.SERIAL_CALLERS[idx];
+  $("timelineLabel").textContent=maskPhone(s.phone);
+  $("timelineMeta").innerHTML=`<span style="font-size:12px">🔥 ${s.total} calls • <b style="color:var(--hot)">😤 ${s.frustrated}</b> frustrated • <b style="color:var(--green)">✓ ${s.general}</b> general • <b style="color:var(--teal)">⏳ ${s.totalDur} mins</b> | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</span>`;
+  $("timeline").innerHTML=s.calls.map((c,i)=>{
+    const date=formatCallTimeWithWeekday(c);
+    const icon=c.frustrated?'😤':'✓';
+    const tag=c.frustrated?`<b style="color:var(--hot)">FRUSTRATED</b>`:` <b style="color:var(--green)">GENERAL</b>`;
+    return`<div style="padding:12px;border-left:2px solid ${c.frustrated?'var(--hot)':'var(--green)'};margin-left:10px;margin-bottom:12px;background:#0f1620;border-radius:6px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <b>${icon} Call ${i+1} ${tag}</b>
+        <span style="color:var(--muted)">${date}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.4">
+        <b>Intent:</b> ${esc(c.intent)}<br>
+        <b>Duration:</b> ${formatDuration(c.dur)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
+        <span style="font-size:10px">${esc(c.summary)}</span>
+      </div>
+    </div>`;
+  }).join("");
+  $("timelinePanel").style.display="block";
+  $("timelinePanel").scrollIntoView({behavior:"smooth"});
+}
+
+// === CSV EXPORT FUNCTIONS ===
+function downloadCSV(filename, csvContent){
+  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);
+  link.download=filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function escCSV(val){
+  const s=String(val||'').replace(/"/g,'""');
+  return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s}"`:s;
+}
+
+function exportHottestLeads(){
+  if(!RECORDS.length){alert("No data to export in the current filter range.");return;}
+  const byPhone=groupByPhone(RECORDS);
+  const leads=Object.entries(byPhone).map(([ph,calls])=>{
+    const hot=calls.filter(c=>c.leadTemp==="Hot").length;
+    const warm=calls.filter(c=>c.leadTemp==="Warm").length;
+    const cold=calls.filter(c=>c.leadTemp==="Cold").length;
+    const frustrated=calls.filter(c=>c.frustrated).length;
+    const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
+    const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
+    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    const leadScore=Math.round((hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2);
+    const intents={};calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
+    const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
+    const lastCall=calls.sort((a,b)=>b.ts-a.ts)[0];
+    return{ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",lastCallTime:formatCallTime(lastCall),lastSummary:lastCall.summary};
+  }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
+  
+  let csv='Phone,Total Calls,Hot,Warm,Cold,Frustrated,Avg Confidence %,Avg Need Score,Total Duration (mins),Lead Score,Top Intent,Last Call Time,Last Summary\n';
+  leads.forEach(l=>{csv+=`${l.ph},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
+  downloadCSV('hottest_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
+function exportSerialEngagers(){
+  const serial=findSerialCallers(RECORDS);
+  if(!serial.length){alert("No serial engagers (3+ calls) to export in this range.");return;}
+  let csv='Phone,Total Calls,Frustrated,General,Total Duration (mins),Total Cost (Rs),Last Call Time\n';
+  serial.forEach(s=>{
+    const lastCall=s.calls[0];
+    csv+=`${s.phone},${s.total},${s.frustrated},${s.general},${s.totalDur},${s.totalDur*5},${escCSV(formatCallTime(lastCall))}\n`;
+  });
+  downloadCSV('serial_engagers_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
+function exportCallbacks(){
+  const cbs=RECORDS.filter(r=>r.callback);
+  if(!cbs.length){alert("No callback requests to export in this range.");return;}
+  let csv='Phone,Call Time,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
+  cbs.sort((a,b)=>b.ts-a.ts).forEach(c=>{
+    const durMins=Math.round(c.dur/60*10)/10;
+    csv+=`${c.from},${escCSV(formatCallTime(c))},${durMins},${escCSV(c.intent)},${escCSV(c.cbReason)},${Math.round(c.conf)},${Math.round(c.need)},${escCSV(c.summary)}\n`;
+  });
+  downloadCSV('callback_requests_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+}
+
+</script>
+</div><!-- /dashboardContent -->
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Aanya Voice Analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0a0e15;--panel:#0f1620;--panel2:#1a2330;--glass:#0f1620ee;--line:#1a3a3a;--cream:#ece6d8;--muted:#7a8a9a;--faint:#5a6a7a;--teal:#00d4aa;--green:#4ade80;--amber:#fbbf24;--coral:#ff6b6b;--gold:#fcd34d;--blue:#60a5fa;--violet:#a78bfa;--hot:#ff5555;--warm:#fb923c;--cold:#64748b;--text:#e8e8e8}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--ink);color:var(--cream);font-family:'IBM Plex Sans',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:radial-gradient(circle at 12% -5%,#16202e 0%,transparent 42%),radial-gradient(circle at 88% 0%,#1c1626 0%,transparent 38%),radial-gradient(circle at 50% 120%,#101b1a 0%,transparent 50%)}
+body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;background:radial-gradient(38% 32% at 18% 12%,#1c3a4f4d,transparent 70%),radial-gradient(34% 28% at 86% 8%,#2a1f4a4d,transparent 70%),radial-gradient(44% 38% at 62% 92%,#10322c4d,transparent 70%);filter:blur(46px);animation:drift 26s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-3%,2%) scale(1.07)}}
+@keyframes kpiPulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:0.8}100%{transform:scale(1);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.7) sepia(1) saturate(3) hue-rotate(120deg);cursor:pointer}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px 90px}
+#uploadView{display:none !important;visibility:hidden !important;pointer-events:none !important;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
+#uploadView h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(34px,6vw,62px);line-height:1.02;margin:14px 0 10px;letter-spacing:-1.5px;background:linear-gradient(120deg,var(--cream),var(--teal));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+#uploadView h1 em{font-style:italic;font-weight:500;-webkit-text-fill-color:var(--muted)}
+#uploadView .lead{color:var(--muted);font-size:16px;max-width:560px;margin-bottom:38px}
+.drop{width:min(560px,90vw);border:2px dashed var(--line);border-radius:18px;padding:54px 32px;cursor:pointer;transition:.25s;background:#10161f99;backdrop-filter:blur(6px)}
+.drop:hover,.drop.over{border-color:var(--teal);background:#13202099;transform:translateY(-3px);box-shadow:0 20px 60px -20px #4ec9b055}
+.drop b{font-size:18px;display:block;margin-bottom:6px;font-family:'Fraunces',serif;font-weight:600}
+#reportView{display:none}
+header{padding:44px 0 22px}
+header h1{font-family:'Fraunces',serif;font-weight:900;font-size:clamp(28px,4vw,46px);line-height:1.02;letter-spacing:-1px}
+section{margin:46px 0}
+.shead{display:flex;align-items:baseline;gap:14px;margin-bottom:22px}
+.shead h2{font-family:'Fraunces',serif;font-size:25px;font-weight:600;letter-spacing:-.3px}
+.shead .n{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);border:1px solid var(--line);padding:3px 8px;border-radius:5px}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{background:linear-gradient(160deg,#18212f,#121925);border:1px solid var(--line);border-radius:13px;padding:18px 16px;position:relative;overflow:hidden;transition:transform .18s ease}
+.kpi.pulse{animation:kpiPulse 0.6s ease}
+.kpi:hover{transform:translateY(-2px)}
+.kpi::after{content:"";position:absolute;inset:0 0 auto 0;height:1px;background:linear-gradient(90deg,transparent,#ffffff22,transparent)}
+.kpi .v{font-family:'Fraunces',serif;font-size:36px;font-weight:900;line-height:1;letter-spacing:-1px}
+.kpi .l{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.35}
+.kpi .b{position:absolute;top:0;left:0;width:3px;height:100%}
+.kpi.good .b{background:var(--teal)}.kpi.good .v{color:var(--teal)}
+.kpi.hot .b{background:var(--hot)}.kpi.hot .v{color:var(--hot)}
+.kpi.neut .b{background:var(--blue)}.kpi.neut .v{color:var(--cream)}
+.hero{display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center;background:linear-gradient(135deg,rgba(0,212,170,0.08),rgba(78,201,176,0.04));border:1px solid rgba(78,201,176,0.25);border-radius:20px;padding:32px 40px;margin:8px 0;position:relative;overflow:hidden;box-shadow:0 10px 40px rgba(0,212,170,0.08)}
+.hero::before{content:"";position:absolute;right:-80px;top:-80px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(0,212,170,0.15),transparent 70%)}
+.hero .hx h3{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+.hero .hx .verdict{font-family:'Fraunces',serif;font-size:24px;font-weight:600;line-height:1.2;margin:9px 0 7px}
+.verdict.pulse{animation:kpiPulse 0.6s ease}
+.hero .hx p{color:var(--muted);font-size:14px;max-width:580px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.grid3{display:grid;grid-template-columns:1.1fr 1fr;gap:24px}
+.panel{background:linear-gradient(135deg,#0f1620,#0a0f18);border:1px solid rgba(78,201,176,0.2);border-radius:16px;padding:28px;transition:all .2s ease;box-shadow:0 8px 32px rgba(0,212,170,0.05)}
+.panel:hover{transform:translateY(-3px);border-color:rgba(78,201,176,0.4);box-shadow:0 16px 48px rgba(0,212,170,0.1)}
+.panel h4{font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin-bottom:4px}
+.panel .cap{font-size:13px;color:var(--faint);margin-bottom:20px}
+.funnel{display:flex;flex-direction:column;gap:6px}
+.fstep{height:58px;display:flex;align-items:center;padding:0 20px;border-radius:8px;color:#ffffff}
+.fstep .fn{font-family:'Fraunces',serif;font-size:28px;font-weight:900}
+.fstep .ft{margin-left:14px;font-size:13px;font-weight:600}
+.fstep .fp{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;opacity:.7}
+.bar{margin-bottom:15px}
+.bar .top{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px}
+.bar .top b{font-family:'IBM Plex Mono',monospace;color:var(--cream)}
+.track{height:9px;background:#0c121b;border-radius:5px;overflow:hidden}
+.fill{height:100%;border-radius:5px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.chart{width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.intlist{max-height:400px;overflow:auto}
+.intlist::-webkit-scrollbar{width:8px}.intlist::-webkit-scrollbar-thumb{background:#26303f;border-radius:4px}
+.intitem{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.intitem:last-child{border:none}
+.intitem .in{flex:1;color:var(--cream)}
+.intitem .ct{font-family:'IBM Plex Mono',monospace;color:var(--teal);font-weight:600;min-width:40px;text-align:right}
+footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint);line-height:1.7}
+footer b{color:var(--muted)}
+@media(max-width:860px){.wrap{padding:0 16px 60px}.strip{grid-template-columns:repeat(2,1fr)}.grid2,.grid3{grid-template-columns:1fr}.hero{grid-template-columns:1fr;text-align:center}}
+.cbfilt{border:1px solid var(--line);padding:6px 12px;border-radius:6px;background:#0f1620;color:var(--teal);cursor:pointer;font-size:12px;font-family:'IBM Plex Mono',monospace;transition:.15s}
+.cbfilt:hover,.cbfilt.on{border-color:var(--teal);background:linear-gradient(135deg,#1c3a34,#16302b);font-weight:600}
+.cbempty{padding:40px 20px;text-align:center;color:var(--faint);font-family:'IBM Plex Mono',monospace;font-size:12.5px}
+#loginGate{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0a0f15,#1a1f2e);font-family:'IBM Plex Sans',sans-serif}
+#loginGate .card{text-align:center;max-width:380px;padding:40px;background:#0f1620;border:1px solid rgba(0,212,170,0.2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+#loginGate .card h1{font-size:20px;font-weight:800;color:#e8e8e8;margin:16px 0 6px}
+#loginGate .card p{font-size:12px;color:#7a8a9a;margin-bottom:24px}
+#loginGate input[type="password"]{width:100%;padding:10px 14px;background:#0a0f15;border:1px solid #1a3a3a;border-radius:6px;color:#e8e8e8;font-size:13px;margin-bottom:12px}
+#loginGate button.pwd-btn{width:100%;padding:10px;background:var(--teal);color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px}
+#loginGate .err-msg{color:#ff5555;font-size:11px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN GATE ===== -->
+<div id="loginGate">
+  <div class="card">
+    <div style="width:44px;height:44px;background:linear-gradient(135deg,#00d4aa,#4ec9b0);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:22px;margin:0 auto">B</div>
+    <h1>Aanya Voice Analytics</h1>
+    <p>BITS Pilani Digital — Authorized access only</p>
+
+    <input type="password" id="loginPassword" placeholder="Enter access password..." onkeyup="if(event.key==='Enter')checkPassword()">
+    <button class="pwd-btn" onclick="checkPassword()">🔓 Unlock Dashboard</button>
+    <div id="loginError" class="err-msg"></div>
+  </div>
+</div>
+
+<script>
+// ===== SECURITY CONFIG =====
+const SECURITY = {
+  // SHA-256 hash of password "Aanya@Voice-2026!BPD" — change by hashing your own (see sha256 fn below)
+  PASSWORD_HASH: "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a",
+  // Session timeout in minutes
+  SESSION_TIMEOUT_MINS: 30,
+  // Mask phone numbers in display (full numbers in CSV export)
+  MASK_PHONES: true
+};
+
+// Generate SHA-256 hash
+async function sha256(text){
+  const encoder=new TextEncoder();
+  const data=encoder.encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Password login
+async function checkPassword(){
+  const pwd=document.getElementById('loginPassword').value;
+  if(!pwd){document.getElementById('loginError').textContent='Please enter a password.';return;}
+  
+  const hash=await sha256(pwd);
+  
+  if(hash===SECURITY.PASSWORD_HASH){
+    window.DECRYPT_PASSPHRASE=pwd;
+    sessionStorage.setItem('auth_user','password_user');
+    sessionStorage.setItem('auth_time',Date.now().toString());
+    sessionStorage.setItem('auth_method','password');
+    sessionStorage.setItem('dk',pwd); // session-only, for decryption on this device while browser open
+    unlockDashboard('password_user');
+  } else {
+    document.getElementById('loginError').textContent='❌ Incorrect password.';
+    document.getElementById('loginPassword').value='';
+  }
+}
+
+// Unlock dashboard
+function unlockDashboard(user){
+  document.getElementById('loginGate').style.display='none';
+  document.getElementById('dashboardContent').style.display='block';
+  startSessionTimer();
+  // Load data only after auth (gated), and only once per session
+  if(!window.DATA_LOADED){
+    autoLoadLatestExcel();
+  }
+}
+
+// Session timeout
+let sessionTimer;
+function startSessionTimer(){
+  clearInterval(sessionTimer);
+  const timeout=SECURITY.SESSION_TIMEOUT_MINS*60*1000;
+  
+  // Reset timer on any interaction
+  const resetTimer=()=>{sessionStorage.setItem('auth_time',Date.now().toString());};
+  ['click','keydown','scroll','mousemove'].forEach(e=>document.addEventListener(e,resetTimer,{passive:true}));
+  
+  sessionTimer=setInterval(()=>{
+    const authTime=Number(sessionStorage.getItem('auth_time')||0);
+    if(Date.now()-authTime>timeout){
+      lockDashboard();
+    }
+  },30000); // check every 30s
+}
+
+function lockDashboard(){
+  clearInterval(sessionTimer);
+  sessionStorage.clear();
+  document.getElementById('loginGate').style.display='flex';
+  document.getElementById('dashboardContent').style.display='none';
+  document.getElementById('loginError').textContent='⏱️ Session expired. Please log in again.';
+}
+
+// Phone masking
+function maskPhone(phone){
+  if(!SECURITY.MASK_PHONES)return phone;
+  const p=String(phone||'');
+  if(p.length<6)return p;
+  return p.slice(0,4)+'****'+p.slice(-2);
+}
+
+// Check existing session on load
+function checkExistingSession(){
+  const authTime=Number(sessionStorage.getItem('auth_time')||0);
+  const authUser=sessionStorage.getItem('auth_user');
+  const timeout=SECURITY.SESSION_TIMEOUT_MINS*60*1000;
+  
+  if(authUser && (Date.now()-authTime)<timeout){
+    window.DECRYPT_PASSPHRASE=sessionStorage.getItem('dk')||'';
+    unlockDashboard(authUser);
+    return true;
+  }
+  return false;
+}
+
+// Init: check session after full page load (both script blocks parsed)
+window.addEventListener('DOMContentLoaded',()=>{
+  checkExistingSession();
+});
+</script>
+
+<!-- ===== DASHBOARD CONTENT (hidden until auth) ===== -->
+<div id="dashboardContent" style="display:none">
+
+<!-- Loading state -->
+<div id="dataLoading" style="display:none;align-items:center;justify-content:center;min-height:80vh;flex-direction:column;text-align:center">
+  <div style="width:48px;height:48px;border:4px solid rgba(0,212,170,0.2);border-top-color:#00d4aa;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <p style="margin-top:20px;color:#7a8a9a;font-size:14px">Loading latest data…</p>
+</div>
+
+<!-- No-data placeholder (swaps in safely, does NOT destroy the page) -->
+<div id="dataPlaceholder" style="display:none;align-items:center;justify-content:center;min-height:80vh;padding:20px">
+  <div style="text-align:center;color:#e8e8e8;max-width:400px">
+    <div style="font-size:64px;margin-bottom:20px">📁</div>
+    <h1 style="font-size:28px;margin-bottom:12px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">No Data Yet</h1>
+    <p style="font-size:14px;color:#999;line-height:1.8">
+      Admin has not published any data yet.<br><br>
+      Once the first Excel file is uploaded, the dashboard will automatically load with the latest data.
+    </p>
+    <div style="margin-top:30px;padding:20px;background:#0f1620;border:1px solid #1a3050;border-radius:8px;font-size:12px;color:#999">
+      <p style="margin-bottom:8px">✓ Dashboard checks for latest data on each load</p>
+      <p style="margin-bottom:8px">✓ Admin uploads = data appears on next refresh</p>
+      <p>✓ Always shows the most recent Excel file</p>
+    </div>
+    <button onclick="retryDataLoad()" style="margin-top:30px;padding:12px 24px;background:#00d4aa;color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px">🔄 Check Again</button>
+  </div>
+</div>
+
+<div class="wrap" id="mainWrap">
+
+<div id="uploadView" style="display:none !important;visibility:hidden !important;pointer-events:none !important">
+  <div class="tag">BITS Pilani Digital · Aanya Voice Analytics</div>
+  <h1>Aanya Voice <em>Intelligence</em></h1>
+  <p class="lead">Drop in the voice call export and explore call quality, lead temperature, Aanya's performance, and revenue impact. Everything runs in your browser; nothing is uploaded.</p>
+  <div class="drop" id="dropZone">
+    <div style="font-size:42px;margin-bottom:14px">🎙️</div>
+    <b>Drop the Voice Export here</b>
+    <span>or click to choose &nbsp;·&nbsp; .xlsx from Aanya voice logs</span>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+  </div>
+  <div id="err" style="color:var(--coral);font-size:14px;margin-top:18px;min-height:20px"></div>
+</div>
+
+<div id="reportView">
+  <header style="background:linear-gradient(135deg,#060c14 0%,#0a1220 100%);border-bottom:1px solid rgba(0,212,170,0.2);padding:24px;margin-bottom:32px">
+
+    <!-- TOPBAR -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4aa,#4ec9b0);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#000;font-size:18px;flex-shrink:0">B</div>
+        <div>
+          <div style="font-size:10px;color:#00d4aa;font-weight:700;letter-spacing:2px;text-transform:uppercase;line-height:1">BITS Pilani Digital</div>
+          <div style="font-size:18px;font-weight:800;color:#e8e8e8;line-height:1.3">Aanya Voice Analytics</div>
+        </div>
+      </div>
+      <div id="meta" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div style="border-top:1px solid rgba(0,212,170,0.12);padding:12px 0">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <label style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">Filter:</label>
+        <button onclick="quickFilter('today')" id="btn-today" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Today</button>
+        <button onclick="quickFilter('yesterday')" id="btn-yesterday" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Yesterday</button>
+        <button onclick="quickFilter('week')" id="btn-week" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 7 Days</button>
+        <button onclick="quickFilter('month')" id="btn-month" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 30 Days</button>
+        <button onclick="quickFilter('all')" id="btn-all" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">All</button>
+        <button onclick="toggleCustomFilter()" id="btn-custom" style="padding:6px 12px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">📆 Custom</button>
+
+        <!-- Inline custom date range (compact, appears in same row) -->
+        <div id="customFilterPanel" style="display:none;align-items:center;gap:8px;background:#0a1118;border:1px solid rgba(0,212,170,0.3);border-radius:6px;padding:5px 8px">
+          <input type="date" id="filterFromDate" style="padding:5px 8px;background:#0a0f15;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer">
+          <span style="color:var(--faint);font-size:13px">→</span>
+          <input type="date" id="filterToDate" style="padding:5px 8px;background:#0a0f15;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer">
+          <button onclick="applyCustomFilter()" style="padding:5px 14px;background:var(--teal);border:none;border-radius:5px;color:#000;font-size:12px;font-weight:700;cursor:pointer">Apply</button>
+        </div>
+
+        <!-- Selected Date Range pill + Search (pushed right) -->
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+          <div id="selectedDateRange" style="padding:6px 12px;background:#0f1620;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
+            📅 <span id="dateRangeText" style="font-family:'IBM Plex Mono',monospace;font-size:11px"></span>
+          </div>
+          <input type="text" id="searchMobile" placeholder="🔍 Search mobile..." style="padding:6px 10px;background:#0f1620;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;width:180px" oninput="debouncedSearch(this.value)">
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero: Call Quality Score + Gauge -->
+  <div class="hero">
+    <div id="gauge"></div>
+    <div class="hx" id="heroText"></div>
+  </div>
+
+  <!-- KPI Strip -->
+  <div class="strip" id="kpis"></div>
+
+  <!-- User Search Panel -->
+  <div id="userSearchResult" style="display:none;margin-bottom:24px;padding:16px;background:#0a1f1a;border-radius:8px;border-left:3px solid var(--teal)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <div style="font-size:11px;color:var(--teal);font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">User Profile</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px"><b id="userSearchPhone"></b> — <span id="userSearchStats"></span></div>
+      </div>
+      <button onclick="closeUserSearch()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div id="userSearchTimeline" style="margin-top:12px;max-height:500px;overflow-y:auto"></div>
+  </div>
+
+  <section><div class="shead"><span class="n">01</span><h2>Lead temperature funnel</h2></div>
+    <div class="grid2">
+      <div class="panel"><h4>Lead pipeline</h4><div class="cap">Hot → Warm → Cold. What share of calls generate real interest?</div><div class="funnel" id="funnel"></div></div>
+      <div class="panel"><h4>Call quality by temperature</h4><div class="cap">Avg Aanya confidence, need score, and review band for each tier.</div><div id="tempQual"></div></div>
+    </div></section>
+
+  <section><div class="shead"><span class="n">02</span><h2>Aanya performance metrics</h2></div>
+    <div class="grid2">
+      <div class="panel"><h4>Aanya confidence distribution</h4><div class="cap">Calls grouped by how confident Aanya was in its answers.</div><div id="confDist"></div></div>
+      <div class="panel"><h4>Call outcomes by confidence</h4><div class="cap">Do high-confidence calls convert to hot leads?</div><div id="confImpact"></div></div>
+    </div></section>
+
+  <section><div class="shead"><span class="n">03</span><h2>What callers ask about</h2></div>
+    <div class="panel"><h4>Intent distribution</h4><div class="cap" style="margin-bottom:14px">Mined from transcripts — what brings callers to Aanya.</div><div class="intlist" id="intents"></div></div></section>
+
+  <section><div class="shead"><span class="n">04</span><h2>Call volume trends</h2></div>
+    <div class="grid2">
+      <div class="panel"><h4>Daily volume</h4><div class="cap">Calls per day — where does traffic peak?</div><div id="dayChart"></div></div>
+      <div class="panel"><h4>Hourly patterns</h4><div class="cap">What time of day do most calls come in?</div><div id="hourChart"></div></div>
+    </div></section>
+
+  <section><div class="shead"><span class="n">05</span><h2>Call efficiency & duration</h2></div>
+    <div class="grid2">
+      <div class="panel"><h4>Calls by duration</h4><div class="cap">Where do most calls land? Shorter = Aanya resolved it; longer = escalation/interest.</div><div id="durBands"></div></div>
+      <div class="panel"><h4>Quality by messages exchanged</h4><div class="cap">Do longer conversations lead to hotter leads?</div><div id="msgImpact"></div></div>
+    </div></section>
+
+  <section><div class="shead"><span class="n">06</span><h2>Review band breakdown</h2></div>
+    <div class="panel"><div class="cap">Green (quality), Amber (ok), Red (needs attention) — what share of calls passed QA?</div><div id="bandBars"></div></div></section>
+
+  <section><div class="shead"><span class="n">07</span><h2>🏆 Hottest Leads (Top 50)</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
+    <div class="panel"><h4>Ranked by lead score & engagement</h4><div class="cap">Hot leads ranked by temperature, call frequency, need score & confidence. Click any lead to view full profile.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div></section>
+
+  <section><div class="shead"><span class="n">08</span><h2>🔥 Serial Engagers (Hot Leads)</h2><button onclick="exportSerialEngagers()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
+    <div class="panel"><h4>Repeat callers with high engagement</h4><div class="cap">Phone numbers with 3+ calls — shows frustrated vs general breakdown. High engagement = strong interest signal. Click to view timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
+    <div id="timelinePanel" style="display:none;margin-top:24px">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div><h4 id="timelineLabel"></h4><div class="cap" id="timelineMeta"></div></div>
+          <button onclick="$('timelinePanel').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+        </div>
+        <div class="timeline" id="timeline" style="max-height:600px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#0a0f15;padding:16px"></div>
+      </div>
+    </div></section>
+
+  <section><div class="shead"><span class="n">09</span><h2>🔥 Callback Requests — Your Hottest Leads</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">📥 Export CSV</button></div>
+    <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number & reason. <b id="cbCount" style="color:var(--hot)"></b> calls — actionable follow-up list.</div>
+    <div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+    <div id="cbList" style="max-height:600px;overflow-y:auto"></div></div></section>
+
+  <section><div class="shead"><span class="n">10</span><h2>😤 Frustrated Callers Analysis</h2></div>
+    <div class="grid2">
+      <div class="panel"><h4>Frustrated call breakdown</h4><div class="cap">Why are callers frustrated? Common patterns.</div><div id="frustBreak"></div></div>
+      <div class="panel"><h4>Cost Impact</h4><div class="cap">Real ₹ cost of frustrated calls at ₹5/min</div><div id="frustCost"></div></div>
+    </div></section>
+
+    <footer id="foot"></footer>
+</div>
+
+</div>
+
+<script>
+const C={teal:"#4ec9b0",green:"#5fcf80",amber:"#e8a838",coral:"#e8654f",gold:"#d4af37",blue:"#5a9bd8",hot:"#e74c3c",warm:"#f39c12",cold:"#95a5a6",line:"#26303f",muted:"#8a96a8",cream:"#ece6d8"};
+const $=id=>document.getElementById(id);
+let RECORDS=[], SRC="";
+
+const dz=$("dropZone"),fi=$("fileInput");
+dz.onclick=()=>fi.click();
+fi.onchange=e=>{if(e.target.files[0])handle(e.target.files[0]);};
+["dragover","dragenter"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("over");}));
+dz.addEventListener("drop",e=>{if(e.dataTransfer.files[0])handle(e.dataTransfer.files[0]);});
+if($("reloadBtn"))$("reloadBtn").onclick=()=>{$("reportView").style.display="none";$("uploadView").style.display="flex";$("err").textContent="";fi.value="";};
+
+// NOTE: Data loads only AFTER successful auth — see unlockDashboard() → autoLoadLatestExcel()
+window.DATA_LOADED=false;
+
+function autoLoadLatestExcel(){
+  // Show loading, hide others
+  $("dataLoading").style.display="flex";
+  $("dataPlaceholder").style.display="none";
+  $("mainWrap").style.display="none";
+
+  fetch('data/voice_analytics.xlsx',{cache:'no-store'})
+    .then(r=>{
+      if(r.ok)return r.arrayBuffer();
+      throw new Error('File not found');
+    })
+    .then(async buf=>{
+      const bytes=new Uint8Array(buf);
+      let fileBytes=bytes;
+      // Detect encryption magic header "AANYAENC1"
+      if(isEncrypted(bytes)){
+        try{
+          fileBytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');
+        }catch(e){
+          $("dataLoading").style.display="none";
+          $("mainWrap").style.display="none";
+          $("dataPlaceholder").style.display="none";
+          // Wrong passphrase → lock back to login with a clear message
+          $("loginError").textContent="❌ Could not decrypt data — wrong password. Please re-enter.";
+          $("loginGate").style.display="flex";
+          $("dashboardContent").style.display="none";
+          sessionStorage.removeItem('dk');sessionStorage.removeItem('auth_user');
+          return;
+        }
+      }
+      const file=new File([fileBytes],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
+      handle(file);
+    })
+    .catch(err=>{
+      $("dataLoading").style.display="none";
+      $("mainWrap").style.display="none";
+      $("dataPlaceholder").style.display="flex";
+    });
+}
+
+// ===== AES-256-GCM decryption (matches admin encryption) =====
+const ENC_MAGIC="AANYAENC1";
+function isEncrypted(bytes){
+  if(bytes.length<ENC_MAGIC.length)return false;
+  for(let i=0;i<ENC_MAGIC.length;i++){if(bytes[i]!==ENC_MAGIC.charCodeAt(i))return false;}
+  return true;
+}
+async function deriveKey(passphrase,salt){
+  const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},
+    baseKey,{name:'AES-GCM',length:256},false,['decrypt']
+  );
+}
+async function decryptData(bytes,passphrase){
+  // Layout: [9 magic][16 salt][12 iv][...ciphertext]
+  const off=ENC_MAGIC.length;
+  const salt=bytes.slice(off,off+16);
+  const iv=bytes.slice(off+16,off+28);
+  const ct=bytes.slice(off+28);
+  const key=await deriveKey(passphrase,salt);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  return new Uint8Array(plain);
 }
 
 function retryDataLoad(){
