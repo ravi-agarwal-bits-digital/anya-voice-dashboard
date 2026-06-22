@@ -339,6 +339,26 @@ footer b{color:var(--navy)!important}
 .callback-preferred.unspecified b{color:#7a8797!important}
 </style>
 
+<style id="load-state-hardening">
+/* Loading/error states must not show the dashboard chrome/sidebar */
+body.dashboard-loading #mainShell,
+body.dashboard-placeholder #mainShell,
+body.dashboard-loading .app-shell,
+body.dashboard-placeholder .app-shell,
+body.dashboard-loading .exec-sidebar,
+body.dashboard-placeholder .exec-sidebar{
+  display:none!important;
+}
+body.dashboard-loading #dataLoading,
+body.dashboard-placeholder #dataPlaceholder{
+  min-height:100vh!important;
+  width:100%!important;
+}
+body.dashboard-loading #dashboardContent,
+body.dashboard-placeholder #dashboardContent{
+  padding:0!important;
+}
+</style>
 </head>
 <body>
 
@@ -798,23 +818,29 @@ window.DATA_LOADED=false;
 
 function setDashboardLoading(){
   const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
-  if(loading)loading.style.display="flex";
+  document.body.classList.add("dashboard-loading");
+  document.body.classList.remove("dashboard-ready","dashboard-placeholder");
+  if(shell)shell.style.setProperty("display","none","important");
+  if(wrap)wrap.style.setProperty("display","none","important");
   if(placeholder)placeholder.style.display="none";
-  if(shell)shell.style.display="none";
-  if(wrap)wrap.style.display="none";
+  if(loading)loading.style.display="flex";
 }
 function setDashboardReady(){
   const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
+  document.body.classList.add("dashboard-ready");
+  document.body.classList.remove("dashboard-loading","dashboard-placeholder");
   if(loading)loading.style.display="none";
   if(placeholder)placeholder.style.display="none";
-  if(shell)shell.style.display="";
-  if(wrap)wrap.style.display="block";
+  if(shell){shell.style.removeProperty("display");shell.style.display="grid";}
+  if(wrap){wrap.style.removeProperty("display");wrap.style.display="block";}
 }
 function setDashboardPlaceholder(title,msg){
   const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
+  document.body.classList.add("dashboard-placeholder");
+  document.body.classList.remove("dashboard-loading","dashboard-ready");
   if(loading)loading.style.display="none";
-  if(shell)shell.style.display="none";
-  if(wrap)wrap.style.display="none";
+  if(shell)shell.style.setProperty("display","none","important");
+  if(wrap)wrap.style.setProperty("display","none","important");
   if(placeholder)placeholder.style.display="flex";
   if($("dataPlaceholderTitle"))$("dataPlaceholderTitle").textContent=title||"No data published";
   if($("dataPlaceholderMsg"))$("dataPlaceholderMsg").innerHTML=msg||"No dataset has been published yet.<br><br>Once an Excel file is published, this dashboard will load the latest available dataset.";
@@ -903,11 +929,12 @@ function handle(file){
   rd.onload=e=>{
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      let name=wb.SheetNames.find(n=>n.toLowerCase().includes('voice export'))||wb.SheetNames.find(n=>n.toLowerCase().includes('export'));
+      let name=wb.SheetNames.find(n=>n.toLowerCase().includes('voice export'))||wb.SheetNames.find(n=>n.toLowerCase().includes('export'))||wb.SheetNames[0];
       if(!name){
-        setDashboardPlaceholder('Expected sheet not found','The workbook loaded, but no <b>Voice Export</b> sheet was found.<br><br>Available sheets: '+esc(wb.SheetNames.join(', ')));
+        setDashboardPlaceholder('No worksheet found','The workbook loaded, but it does not contain any worksheet.');
         return;
       }
+      // Some published exports arrive as "Sheet1"; use the first sheet when the expected export name is absent.
       const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:''});
       if(!rows.length){
         setDashboardPlaceholder('No records found','The <b>'+esc(name)+'</b> sheet is empty. Please publish an export with call rows.');
@@ -916,7 +943,7 @@ function handle(file){
       RECORDS=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
       SRC=file.name;
       if(!RECORDS.length){
-        setDashboardPlaceholder('No valid call records','The export loaded, but no rows had a valid call date. Please check the date columns in the Voice Export sheet.');
+        setDashboardPlaceholder('No valid call records','The export loaded, but no rows had a valid call date. Please check the date columns in the published worksheet.');
         return;
       }
       boot();
