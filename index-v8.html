@@ -359,6 +359,26 @@ body.dashboard-placeholder #dashboardContent{
   padding:0!important;
 }
 </style>
+
+<style id="load-overlay-v4">
+body.dashboard-loading #dataLoading,
+body.dashboard-placeholder #dataPlaceholder{
+  position:fixed!important;inset:0!important;z-index:99999!important;display:flex!important;min-height:100vh!important;width:100vw!important;
+  background:linear-gradient(135deg,#f4f7fb 0%,#eef3f9 52%,#f8fafc 100%)!important;
+}
+body.dashboard-loading #mainShell,
+body.dashboard-placeholder #mainShell,
+body.dashboard-loading .app-shell,
+body.dashboard-placeholder .app-shell,
+body.dashboard-loading .exec-sidebar,
+body.dashboard-placeholder .exec-sidebar,
+body.dashboard-loading #kpiPanel,
+body.dashboard-placeholder #kpiPanel,
+body.dashboard-loading #kpiOverlay,
+body.dashboard-placeholder #kpiOverlay{opacity:0!important;visibility:hidden!important;pointer-events:none!important;}
+body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
+</style>
+
 </head>
 <body>
 
@@ -921,35 +941,26 @@ function retryDataLoad(){
 function handle(file){
   if($('err'))$('err').textContent='';
   if(typeof XLSX==='undefined'){
-    setDashboardPlaceholder('Spreadsheet engine unavailable','The spreadsheet parser did not load. Please check the internet connection/CDN access and refresh the dashboard.');
+    setDashboardPlaceholder('Spreadsheet engine unavailable','The spreadsheet parser did not load. Please check internet/CDN access and refresh the dashboard.');
     return;
   }
   const rd=new FileReader();
   rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
   rd.onload=e=>{
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      let name=wb.SheetNames.find(n=>n.toLowerCase().includes('voice export'))||wb.SheetNames.find(n=>n.toLowerCase().includes('export'))||wb.SheetNames[0];
-      if(!name){
-        setDashboardPlaceholder('No worksheet found','The workbook loaded, but it does not contain any worksheet.');
-        return;
-      }
-      // Some published exports arrive as "Sheet1"; use the first sheet when the expected export name is absent.
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:''});
-      if(!rows.length){
-        setDashboardPlaceholder('No records found','The <b>'+esc(name)+'</b> sheet is empty. Please publish an export with call rows.');
-        return;
-      }
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const chosen=chooseWorkbookRows(wb);
+      if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
+      const rows=chosen.rows;
       RECORDS=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
       SRC=file.name;
       if(!RECORDS.length){
-        setDashboardPlaceholder('No valid call records','The export loaded, but no rows had a valid call date. Please check the date columns in the published worksheet.');
+        const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
+        setDashboardPlaceholder('No valid call records','The export loaded from <b>'+esc(chosen.name)+'</b>, but the dashboard could not identify a valid call date column.<br><br><b>Columns seen:</b> '+esc(headers||'none'));
         return;
       }
       boot();
-    }catch(err){
-      setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));
-    }
+    }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
   };
   rd.readAsArrayBuffer(file);
 }
@@ -1217,47 +1228,47 @@ function closeUserSearch(){
 }
 
 function parseDateFull(v){
-  const s=String(v||"").trim();
+  if(v===null||v===undefined||v==='')return null;
+  const pad=n=>String(Number(n)||0).padStart(2,'0');
+  const out=(y,mo,d,h=0,m=0)=>({iso:`${Number(y)}-${pad(mo)}-${pad(d)}`,h:Number(h)||0,m:Number(m)||0});
+  const fromDate=(dt,useUTC=false)=>{
+    if(!(dt instanceof Date)||isNaN(dt.getTime()))return null;
+    return useUTC
+      ? out(dt.getUTCFullYear(),dt.getUTCMonth()+1,dt.getUTCDate(),dt.getUTCHours(),dt.getUTCMinutes())
+      : out(dt.getFullYear(),dt.getMonth()+1,dt.getDate(),dt.getHours(),dt.getMinutes());
+  };
+  if(typeof v==='number' && isFinite(v)){
+    const days=Math.floor(v-25569);
+    const frac=v-Math.floor(v);
+    const ms=days*86400*1000+Math.round(frac*86400*1000);
+    return fromDate(new Date(ms),true);
+  }
+  if(v instanceof Date)return fromDate(v,false);
+  const s=String(v||'').trim();
   if(!s)return null;
-
-  // Format 1: DD Mon YYYY HH:MM:SS AM/PM IST (12 Jun 2026, 06:22:01 PM IST)
-  let dm2=s.match(/(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/);
+  let dm2=s.match(/(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/) || s.match(/([A-Za-z]{3})[A-Za-z]*\s+(\d{1,2}),?\s+(\d{4})/);
   if(dm2){
-    const mo={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11}[dm2[2].toLowerCase()];
-    if(mo==null)return null;
-    
+    const monthToken=isNaN(Number(dm2[1]))?dm2[1]:dm2[2];
+    const dayToken=isNaN(Number(dm2[1]))?dm2[2]:dm2[1];
+    const yearToken=dm2[3];
+    const mo={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12}[monthToken.toLowerCase().slice(0,3)];
+    if(!mo)return null;
     let h=0,m=0;
-    const tm=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)\s*(?:IST)?/i);
-    if(tm){
-      h=Number(tm[1])%12;
-      m=Number(tm[2])||0;
-      if(/pm/i.test(tm[3]))h+=12;
-    }
-    return{iso:`${dm2[3]}-${String(mo+1).padStart(2,"0")}-${dm2[1].padStart(2,"0")}`,h,m};
+    const tm=s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+    if(tm){h=Number(tm[1]);m=Number(tm[2])||0;const ap=(tm[3]||'').toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;}
+    return out(yearToken,mo,dayToken,h,m);
   }
-
-  // Format 2: DD/MM/YYYY HH:MM(:SS) with optional AM/PM
-  dm2=s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  dm2=s.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:\s+|T)?(\d{1,2})?:?(\d{2})?(?::\d{2})?\s*(AM|PM)?\b/i);
   if(dm2){
-    let h=Number(dm2[4]);
-    const m=Number(dm2[5])||0;
-    const ampm=s.match(/(AM|PM)/i);
-    if(ampm){ // 12-hour format
-      h=h%12;
-      if(/pm/i.test(ampm[1]))h+=12;
-    } // else already 24-hour, use as-is
-    return{iso:`${dm2[3]}-${String(Number(dm2[2])).padStart(2,"0")}-${dm2[1].padStart(2,"0")}`,h,m};
+    let a=Number(dm2[1]),b=Number(dm2[2]),y=Number(dm2[3]);if(y<100)y+=2000;
+    let day=a,mo=b;if(a<=12 && b>12){mo=a;day=b;}
+    let h=Number(dm2[4]||0),m=Number(dm2[5]||0);const ap=(dm2[6]||'').toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;
+    return out(y,mo,day,h,m);
   }
-
-  // Format 3: YYYY-MM-DD
-  dm2=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(dm2){
-    let h=0,m=0;
-    const tm=s.match(/(\d{1,2}):(\d{2})/);
-    if(tm){h=Number(tm[1]);m=Number(tm[2]);}
-    return{iso:`${dm2[1]}-${String(Number(dm2[2])).padStart(2,"0")}-${String(Number(dm2[3])).padStart(2,"0")}`,h,m};
-  }
-
+  dm2=s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::\d{2})?)?/);
+  if(dm2)return out(dm2[1],dm2[2],dm2[3],dm2[4]||0,dm2[5]||0);
+  const native=new Date(s);
+  if(!isNaN(native.getTime()))return fromDate(native,false);
   return null;
 }
 
@@ -1429,45 +1440,70 @@ function preferredCallbackWindow(row, transcript, summary, callIso){
   return 'Not specified';
 }
 
-function rowToRecord(r){
-  const dtStr=r["Created At (IST)"]||"";
-  const dt=parseDateFull(dtStr);
-  const trans=String(r["Full Transcript"]||"");
-  const excelSummary=String(r["Summary"]||"").trim();
-  
-  // Build summary: prefer Excel summary, fallback to transcript extraction
-  let summary=excelSummary;
-  if(!summary){
-    // Extract first 100 chars from transcript as fallback
-    const cleanTrans=trans.replace(/\s+/g, ' ').trim();
-    summary=cleanTrans.length>120?cleanTrans.slice(0,120)+"...":cleanTrans;
+function normFieldName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function pickField(row,aliases){
+  const keys=Object.keys(row||{});
+  for(const a of aliases){if(Object.prototype.hasOwnProperty.call(row,a))return row[a];}
+  const normalized=keys.map(k=>[k,normFieldName(k)]);
+  for(const a of aliases){
+    const na=normFieldName(a);
+    const hit=normalized.find(([k,nk])=>nk===na || nk.includes(na) || na.includes(nk));
+    if(hit)return row[hit[0]];
   }
-  
-  const intent=intentOf(trans);
-  const callbackReq=/callback|call me|call back|please call|ring me|ring back|contact me|get back|follow.{0,5}up/i.test(trans);
-  const need=Number(r["Need Score"])||0;
-  // Frustrated = genuine negative-sentiment signals only (NOT callbacks — wanting a callback ≠ being upset)
-  const frustrated=/frustrat|angry|upset|annoyed|waited|promised.*not|multiple.*time|already.*called|no.*response|not.*working|disappoint|useless|terrible|worst|complaint/i.test(trans);
-  
-  // Extract callback reason from transcript
-  let cbReason="Follow-up needed";
-  if(/payment|fee|cost|emi|installment/.test(trans))cbReason="Payment clarification";
-  else if(/admission|apply|process|enrol|form/.test(trans))cbReason="Admission assistance";
-  else if(/programme|course|curriculum|batch/.test(trans))cbReason="Programme info";
-  else if(/result|mark|grade|certificate/.test(trans))cbReason="Results/Certificate";
-  else if(/access|login|portal|enrolled|student/.test(trans))cbReason="Account access";
-  else if(/technical|audio|connection|quality|issue/.test(trans))cbReason="Technical support";
-  else if(/eligib|qualify|require/.test(trans))cbReason="Eligibility check";
-  
-  // Create date object from IST values (h, m are already IST)
-  const dateObj=dt?new Date(Number(dt.iso.split("-")[0]),Number(dt.iso.split("-")[1])-1,Number(dt.iso.split("-")[2]),dt.h,dt.m,0):new Date();
+  return '';
+}
+function scoreSheetRows(rows,name){
+  if(!rows||!rows.length)return 0;
+  const headers=Object.keys(rows[0]||{}).map(normFieldName).join('|');
+  let score=0;
+  if(/voice|export/i.test(name||''))score+=8;
+  ['createdat','date','timestamp','calltime'].forEach(k=>{if(headers.includes(k))score+=4;});
+  ['fulltranscript','transcript','summary','from','phone','mobile','duration','confidence','needscore'].forEach(k=>{if(headers.includes(k))score+=2;});
+  const sample=rows.slice(0,25);
+  const validDates=sample.filter(r=>parseDateFull(pickField(r,['Created At (IST)','Created At','Timestamp','Call Time','Call Date','Date','Started At','Start Time','created_at']))).length;
+  score+=validDates*3;
+  return score;
+}
+function chooseWorkbookRows(wb){
+  const candidates=(wb.SheetNames||[]).map(name=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',raw:false});
+    return{name,rows,score:scoreSheetRows(rows,name)};
+  }).filter(c=>c.rows.length);
+  candidates.sort((a,b)=>b.score-a.score);
+  return candidates[0]||null;
+}
+
+function rowToRecord(r){
+  const dtStr=pickField(r,['Created At (IST)','Created At','Timestamp','Call Time','Call Date','Date','Started At','Start Time','created_at','createdAt']);
+  const dt=parseDateFull(dtStr);
+  const trans=String(pickField(r,['Full Transcript','Transcript','Call Transcript','Conversation Transcript','Conversation','Messages','Dialogue'])||'');
+  const excelSummary=String(pickField(r,['Summary','Call Summary','Conversation Summary','AI Summary','Synopsis'])||'').trim();
+  let summary=excelSummary;
+  if(!summary){const cleanTrans=trans.replace(/\s+/g,' ').trim();summary=cleanTrans.length>120?cleanTrans.slice(0,120)+'...':cleanTrans;}
+  const bodyText=(trans+' '+summary).trim();
+  const intent=intentOf(bodyText);
+  const callbackReq=/callback|call me|call back|please call|ring me|ring back|contact me|get back|follow.{0,5}up/i.test(bodyText);
+  const need=Number(pickField(r,['Need Score','Need','Lead Need Score','NeedScore']))||0;
+  const frustrated=/frustrat|angry|upset|annoyed|waited|promised.*not|multiple.*time|already.*called|no.*response|not.*working|disappoint|useless|terrible|worst|complaint/i.test(bodyText);
+  const low=bodyText.toLowerCase();
+  let cbReason='Follow-up needed';
+  if(/payment|fee|cost|emi|installment/.test(low))cbReason='Payment clarification';
+  else if(/admission|apply|process|enrol|form/.test(low))cbReason='Admission assistance';
+  else if(/programme|program|course|curriculum|batch/.test(low))cbReason='Programme info';
+  else if(/result|mark|grade|certificate/.test(low))cbReason='Results/Certificate';
+  else if(/access|login|portal|enrolled|student/.test(low))cbReason='Account access';
+  else if(/technical|audio|connection|quality|issue/.test(low))cbReason='Technical support';
+  else if(/eligib|qualify|require/.test(low))cbReason='Eligibility check';
+  const dateObj=dt?new Date(Number(dt.iso.split('-')[0]),Number(dt.iso.split('-')[1])-1,Number(dt.iso.split('-')[2]),dt.h,dt.m,0):new Date();
   return{
-    d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,callId:String(r["Call ID"]||""),ts:Math.floor(dateObj.getTime()/1000),
-    dur:Number(r["Duration (s)"])||0,msg:Number(r["Messages"])||0,
-    status:String(r["Status"]||"").toLowerCase(),leadTemp:String(r["Lead Temp."]||"").trim(),
-    conf:Number(r["Bot Conf."])||0,need,
-    band:String(r["Review Band"]||"").trim(),intent,callback:callbackReq,cbReason,cbPreferred:preferredCallbackWindow(r,trans,summary,dt?dt.iso:null),frustrated,summary,
-    from:String(r["From"]||"unknown"),trans
+    d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,
+    callId:String(pickField(r,['Call ID','CallId','ID','Conversation ID','Session ID'])||''),ts:Math.floor(dateObj.getTime()/1000),
+    dur:Number(pickField(r,['Duration (s)','Duration','Duration Seconds','Duration(s)','Call Duration']))||0,
+    msg:Number(pickField(r,['Messages','Message Count','Total Messages','Turns']))||0,
+    status:String(pickField(r,['Status','Call Status'])||'').toLowerCase(),leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
+    conf:Number(pickField(r,['Bot Conf.','Bot Conf','Bot Confidence','AI Confidence','Confidence','Model Confidence']))||0,need,
+    band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),intent,callback:callbackReq,cbReason,cbPreferred:preferredCallbackWindow(r,trans,summary,dt?dt.iso:null),frustrated,summary,
+    from:String(pickField(r,['From','Phone','Phone Number','Mobile','Mobile Number','Caller','Caller Number','Contact','User Phone'])||'unknown'),trans
   };
 }
 
