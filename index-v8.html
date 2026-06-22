@@ -543,8 +543,8 @@ window.addEventListener('DOMContentLoaded',()=>{
 <div id="dataPlaceholder" style="display:none;align-items:center;justify-content:center;min-height:80vh;padding:20px">
   <div style="text-align:center;color:#e8e8e8;max-width:400px">
     <div style="font-size:42px;margin-bottom:20px;font-weight:800;color:var(--gold)">Data</div>
-    <h1 style="font-size:28px;margin-bottom:12px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">No data published</h1>
-    <p style="font-size:14px;color:var(--muted);line-height:1.8">
+    <h1 id="dataPlaceholderTitle" style="font-size:28px;margin-bottom:12px;background:linear-gradient(120deg,#ffd700,#00d4aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">No data published</h1>
+    <p id="dataPlaceholderMsg" style="font-size:14px;color:var(--muted);line-height:1.8">
       No dataset has been published yet.<br><br>
       Once an Excel file is published, this dashboard will load the latest available dataset.
     </p>
@@ -558,7 +558,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 </div>
 
 
-<div class="app-shell" id="mainShell">
+<div class="app-shell" id="mainShell" style="display:none">
 <aside class="exec-sidebar" aria-label="Dashboard navigation">
   <div class="side-compact-brand"><div class="side-compact-title">Anya</div><div class="side-compact-sub">Voice dashboard</div></div>
   <nav class="side-nav">
@@ -796,13 +796,39 @@ if($("reloadBtn"))$("reloadBtn").onclick=()=>{$("reportView").style.display="non
 // NOTE: Data loads only AFTER successful auth — see unlockDashboard() → autoLoadLatestExcel()
 window.DATA_LOADED=false;
 
-function autoLoadLatestExcel(){
-  // Show loading, hide others
-  $("dataLoading").style.display="flex";
-  $("dataPlaceholder").style.display="none";
-  $("mainWrap").style.display="none";
+function setDashboardLoading(){
+  const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
+  if(loading)loading.style.display="flex";
+  if(placeholder)placeholder.style.display="none";
+  if(shell)shell.style.display="none";
+  if(wrap)wrap.style.display="none";
+}
+function setDashboardReady(){
+  const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
+  if(loading)loading.style.display="none";
+  if(placeholder)placeholder.style.display="none";
+  if(shell)shell.style.display="";
+  if(wrap)wrap.style.display="block";
+}
+function setDashboardPlaceholder(title,msg){
+  const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
+  if(loading)loading.style.display="none";
+  if(shell)shell.style.display="none";
+  if(wrap)wrap.style.display="none";
+  if(placeholder)placeholder.style.display="flex";
+  if($("dataPlaceholderTitle"))$("dataPlaceholderTitle").textContent=title||"No data published";
+  if($("dataPlaceholderMsg"))$("dataPlaceholderMsg").innerHTML=msg||"No dataset has been published yet.<br><br>Once an Excel file is published, this dashboard will load the latest available dataset.";
+}
+function fetchWithTimeout(url,options={},timeoutMs=15000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  return fetch(url,{...options,signal:controller.signal}).finally(()=>clearTimeout(timer));
+}
 
-  fetch('data/voice_analytics.xlsx',{cache:'no-store'})
+function autoLoadLatestExcel(){
+  setDashboardLoading();
+
+  fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-store'},15000)
     .then(r=>{
       if(r.ok)return r.arrayBuffer();
       throw new Error('File not found');
@@ -815,13 +841,10 @@ function autoLoadLatestExcel(){
         try{
           fileBytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');
         }catch(e){
-          $("dataLoading").style.display="none";
-          $("mainWrap").style.display="none";
-          $("dataPlaceholder").style.display="none";
-          // Wrong passphrase → lock back to login with a clear message
-          $("loginError").textContent="Could not decrypt data — wrong password. Please re-enter.";
-          $("loginGate").style.display="flex";
-          $("dashboardContent").style.display="none";
+          setDashboardPlaceholder('Data locked','Could not decrypt the published data file. Please re-enter the dashboard password and try again.');
+          if($('loginError'))$('loginError').textContent='Could not decrypt data — wrong password. Please re-enter.';
+          if($('loginGate'))$('loginGate').style.display='flex';
+          if($('dashboardContent'))$('dashboardContent').style.display='none';
           sessionStorage.removeItem('dk');sessionStorage.removeItem('auth_user');
           return;
         }
@@ -830,9 +853,13 @@ function autoLoadLatestExcel(){
       handle(file);
     })
     .catch(err=>{
-      $("dataLoading").style.display="none";
-      $("mainWrap").style.display="none";
-      $("dataPlaceholder").style.display="flex";
+      const timedOut=err && err.name==='AbortError';
+      setDashboardPlaceholder(
+        timedOut?'Data load timed out':'No data published',
+        timedOut
+          ? 'The dashboard waited for the latest voice export but the request did not complete. Please check that <b>data/voice_analytics.xlsx</b> is reachable, then refresh or click Check Again.'
+          : 'No voice export was found at <b>data/voice_analytics.xlsx</b>.<br><br>Once the Excel file is published in that path, this dashboard will load it automatically.'
+      );
     });
 }
 
@@ -866,23 +893,36 @@ function retryDataLoad(){
   autoLoadLatestExcel();
 }
 function handle(file){
-  $("err").textContent="";
-  if(typeof XLSX==="undefined"){$("err").textContent="Spreadsheet engine did not load — check your connection and refresh.";return;}
+  if($('err'))$('err').textContent='';
+  if(typeof XLSX==='undefined'){
+    setDashboardPlaceholder('Spreadsheet engine unavailable','The spreadsheet parser did not load. Please check the internet connection/CDN access and refresh the dashboard.');
+    return;
+  }
   const rd=new FileReader();
+  rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
   rd.onload=e=>{
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
-      let name=wb.SheetNames.find(n=>n.toLowerCase().includes("voice export"))||wb.SheetNames.find(n=>n.toLowerCase().includes("export"));
-      if(!name){$("err").textContent='No "Voice Export" sheet found. Sheets: '+wb.SheetNames.join(", ");return;}
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:""});
-      if(!rows.length){$("err").textContent="That sheet is empty.";return;}
-      RECORDS=rows.map((r,i)=>{
-        const rec=rowToRecord(r);
-        return rec;
-      }).filter(r=>r && r.d);
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      let name=wb.SheetNames.find(n=>n.toLowerCase().includes('voice export'))||wb.SheetNames.find(n=>n.toLowerCase().includes('export'));
+      if(!name){
+        setDashboardPlaceholder('Expected sheet not found','The workbook loaded, but no <b>Voice Export</b> sheet was found.<br><br>Available sheets: '+esc(wb.SheetNames.join(', ')));
+        return;
+      }
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:''});
+      if(!rows.length){
+        setDashboardPlaceholder('No records found','The <b>'+esc(name)+'</b> sheet is empty. Please publish an export with call rows.');
+        return;
+      }
+      RECORDS=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
       SRC=file.name;
+      if(!RECORDS.length){
+        setDashboardPlaceholder('No valid call records','The export loaded, but no rows had a valid call date. Please check the date columns in the Voice Export sheet.');
+        return;
+      }
       boot();
-    }catch(err){$("err").textContent="Could not read that file: "+err.message;}
+    }catch(err){
+      setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));
+    }
   };
   rd.readAsArrayBuffer(file);
 }
@@ -1532,9 +1572,7 @@ function paintCallbacks(recs){
 function boot(){
   if(!RECORDS.length){$("err").textContent="No valid call records found. Check your file format.";return;}
   window.DATA_LOADED=true;
-  $("dataLoading").style.display="none";
-  $("dataPlaceholder").style.display="none";
-  $("mainWrap").style.display="block";
+  setDashboardReady();
   $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>syncSidebarActive("sec-overview"),80);
   const datesAll=RECORDS.map(r=>r.d).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
   
