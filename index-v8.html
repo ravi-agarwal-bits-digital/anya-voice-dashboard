@@ -910,12 +910,22 @@ function autoLoadLatestExcel(){
 }
 
 // ===== AES-256-GCM decryption (matches admin encryption) =====
-const ENC_MAGIC="ANYAENC1";
-function isEncrypted(bytes){
-  if(bytes.length<ENC_MAGIC.length)return false;
-  for(let i=0;i<ENC_MAGIC.length;i++){if(bytes[i]!==ENC_MAGIC.charCodeAt(i))return false;}
-  return true;
+// IMPORTANT: The published encrypted data file uses the original legacy magic
+// header "AANYAENC1". This is an internal file signature, not visible branding.
+// Keep both headers supported so older and newer admin exports continue to load.
+const ENC_MAGIC_OPTIONS=["AANYAENC1","ANYAENC1"];
+function encryptedMagic(bytes){
+  for(const magic of ENC_MAGIC_OPTIONS){
+    if(bytes.length<magic.length)continue;
+    let ok=true;
+    for(let i=0;i<magic.length;i++){
+      if(bytes[i]!==magic.charCodeAt(i)){ok=false;break;}
+    }
+    if(ok)return magic;
+  }
+  return null;
 }
+function isEncrypted(bytes){return !!encryptedMagic(bytes);}
 async function deriveKey(passphrase,salt){
   const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);
   return crypto.subtle.deriveKey(
@@ -924,8 +934,10 @@ async function deriveKey(passphrase,salt){
   );
 }
 async function decryptData(bytes,passphrase){
-  // Layout: [9 magic][16 salt][12 iv][...ciphertext]
-  const off=ENC_MAGIC.length;
+  // Layout: [magic][16 salt][12 iv][...ciphertext]
+  const magic=encryptedMagic(bytes);
+  if(!magic)throw new Error('Encrypted data header not recognized');
+  const off=magic.length;
   const salt=bytes.slice(off,off+16);
   const iv=bytes.slice(off+16,off+28);
   const ct=bytes.slice(off+28);
