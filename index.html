@@ -567,6 +567,95 @@ body.dashboard-loading #dataLoading,
 body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100%!important;}
 </style>
 
+
+
+<style id="responsive-v7-sticky-devicebar">
+/* v7: keep desktop unchanged; add a compact sticky top navigation for iPad portrait and mobile only. */
+@media (max-width:900px){
+  html{scroll-padding-top:126px!important;}
+  #mainShell.app-shell,.app-shell{padding-top:8px!important;}
+  .exec-sidebar{
+    position:sticky!important;
+    top:0!important;
+    z-index:1100!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+    border-radius:0 0 20px 20px!important;
+    margin:-10px -10px 12px!important;
+    padding:9px 10px 10px!important;
+    background:rgba(255,255,255,.97)!important;
+    backdrop-filter:blur(16px)!important;
+    -webkit-backdrop-filter:blur(16px)!important;
+    border-top:0!important;
+    border-left:0!important;
+    border-right:0!important;
+    border-bottom:1px solid rgba(203,213,225,.95)!important;
+    box-shadow:0 12px 26px rgba(11,31,58,.08)!important;
+  }
+  body.mobile-nav-scrolled .exec-sidebar{box-shadow:0 16px 34px rgba(11,31,58,.14)!important;}
+  .exec-sidebar .side-compact-brand{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:12px!important;
+    margin:0 2px 8px!important;
+    padding:8px 10px!important;
+    border-radius:15px!important;
+    border:1px solid var(--line2)!important;
+    background:linear-gradient(135deg,#ffffff,#f6f9fd)!important;
+  }
+  .side-compact-title{font-size:21px!important;line-height:1!important;white-space:nowrap!important;}
+  .side-compact-sub{
+    margin:0!important;
+    color:var(--gold)!important;
+    font-size:9.5px!important;
+    line-height:1.15!important;
+    letter-spacing:.13em!important;
+    text-align:right!important;
+  }
+  .side-compact-sub::before{content:"BITS PILANI'S LEGACY";display:block;color:var(--gold);font-weight:900;}
+  .side-compact-sub{font-size:0!important;}
+  .side-compact-sub::after{content:"DIGITAL INTELLIGENCE";display:block;color:var(--navy);font-size:9.5px;font-weight:900;letter-spacing:.13em;margin-top:2px;}
+  .side-nav{
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    gap:8px!important;
+    margin:0!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    -webkit-overflow-scrolling:touch!important;
+    scrollbar-width:none!important;
+    padding:2px 2px 4px!important;
+    scroll-snap-type:x proximity!important;
+  }
+  .side-nav::-webkit-scrollbar{display:none!important;}
+  .side-link{
+    flex:0 0 auto!important;
+    min-width:112px!important;
+    scroll-snap-align:start!important;
+    justify-content:center!important;
+    white-space:nowrap!important;
+    font-size:12px!important;
+    padding:9px 10px!important;
+    border-radius:14px!important;
+    background:#fff!important;
+  }
+  .side-link.active{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 20px rgba(11,31,58,.16)!important;}
+  .side-link.active .side-icon{background:rgba(255,255,255,.17)!important;color:#fff!important;}
+  section,#userSearchResult,#timelinePanel{scroll-margin-top:132px!important;}
+}
+@media (max-width:560px){
+  html{scroll-padding-top:112px!important;}
+  .exec-sidebar{margin:-8px -8px 10px!important;padding:8px 8px 9px!important;border-radius:0 0 18px 18px!important;}
+  .exec-sidebar .side-compact-brand{padding:7px 9px!important;margin-bottom:7px!important;}
+  .side-compact-title{font-size:19px!important;}
+  .side-compact-sub::after{font-size:8.6px!important;letter-spacing:.10em!important;}
+  .side-link{min-width:92px!important;font-size:11px!important;padding:8px 8px!important;}
+  section,#userSearchResult,#timelinePanel{scroll-margin-top:118px!important;}
+}
+</style>
+
 </head>
 <body>
 
@@ -977,6 +1066,22 @@ window.addEventListener('DOMContentLoaded',()=>{
 <script>
 
 
+function getStickyTopOffset(){
+  const nav=document.querySelector('.exec-sidebar');
+  if(window.innerWidth<=900 && nav && nav.offsetParent!==null){
+    return Math.min(Math.max(nav.offsetHeight+12,96),150);
+  }
+  return 24;
+}
+function scrollToWithStickyOffset(el, behavior='smooth'){
+  if(!el)return;
+  const y=el.getBoundingClientRect().top+window.pageYOffset-getStickyTopOffset();
+  window.scrollTo({top:Math.max(0,y),behavior});
+}
+function updateMobileNavShadow(){
+  document.body.classList.toggle('mobile-nav-scrolled',window.innerWidth<=900 && window.scrollY>8);
+}
+
 function syncSidebarActive(forceId){
   const links=[...document.querySelectorAll('.side-link')];
   if(!links.length)return;
@@ -1000,13 +1105,15 @@ window.addEventListener('DOMContentLoaded',()=>{
     const el=document.querySelector(a.getAttribute('href'));
     if(el){
       e.preventDefault();
-      el.scrollIntoView({behavior:'smooth',block:'start'});
+      scrollToWithStickyOffset(el);
       syncSidebarActive(el.id);
       history.replaceState(null,'',a.getAttribute('href'));
     }
   }));
-  window.addEventListener('scroll',()=>syncSidebarActive(),{passive:true});
+  window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
+  window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
   syncSidebarActive('sec-overview');
+  updateMobileNavShadow();
 });
 
 const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
@@ -1379,8 +1486,7 @@ function revealUserProfile(source){
   el.classList.add("profile-visible");
   if(source!=="silent"){
     setTimeout(()=>{
-      const y=el.getBoundingClientRect().top+window.pageYOffset-92;
-      window.scrollTo({top:Math.max(0,y),behavior:"smooth"});
+      scrollToWithStickyOffset(el);
       el.classList.add("profile-flash");
       setTimeout(()=>el.classList.remove("profile-flash"),1400);
     },80);
@@ -1898,7 +2004,7 @@ function paintKPIs(o){
 function jumpToSection(id){
   const el=document.getElementById(id);
   if(!el)return;
-  el.scrollIntoView({behavior:'smooth',block:'start'});
+  scrollToWithStickyOffset(el);
   el.style.transition='box-shadow .3s';
   el.style.boxShadow='0 0 0 3px rgba(176,138,60,.26)';
   setTimeout(()=>{el.style.boxShadow='';},1500);
@@ -2170,8 +2276,7 @@ function explorerOpen(phone){
   setTimeout(()=>{
     const el=$("userSearchResult");
     if(el){
-      const y=el.getBoundingClientRect().top+window.pageYOffset-70;
-      window.scrollTo({top:y,behavior:'smooth'});
+      scrollToWithStickyOffset(el);
       el.style.transition='box-shadow .3s';el.style.boxShadow='0 0 0 3px rgba(176,138,60,.26)';
       setTimeout(()=>{el.style.boxShadow='';},1500);
     }
@@ -2292,8 +2397,7 @@ function openLeadProfile(i){
   setTimeout(()=>{
     const el=$("userSearchResult");
     if(el){
-      const y=el.getBoundingClientRect().top+window.pageYOffset-70; // offset for sticky header
-      window.scrollTo({top:y,behavior:'smooth'});
+      scrollToWithStickyOffset(el);
       el.style.transition='box-shadow .3s';
       el.style.boxShadow='0 0 0 3px rgba(176,138,60,.26)';
       setTimeout(()=>{el.style.boxShadow='';},1500);
@@ -2343,7 +2447,7 @@ function showSerialTimeline(idx){
     </div>`;
   }).join("");
   $("timelinePanel").style.display="block";
-  $("timelinePanel").scrollIntoView({behavior:"smooth"});
+  scrollToWithStickyOffset($("timelinePanel"));
 }
 
 // === CSV EXPORT FUNCTIONS ===
