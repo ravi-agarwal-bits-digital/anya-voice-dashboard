@@ -748,6 +748,175 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
 .callback-preferred span{font-size:9px!important;letter-spacing:.12em!important;text-transform:uppercase!important}
 @media(max-width:720px){.queue-filter-label{margin-top:8px}.empty-view{padding:18px 14px}}
 </style>
+
+
+<style id="responsive-v12-compact-mobile-polish">
+/* v12: compact mobile / iPad portrait polish only. Desktop and laptop sidebar behavior intentionally untouched. */
+@media (max-width:900px){
+  html{scroll-padding-top:112px!important;}
+  #dashboardContent{padding-top:6px!important;}
+  #mainShell.app-shell,.app-shell{padding:8px 10px 34px!important;}
+
+  /* Keep the sticky section nav, but make it lighter and lower-height. */
+  .exec-sidebar{
+    padding:7px 8px 8px!important;
+    margin:-8px -10px 10px!important;
+    border-radius:0 0 16px 16px!important;
+  }
+  .exec-sidebar .side-compact-brand{
+    padding:6px 8px!important;
+    margin:0 1px 6px!important;
+    min-height:42px!important;
+    border-radius:13px!important;
+  }
+  .side-compact-title{font-size:18px!important;line-height:1!important;}
+  .side-compact-sub::before{font-size:8.5px!important;letter-spacing:.10em!important;line-height:1.1!important;}
+  .side-compact-sub::after{font-size:8.5px!important;letter-spacing:.10em!important;line-height:1.1!important;margin-top:1px!important;}
+  .side-nav{gap:6px!important;padding:1px 1px 3px!important;}
+  .side-link{
+    min-width:94px!important;
+    padding:7px 8px!important;
+    font-size:10.8px!important;
+    border-radius:12px!important;
+    gap:6px!important;
+  }
+  .side-icon{width:23px!important;height:23px!important;border-radius:9px!important;}
+  .side-icon svg{width:13px!important;height:13px!important;}
+
+  /* Compact main header; this was the tallest mobile area in audit. */
+  #reportView header{
+    padding:12px!important;
+    margin-bottom:14px!important;
+    border-radius:18px!important;
+  }
+  #reportView header>div:first-child{
+    padding-bottom:9px!important;
+    gap:8px!important;
+  }
+  .top-brand{
+    display:flex!important;
+    align-items:center!important;
+    gap:10px!important;
+  }
+  .top-logo-img{
+    width:170px!important;
+    max-width:46vw!important;
+    margin:0!important;
+  }
+  .top-title-wrap{
+    border-left:1px solid var(--line)!important;
+    padding-left:10px!important;
+    margin-top:0!important;
+    min-width:0!important;
+  }
+  .top-title{font-size:21px!important;line-height:1.02!important;letter-spacing:-.045em!important;}
+  .top-subtitle{font-size:11px!important;line-height:1.32!important;margin-top:3px!important;max-width:270px!important;}
+  #meta{
+    width:100%!important;
+    justify-content:flex-start!important;
+    gap:5px!important;
+    margin-top:7px!important;
+  }
+  #meta>div{
+    padding:5px 8px!important;
+    font-size:10px!important;
+    line-height:1.15!important;
+  }
+
+  /* Filter block compacting without changing filter logic. */
+  #reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{
+    margin-top:8px!important;
+    padding-top:9px!important;
+  }
+  #reportView header [style*="display:flex;flex-wrap:wrap;gap:8px;align-items:center"]{
+    gap:6px!important;
+  }
+  header label{font-size:9.5px!important;letter-spacing:.07em!important;}
+  #btn-today,#btn-yesterday,#btn-week,#btn-month,#btn-all,#btn-custom{
+    padding:6px 9px!important;
+    font-size:10.8px!important;
+    min-height:30px!important;
+  }
+  #customFilterPanel{
+    width:100%!important;
+    padding:6px!important;
+    gap:6px!important;
+    overflow-x:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  #customFilterPanel input[type="date"]{min-width:128px!important;font-size:11px!important;padding:6px 7px!important;}
+  #customFilterPanel button{padding:6px 11px!important;font-size:11px!important;}
+  .filter-right-actions{
+    width:100%!important;
+    gap:6px!important;
+    align-items:center!important;
+  }
+  #reportView .direction-switch{
+    flex:1 1 100%!important;
+    padding:4px!important;
+    border-radius:15px!important;
+    gap:3px!important;
+  }
+  #reportView .direction-switch .dir-btn{
+    padding:8px 6px!important;
+    font-size:10.5px!important;
+    min-height:30px!important;
+  }
+  .direction-current{
+    width:auto!important;
+    flex:0 0 auto!important;
+    min-height:28px!important;
+    padding:5px 8px!important;
+    font-size:10px!important;
+    justify-content:center!important;
+  }
+  #selectedDateRange{
+    padding:5px 8px!important;
+    font-size:10px!important;
+    min-height:28px!important;
+  }
+  #searchMobile{
+    flex:1 1 185px!important;
+    width:auto!important;
+    min-width:170px!important;
+    padding:7px 10px!important;
+    font-size:11px!important;
+  }
+
+  /* Tighter first-screen content after the header. */
+  .hero{padding:19px!important;margin-bottom:14px!important;border-radius:20px!important;gap:18px!important;}
+  #gauge{min-height:148px!important;padding:9px!important;}
+  #gauge svg{width:138px!important;height:138px!important;}
+  .hero .hx h3{font-size:10.5px!important;}
+  .hero .hx .verdict{font-size:25px!important;margin:6px 0!important;}
+  .hero .hx p{font-size:13.2px!important;line-height:1.58!important;}
+  section,#userSearchResult,#timelinePanel{scroll-margin-top:116px!important;}
+}
+
+@media (max-width:560px){
+  html{scroll-padding-top:104px!important;}
+  #mainShell.app-shell,.app-shell{padding:7px 8px 32px!important;}
+  .exec-sidebar{margin:-7px -8px 8px!important;padding:6px 7px 7px!important;}
+  .exec-sidebar .side-compact-brand{padding:5px 7px!important;margin-bottom:5px!important;}
+  .side-compact-title{font-size:17px!important;}
+  .side-compact-sub::before,.side-compact-sub::after{font-size:7.8px!important;letter-spacing:.08em!important;}
+  .side-link{min-width:82px!important;font-size:10.2px!important;padding:6px 7px!important;}
+  .side-icon{display:none!important;}
+
+  #reportView header{padding:10px!important;border-radius:16px!important;margin-bottom:12px!important;}
+  .top-brand{gap:8px!important;}
+  .top-logo-img{width:132px!important;max-width:42vw!important;}
+  .top-title-wrap{padding-left:8px!important;}
+  .top-title{font-size:18.5px!important;}
+  .top-subtitle{font-size:10px!important;line-height:1.25!important;}
+  #meta>div{padding:4px 7px!important;font-size:9.5px!important;}
+  #reportView .direction-switch .dir-btn{font-size:10px!important;padding:7px 4px!important;}
+  #searchMobile{min-width:100%!important;}
+  .direction-current,#selectedDateRange{font-size:9.5px!important;}
+  section,#userSearchResult,#timelinePanel{scroll-margin-top:108px!important;}
+}
+</style>
+
 </head>
 <body>
 
