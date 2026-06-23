@@ -665,6 +665,77 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
 .direction-overview{margin-top:20px!important}.direction-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:4px 0 0}.direction-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:var(--cardShadow);position:relative;overflow:hidden}.direction-card:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--navy)}.direction-card.inbound:before{background:var(--teal)}.direction-card.outbound:before{background:var(--gold)}.direction-card.unknown:before{background:var(--faint)}.direction-card.selected{border-color:#b9c9de;box-shadow:0 18px 38px rgba(11,31,58,.09)}.direction-card .dc-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);font-weight:800}.direction-card .dc-value{font-family:'Source Serif 4',serif;font-size:34px;letter-spacing:-.04em;color:var(--navy);line-height:1;margin-top:10px}.direction-card .dc-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:9px}.direction-card .dc-share{position:absolute;right:16px;top:16px;border:1px solid var(--line);background:#f8fafc;color:var(--navy);border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800}.dir-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;font-size:9.5px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);vertical-align:middle;white-space:nowrap}.dir-pill.inbound{background:rgba(22,163,127,.10);color:#0f766e;border-color:rgba(22,163,127,.24)}.dir-pill.outbound{background:rgba(176,138,60,.12);color:#8a5b00;border-color:rgba(176,138,60,.28)}.dir-pill.unknown{background:#eef2f7;color:#64748b;border-color:#dbe3ee}.direction-mix{font-size:10px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}.filter-right-actions{margin-left:auto!important}
 @media(max-width:1180px){.direction-summary{grid-template-columns:1fr 1fr}.direction-card.all{grid-column:1/-1}.filter-right-actions{width:100%;margin-left:0!important;justify-content:flex-start}.direction-switch{overflow:auto}.dir-btn{min-width:max-content}.direction-switch-label{display:inline-flex}}
 @media(max-width:720px){.direction-summary{grid-template-columns:1fr}.direction-card.all{grid-column:auto}.direction-switch{width:100%;border-radius:16px}.dir-btn{flex:1;padding:9px 10px!important}.direction-switch-label{display:none}.filter-right-actions{gap:8px!important}}
+
+<style id="direction-active-visibility-v10">
+/* Strong, unambiguous state for the active All / Inbound / Outbound view.
+   Uses #reportView specificity so the global button theme cannot wash it out. */
+#reportView .direction-switch{
+  display:inline-flex!important;
+  align-items:center!important;
+  gap:5px!important;
+  background:#f5f7fb!important;
+  border:1px solid #cfdbea!important;
+  border-radius:18px!important;
+  padding:5px!important;
+  box-shadow:0 10px 24px rgba(11,31,58,.07)!important;
+}
+#reportView .direction-switch .dir-btn{
+  background:transparent!important;
+  color:#64748b!important;
+  border:1px solid transparent!important;
+  border-radius:13px!important;
+  box-shadow:none!important;
+  padding:8px 13px!important;
+  min-height:32px!important;
+  font-weight:900!important;
+}
+#reportView .direction-switch .dir-btn:hover{
+  background:#ffffff!important;
+  color:#0b1f3a!important;
+  border-color:#dbe5f1!important;
+}
+#reportView .direction-switch .dir-btn.active,
+#reportView .direction-switch .dir-btn[aria-pressed="true"],
+#reportView .direction-switch .dir-btn[data-active="true"]{
+  background:linear-gradient(135deg,#0b1f3a,#132f55)!important;
+  color:#ffffff!important;
+  border-color:#0b1f3a!important;
+  box-shadow:0 10px 22px rgba(11,31,58,.22)!important;
+}
+#reportView .direction-switch .dir-btn.active::before,
+#reportView .direction-switch .dir-btn[aria-pressed="true"]::before,
+#reportView .direction-switch .dir-btn[data-active="true"]::before{
+  content:"✓";
+  display:inline-block;
+  margin-right:6px;
+  font-size:10px;
+  line-height:1;
+}
+.direction-current{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:8px 11px;
+  border-radius:999px;
+  background:#eef4ff;
+  border:1px solid #c9d9ee;
+  color:#0b1f3a;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+  box-shadow:0 8px 18px rgba(11,31,58,.05);
+}
+.direction-current::before{content:"Showing";font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:#667085;font-weight:900}
+.direction-current.inbound{background:rgba(22,163,127,.10);border-color:rgba(22,163,127,.28);color:#0f766e}
+.direction-current.outbound{background:rgba(176,138,60,.13);border-color:rgba(176,138,60,.34);color:#7a570f}
+.direction-current.all{background:#eef4ff;border-color:#c9d9ee;color:#0b1f3a}
+#reportView .direction-switch[data-direction="inbound"]{border-color:rgba(22,163,127,.40)!important;background:#f0fbf7!important}
+#reportView .direction-switch[data-direction="outbound"]{border-color:rgba(176,138,60,.42)!important;background:#fff8ea!important}
+@media(max-width:720px){
+  .direction-current{width:100%;justify-content:center}
+  #reportView .direction-switch{width:100%;overflow:visible!important}
+  #reportView .direction-switch .dir-btn{flex:1;padding:10px 8px!important}
+}
 </style>
 
 </head>
@@ -955,6 +1026,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <button type="button" class="dir-btn" id="dir-inbound" data-dir="inbound" onclick="setDirectionFilter('inbound', event)" aria-pressed="false">Inbound</button>
           <button type="button" class="dir-btn" id="dir-outbound" data-dir="outbound" onclick="setDirectionFilter('outbound', event)" aria-pressed="false">Outbound</button>
         </div>
+          <span id="directionCurrent" class="direction-current all" aria-live="polite">All calls</span>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
@@ -1845,6 +1917,11 @@ function updateDirectionButtons(){
     btn.setAttribute('aria-pressed',on?'true':'false');
     btn.dataset.active=on?'true':'false';
   });
+  const current=$('directionCurrent');
+  if(current){
+    current.className='direction-current '+selected;
+    current.textContent=currentDirectionLabel();
+  }
 }
 function recordMatchesDate(r){
   const fromDate=$('filterFromDate')?$('filterFromDate').value:'';
