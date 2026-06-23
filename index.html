@@ -738,6 +738,16 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
 }
 </style>
 
+
+<style id="v11-polish-css">
+.queue-filter-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--faint);font-weight:900;margin:2px 0 8px;padding-left:2px}
+.empty-view{border:1px dashed #cbd7e7;background:#f8fafc;border-radius:16px;padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.55}
+.empty-view b{display:block;color:var(--navy);font-size:14.5px;margin-bottom:5px}
+.empty-view span{display:block;color:var(--muted);font-size:12.5px}
+#directionSummary .direction-card.all .dc-label{letter-spacing:.11em}
+.callback-preferred span{font-size:9px!important;letter-spacing:.12em!important;text-transform:uppercase!important}
+@media(max-width:720px){.queue-filter-label{margin-top:8px}.empty-view{padding:18px 14px}}
+</style>
 </head>
 <body>
 
@@ -1046,7 +1056,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   <div class="strip" id="kpis"></div>
 
   <section id="sec-direction" class="direction-overview">
-    <div class="shead"><span class="n">00</span><h2>Direction split</h2></div>
+    <div class="shead"><span class="n">00</span><h2>Call Flow Overview</h2></div>
     <div class="direction-summary" id="directionSummary"></div>
   </section>
 
@@ -1114,8 +1124,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     </div></section>
 
   <section id="sec-callbacks"><div class="shead"><span class="n">09</span><h2>Callback requests</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
-    <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number, reason, and preferred callback window where available. <b id="cbCount" style="color:var(--hot)"></b> calls requiring follow-up.</div>
-    <div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+    <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number, reason, and detected callback window where available. <b id="cbCount" style="color:var(--hot)"></b> calls requiring follow-up.</div>
+    <div class="queue-filter-label">Callback queue filter</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
     <div id="cbList" style="max-height:600px;overflow-y:auto"></div></div></section>
 
   <section id="sec-friction"><div class="shead"><span class="n">10</span><h2>Friction analysis</h2></div>
@@ -1471,11 +1481,11 @@ function applyFilters(){
   RECORDS=FILTERED_RECORDS;
   // Rebuild meta pills for the current filtered set (or honest empty-state)
   if(RECORDS.length===0){
-    $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls in selected range</b><span style="margin-left:8px;color:var(--muted)">${currentDirectionLabel()}</span></div>`;
+    $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
   }else{
     const dts=RECORDS.map(r=>r.d).sort();const dmn=dts[0],dmx=dts[dts.length-1];
     const tMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
-    $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Direction",currentDirectionLabel()],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+    $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   }
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
@@ -1570,7 +1580,7 @@ function searchUserByMobile(mobile, source="search"){
       <div class="profile-call-meta">
         <b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
         <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${esc(c.cbReason)}<br>
-        <b>Preferred callback:</b> ${esc(c.cbPreferred||"Not specified")}<br>
+        <b>Detected callback window:</b> ${esc(c.cbPreferred||"Not specified")}<br>
         <span class="profile-call-summary">${esc(c.summary)}</span>
       </div>
       ${transcriptToggle(c,'prof'+i)}
@@ -1731,7 +1741,7 @@ function titleCaseSmall(s){
 }
 
 function preferredCallbackWindow(row, transcript, summary, callIso){
-  // Preferred callback is extracted from transcript/summary and normalized to an actual date + time when possible.
+  // Detected callback window is extracted from transcript/summary and normalized to an actual date + time when possible.
   // We deliberately do not invent a callback window when both date and timing are missing.
   const months={jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,sept:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
   const monNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1936,6 +1946,22 @@ function recordMatchesDirection(r){
 }
 function recordMatchesCurrentFilters(r){return recordMatchesDate(r)&&recordMatchesDirection(r);}
 function currentDirectionLabel(){return SELECTED_DIRECTION==='all'?'All Calls':directionLabel(SELECTED_DIRECTION);}
+function currentViewDescription(){
+  const from=$('filterFromDate')&&$('filterFromDate').value;
+  const to=$('filterToDate')&&$('filterToDate').value;
+  let bits=[];
+  bits.push(currentDirectionLabel());
+  if(from||to){
+    const fmt=d=>{try{return new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});}catch(e){return d;}};
+    if(from&&to)bits.push(fmt(from)+' to '+fmt(to));
+    else if(from)bits.push('from '+fmt(from));
+    else bits.push('until '+fmt(to));
+  }else bits.push('all dates');
+  return bits.join(' · ');
+}
+function emptyViewHtml(message){
+  return `<div class="empty-view"><b>${esc(message||'No calls match current view')}</b><span>${esc(currentViewDescription())}</span></div>`;
+}
 function paintDirectionSplit(){
   const el=$('directionSummary');
   if(!el)return;
@@ -2059,7 +2085,7 @@ function paintCallbacks(recs){
   const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
   const cbs=recs.filter(r=>r.callback);
-  if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=`<div class="cbempty">No callback requests detected in this range.<br>When callers ask for callbacks, they'll appear here.</div>`;cbFilters.innerHTML="";return;}
+  if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callback requests detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
   
   // Group by phone number
   const byPhone=groupByPhone(cbs);
@@ -2103,7 +2129,7 @@ function paintCallbacks(recs){
           <span style="color:var(--muted)">${formatDuration(c.dur)}</span>
         </div>
         <div style="color:var(--muted);margin-bottom:4px">Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | ${esc(c.cbReason)}</div>
-        <div class="callback-preferred ${(!c.cbPreferred || c.cbPreferred==='Not specified')?'unspecified':''}"><span>Preferred callback</span><b>${esc(c.cbPreferred||'Not specified')}</b></div>
+        <div class="callback-preferred ${(!c.cbPreferred || c.cbPreferred==='Not specified')?'unspecified':''}"><span>Detected callback window</span><b>${esc(c.cbPreferred||'Not specified')}</b></div>
         ${c.summary?`<div style="color:#344054;line-height:1.6;border-top:1px solid var(--line2);padding-top:7px;margin-top:6px;font-size:12px">${esc(c.summary)}</div>`:""}
       </div>`;
 
@@ -2153,7 +2179,7 @@ function boot(){
   
   const totalMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
   const totalCost=totalMins*5;
-  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Direction",currentDirectionLabel()],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
   paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer();
@@ -2268,7 +2294,7 @@ function openKpiPanel(key){
 }
 
 function paintFunnel(o){
-  if(!o.n){$("funnel").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls in this range.</div>`;return;}
+  if(!o.n){$("funnel").innerHTML=emptyViewHtml("No calls available for this view");return;}
   const pct=a=>Math.round(a/o.n*100);
   const F=[
     [o.n,"Calls started","#5a9bd8",100],
@@ -2441,7 +2467,7 @@ function renderExplorer(resetLimit){
   if(resetLimit)EXPLORER_LIMIT=50;
   const rows=getExplorerRows();
   $("explorerCount").textContent=`${rows.length} call${rows.length!==1?'s':''}`;
-  if(!rows.length){$("explorerList").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px;font-size:12.5px">No calls match.</div>`;$("explorerMore").innerHTML="";return;}
+  if(!rows.length){$("explorerList").innerHTML=emptyViewHtml("No calls match the current filters");$("explorerMore").innerHTML="";return;}
   const shown=rows.slice(0,EXPLORER_LIMIT);
   $("explorerList").innerHTML=shown.map(r=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
@@ -2709,8 +2735,8 @@ function exportSerialEngagers(){
 
 function exportCallbacks(){
   const cbs=RECORDS.filter(r=>r.callback);
-  if(!cbs.length){alert("No callback requests to export in this range.");return;}
-  let csv='Phone,Direction,Call Time,Preferred Callback,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
+  if(!cbs.length){alert("No callback requests to export for the current date and direction view.");return;}
+  let csv='Phone,Direction,Call Time,Detected Callback Window,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
   cbs.sort((a,b)=>b.ts-a.ts).forEach(c=>{
     const durMins=Math.round(c.dur/60*10)/10;
     csv+=`${fullPhone(c.from)},${escCSV(directionLabel(c.direction))},${escCSV(formatCallTime(c))},${escCSV(c.cbPreferred||'Not specified')},${durMins},${escCSV(c.intent)},${escCSV(c.cbReason)},${Math.round(c.conf)},${Math.round(c.need)},${escCSV(c.summary)}\n`;
