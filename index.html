@@ -658,23 +658,13 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
 
 
 <style id="direction-segmentation-style">
-.direction-switch{display:flex;align-items:center;gap:6px;background:#f4f7fb;border:1px solid var(--line);border-radius:999px;padding:4px;margin-left:6px;white-space:nowrap}
-.direction-switch-label{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:0 5px 0 7px}
-.dir-btn{border:0!important;border-radius:999px!important;background:transparent!important;color:var(--muted)!important;padding:7px 12px!important;font-size:11px!important;font-weight:800!important;box-shadow:none!important;line-height:1;cursor:pointer}
-.dir-btn.active,.dir-btn[aria-pressed="true"]{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;box-shadow:0 10px 22px rgba(11,31,58,.14)!important}
-.direction-overview{margin-top:20px!important}
-.direction-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:4px 0 0}
-.direction-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:var(--cardShadow);position:relative;overflow:hidden}
-.direction-card:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--navy)}
-.direction-card.inbound:before{background:var(--teal)}.direction-card.outbound:before{background:var(--gold)}.direction-card.unknown:before{background:var(--faint)}
-.direction-card .dc-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);font-weight:800}.direction-card .dc-value{font-family:'Source Serif 4',serif;font-size:34px;letter-spacing:-.04em;color:var(--navy);line-height:1;margin-top:10px}.direction-card .dc-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:9px}.direction-card .dc-share{position:absolute;right:16px;top:16px;border:1px solid var(--line);background:#f8fafc;color:var(--navy);border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800}
-.dir-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;font-size:9.5px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);vertical-align:middle;white-space:nowrap}
-.dir-pill.inbound{background:rgba(22,163,127,.10);color:#0f766e;border-color:rgba(22,163,127,.24)}
-.dir-pill.outbound{background:rgba(176,138,60,.12);color:#8a5b00;border-color:rgba(176,138,60,.28)}
-.dir-pill.unknown{background:#eef2f7;color:#64748b;border-color:#dbe3ee}
-.direction-mix{font-size:10px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
-@media(max-width:1180px){.direction-summary{grid-template-columns:1fr 1fr}.direction-card.all{grid-column:1/-1}.direction-switch{order:8;width:100%;overflow:auto;border-radius:18px}.dir-btn{flex:1;min-width:max-content}.direction-switch-label{display:none}}
-@media(max-width:720px){.direction-summary{grid-template-columns:1fr}.direction-card.all{grid-column:auto}.direction-switch{margin-left:0}.dir-btn{padding:8px 10px!important}}
+.direction-switch{display:inline-flex;align-items:center;gap:4px;background:#ffffff;border:1px solid #d7e0ec;border-radius:18px;padding:5px;white-space:nowrap;box-shadow:0 10px 24px rgba(11,31,58,.06);max-width:100%}
+.direction-switch-label{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#7d8796;padding:0 7px 0 8px;border-right:1px solid #e4ebf3;margin-right:2px;line-height:22px}
+.dir-btn{appearance:none;border:0!important;border-radius:13px!important;background:transparent!important;color:#667085!important;padding:8px 12px!important;font-size:11px!important;font-weight:850!important;box-shadow:none!important;line-height:1!important;cursor:pointer;transition:background .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;min-height:31px}
+.dir-btn:hover{background:#f3f6fb!important;color:var(--navy)!important;transform:none!important}.dir-btn.active,.dir-btn[aria-pressed="true"]{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;box-shadow:0 8px 18px rgba(11,31,58,.18)!important}.dir-btn.active::before,.dir-btn[aria-pressed="true"]::before{content:"✓";font-size:10px;margin-right:5px;opacity:.9}.direction-switch[data-direction="inbound"]{border-color:rgba(22,163,127,.32);box-shadow:0 10px 24px rgba(22,163,127,.08)}.direction-switch[data-direction="outbound"]{border-color:rgba(176,138,60,.36);box-shadow:0 10px 24px rgba(176,138,60,.08)}.direction-status-pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;background:#eef4ff;border:1px solid #c7d8f3;color:var(--navy);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:6px 9px;white-space:nowrap}.direction-status-pill.inbound{background:rgba(22,163,127,.10);border-color:rgba(22,163,127,.25);color:#0f766e}.direction-status-pill.outbound{background:rgba(176,138,60,.12);border-color:rgba(176,138,60,.30);color:#7a570f}
+.direction-overview{margin-top:20px!important}.direction-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:4px 0 0}.direction-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px 18px;box-shadow:var(--cardShadow);position:relative;overflow:hidden}.direction-card:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--navy)}.direction-card.inbound:before{background:var(--teal)}.direction-card.outbound:before{background:var(--gold)}.direction-card.unknown:before{background:var(--faint)}.direction-card.selected{border-color:#b9c9de;box-shadow:0 18px 38px rgba(11,31,58,.09)}.direction-card .dc-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);font-weight:800}.direction-card .dc-value{font-family:'Source Serif 4',serif;font-size:34px;letter-spacing:-.04em;color:var(--navy);line-height:1;margin-top:10px}.direction-card .dc-note{font-size:12px;color:var(--muted);line-height:1.55;margin-top:9px}.direction-card .dc-share{position:absolute;right:16px;top:16px;border:1px solid var(--line);background:#f8fafc;color:var(--navy);border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800}.dir-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 8px;font-size:9.5px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);vertical-align:middle;white-space:nowrap}.dir-pill.inbound{background:rgba(22,163,127,.10);color:#0f766e;border-color:rgba(22,163,127,.24)}.dir-pill.outbound{background:rgba(176,138,60,.12);color:#8a5b00;border-color:rgba(176,138,60,.28)}.dir-pill.unknown{background:#eef2f7;color:#64748b;border-color:#dbe3ee}.direction-mix{font-size:10px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}.filter-right-actions{margin-left:auto!important}
+@media(max-width:1180px){.direction-summary{grid-template-columns:1fr 1fr}.direction-card.all{grid-column:1/-1}.filter-right-actions{width:100%;margin-left:0!important;justify-content:flex-start}.direction-switch{overflow:auto}.dir-btn{min-width:max-content}.direction-switch-label{display:inline-flex}}
+@media(max-width:720px){.direction-summary{grid-template-columns:1fr}.direction-card.all{grid-column:auto}.direction-switch{width:100%;border-radius:16px}.dir-btn{flex:1;padding:9px 10px!important}.direction-switch-label{display:none}.filter-right-actions{gap:8px!important}}
 </style>
 
 </head>
@@ -949,13 +939,6 @@ window.addEventListener('DOMContentLoaded',()=>{
         <button onclick="quickFilter('month')" id="btn-month" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 30 Days</button>
         <button onclick="quickFilter('all')" id="btn-all" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">All</button>
         <button onclick="toggleCustomFilter()" id="btn-custom" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Custom range</button>
-        <div class="direction-switch" id="directionSwitch" role="group" aria-label="Call direction filter">
-          <span class="direction-switch-label">Direction</span>
-          <button type="button" class="dir-btn active" id="dir-all" onclick="setDirectionFilter('all')" aria-pressed="true">All Calls</button>
-          <button type="button" class="dir-btn" id="dir-inbound" onclick="setDirectionFilter('inbound')" aria-pressed="false">Inbound</button>
-          <button type="button" class="dir-btn" id="dir-outbound" onclick="setDirectionFilter('outbound')" aria-pressed="false">Outbound</button>
-        </div>
-
         <!-- Inline custom date range (compact, appears in same row) -->
         <div id="customFilterPanel" style="display:none;align-items:center;gap:8px;background:#f8fafc;border:1px solid rgba(0,212,170,0.3);border-radius:6px;padding:5px 8px">
           <input type="date" id="filterFromDate" style="padding:5px 8px;background:#ffffff;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'Inter',monospace;cursor:pointer">
@@ -965,7 +948,13 @@ window.addEventListener('DOMContentLoaded',()=>{
         </div>
 
         <!-- Selected Date Range pill + Search (pushed right) -->
-        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+        <div class="filter-right-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+        <div class="direction-switch" id="directionSwitch" role="group" aria-label="Call view filter" data-direction="all">
+          <span class="direction-switch-label">View</span>
+          <button type="button" class="dir-btn active" id="dir-all" data-dir="all" onclick="setDirectionFilter('all', event)" aria-pressed="true">All calls</button>
+          <button type="button" class="dir-btn" id="dir-inbound" data-dir="inbound" onclick="setDirectionFilter('inbound', event)" aria-pressed="false">Inbound</button>
+          <button type="button" class="dir-btn" id="dir-outbound" data-dir="outbound" onclick="setDirectionFilter('outbound', event)" aria-pressed="false">Outbound</button>
+        </div>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
@@ -1144,6 +1133,16 @@ window.addEventListener('DOMContentLoaded',()=>{
   }));
   window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
   window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
+  const directionSwitch=document.getElementById('directionSwitch');
+  if(directionSwitch){
+    directionSwitch.addEventListener('click',e=>{
+      const btn=e.target.closest('.dir-btn[data-dir]');
+      if(!btn)return;
+      e.preventDefault();
+      setDirectionFilter(btn.dataset.dir||'all');
+    });
+    updateDirectionButtons();
+  }
   syncSidebarActive('sec-overview');
   updateMobileNavShadow();
 });
@@ -1367,6 +1366,7 @@ function updateFilterButtons(active){
 }
 
 function applyFilters(){
+  updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
   const toDate=$("filterToDate").value;
   
@@ -1794,11 +1794,13 @@ function pickField(row,aliases){
 }
 
 function normalizeDirection(v){
-  const s=String(v||'').trim().toLowerCase().replace(/[_-]+/g,' ');
-  if(/\bin\s*bound\b|\bincoming\b|\bin\s*call\b/.test(s))return 'inbound';
-  if(/\bout\s*bound\b|\boutgoing\b|\bout\s*call\b/.test(s))return 'outbound';
-  if(s==='in')return 'inbound';
-  if(s==='out')return 'outbound';
+  const raw=String(v||'').trim();
+  const s=raw.toLowerCase().replace(/[_-]+/g,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!s)return 'unknown';
+  if(s==='in'||s==='inbound'||s==='incoming'||s==='in call'||s==='incoming call')return 'inbound';
+  if(s==='out'||s==='outbound'||s==='outgoing'||s==='out call'||s==='outgoing call')return 'outbound';
+  if(/\bin\s*bound\b|\bincoming\b|\bin\s*call\b|\bcaller\s*initiated\b|\bcustomer\s*initiated\b/.test(s))return 'inbound';
+  if(/\bout\s*bound\b|\boutgoing\b|\bout\s*call\b|\bagent\s*initiated\b|\bcounsellor\s*initiated\b|\bteam\s*initiated\b/.test(s))return 'outbound';
   return 'unknown';
 }
 function directionLabel(d){
@@ -1819,18 +1821,29 @@ function directionMix(calls){
   if(unknown)parts.push(`${directionPill('unknown')} <span>${unknown}</span>`);
   return parts.length?`<div class="direction-mix">${parts.join('')}</div>`:'';
 }
-function setDirectionFilter(dir){
-  SELECTED_DIRECTION=(dir==='inbound'||dir==='outbound')?dir:'all';
+function setDirectionFilter(dir, ev){
+  if(ev && ev.preventDefault) ev.preventDefault();
+  const normalized=(dir==='inbound'||dir==='outbound')?dir:'all';
+  if(SELECTED_DIRECTION===normalized){
+    updateDirectionButtons();
+    return;
+  }
+  SELECTED_DIRECTION=normalized;
   updateDirectionButtons();
   applyFilters();
 }
 function updateDirectionButtons(){
+  const selected=SELECTED_DIRECTION||'all';
+  const switcher=$('directionSwitch');
+  if(switcher) switcher.setAttribute('data-direction',selected);
+  document.body.setAttribute('data-direction-filter',selected);
   ['all','inbound','outbound'].forEach(d=>{
     const btn=$('dir-'+d);
     if(!btn)return;
-    const on=SELECTED_DIRECTION===d;
+    const on=selected===d;
     btn.classList.toggle('active',on);
     btn.setAttribute('aria-pressed',on?'true':'false');
+    btn.dataset.active=on?'true':'false';
   });
 }
 function recordMatchesDate(r){
@@ -1854,9 +1867,9 @@ function paintDirectionSplit(){
   const inbound=base.filter(r=>normalizeDirection(r.direction)==='inbound').length;
   const outbound=base.filter(r=>normalizeDirection(r.direction)==='outbound').length;
   const unknown=Math.max(0,n-inbound-outbound);
-  const card=(cls,label,val,note)=>`<div class="direction-card ${cls}"><span class="dc-share">${n?Math.round(val/n*100):0}%</span><div class="dc-label">${label}</div><div class="dc-value">${val}</div><div class="dc-note">${note}</div></div>`;
+  const card=(cls,label,val,note)=>{const selectedClass=(cls==='all'&&SELECTED_DIRECTION==='all')||(cls===SELECTED_DIRECTION)?' selected':'';return `<div class="direction-card ${cls}${selectedClass}"><span class="dc-share">${n?Math.round(val/n*100):0}%</span><div class="dc-label">${label}</div><div class="dc-value">${val}</div><div class="dc-note">${note}</div></div>`;};
   const selected=currentDirectionLabel();
-  el.innerHTML=card('all','Selected view',RECORDS.length,`${selected} after date and direction filters.`)+
+  el.innerHTML=card('all','Current view',RECORDS.length,`${selected} after active date and direction filters.`)+
     card('inbound','Inbound',inbound,'Calls initiated by prospects/users within the selected date range.')+
     card('outbound','Outbound',outbound,'Calls initiated outward for follow-up, counselling, or engagement.')+
     (unknown?card('unknown','Unknown',unknown,'Direction missing or unmapped in the export. Included only in All Calls.'): '');
