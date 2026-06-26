@@ -1313,27 +1313,39 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div class="panel"><h4>Cost impact</h4><div class="cap">Estimated cost of attention-required calls at ₹5/min</div><div id="frustCost"></div></div>
     </div></section>
 
-  <section id="sec-explorer"><div class="shead"><span class="n">11</span><h2>Enquiry ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export all</button></div>
+  <section id="sec-explorer"><div class="shead"><span class="n">11</span><h2>Enquiry ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export current ledger view</button></div>
     <div class="panel">
-      <div class="cap">Every call in the selected range. Search, sort, and select a row for the full profile.</div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0">
-        <input type="text" id="explorerSearch" placeholder="Filter by number, intent, summary..." style="flex:1;min-width:200px;padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="renderExplorer(true)">
-        <select id="explorerSort" onchange="renderExplorer(true)" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+      <div class="cap">Every call in the selected date and direction view. Search, sort, and select a row for the full profile.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 10px">
+        <input type="text" id="explorerSearch" placeholder="Search ledger: phone, theme, transcript, callback..." style="flex:1;min-width:240px;padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="updateLedgerState({search:this.value})">
+        <select id="explorerSort" onchange="updateLedgerState({sort:this.value})" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+          <option value="priority_desc">Priority first</option>
+          <option value="callback_desc">Callback first</option>
           <option value="time_desc">Newest first</option>
           <option value="time_asc">Oldest first</option>
           <option value="dur_desc">Longest duration</option>
           <option value="dur_asc">Shortest duration</option>
           <option value="conf_desc">Highest confidence</option>
+          <option value="low_conf">Low confidence first</option>
           <option value="need_desc">Highest need</option>
+          <option value="intl_desc">International first</option>
         </select>
-        <select id="explorerFilter" onchange="renderExplorer(true)" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+        <select id="explorerFilter" onchange="updateLedgerState({filter:this.value})" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
           <option value="all">All calls</option>
           <option value="hot">Hot only</option>
-          <option value="frustrated">Frustrated only</option>
+          <option value="frustrated">Attention only</option>
           <option value="callback">Callbacks only</option>
           <option value="intl">International only</option>
+          <option value="india">India only</option>
+          <option value="low_conf">Low confidence only</option>
+          <option value="red_amber">Red / Amber only</option>
+          <option value="has_transcript">Has transcript</option>
+          <option value="no_transcript">No transcript</option>
+          <option value="has_callback_window">Callback window detected</option>
         </select>
+        <button type="button" id="ledgerClearBtn" onclick="clearLedgerFilters()" style="display:none;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--navy);font-size:12px;font-weight:750;cursor:pointer">Clear ledger filters</button>
       </div>
+      <div id="ledgerActiveChips" style="display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px"></div>
       <div id="explorerCount" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
       <div id="explorerList" style="max-height:600px;overflow-y:auto"></div>
       <div id="explorerMore" style="text-align:center;margin-top:12px"></div>
@@ -1679,7 +1691,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer();
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} setTimeout(()=>syncSidebarActive(),120);
   closeUserSearch();
 }
@@ -2361,7 +2373,7 @@ function boot(){
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer();
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} setTimeout(()=>syncSidebarActive(),120);
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
@@ -2613,46 +2625,135 @@ function exportGeo(){
 }
 
 // ===== CALL EXPLORER =====
-let EXPLORER_LIMIT=50;
-function getExplorerRows(){
-  const q=($("explorerSearch")?.value||"").trim().toLowerCase();
-  const sort=$("explorerSort")?.value||"time_desc";
-  const filt=$("explorerFilter")?.value||"all";
-  let rows=RECORDS.slice();
-  // Filter
-  if(filt==="hot")rows=rows.filter(r=>r.leadTemp==="Hot");
-  else if(filt==="frustrated")rows=rows.filter(r=>r.frustrated);
-  else if(filt==="callback")rows=rows.filter(r=>r.callback);
-  else if(filt==="intl")rows=rows.filter(r=>classifyPhone(r.from).intl);
-  // Search
-  if(q)rows=rows.filter(r=>{
-    return String(r.from||"").toLowerCase().includes(q)
-      ||String(r.intent||"").toLowerCase().includes(q)
-      ||String(r.summary||"").toLowerCase().includes(q)
-      ||String(r.leadTemp||"").toLowerCase().includes(q);
-  });
-  // Sort
-  const sorters={
-    time_desc:(a,b)=>b.ts-a.ts, time_asc:(a,b)=>a.ts-b.ts,
-    dur_desc:(a,b)=>b.dur-a.dur, dur_asc:(a,b)=>a.dur-b.dur,
-    conf_desc:(a,b)=>b.conf-a.conf, need_desc:(a,b)=>b.need-a.need
-  };
-  rows.sort(sorters[sort]||sorters.time_desc);
-  return rows;
+const LEDGER_DEFAULT_STATE={search:"",filter:"all",sort:"priority_desc",limit:50};
+let LEDGER_STATE={...LEDGER_DEFAULT_STATE};
+let EXPLORER_LIMIT=LEDGER_STATE.limit;
+const LEDGER_FILTER_LABELS={all:"All calls",hot:"Hot only",frustrated:"Attention only",callback:"Callbacks only",intl:"International only",india:"India only",low_conf:"Low confidence only",red_amber:"Red / Amber only",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window detected"};
+const LEDGER_SORT_LABELS={priority_desc:"Priority first",callback_desc:"Callback first",time_desc:"Newest first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first"};
+
+function syncLedgerControls(){
+  const s=$("explorerSearch"), sort=$("explorerSort"), filt=$("explorerFilter");
+  if(s && s.value!==LEDGER_STATE.search)s.value=LEDGER_STATE.search;
+  if(sort && sort.value!==LEDGER_STATE.sort)sort.value=LEDGER_STATE.sort;
+  if(filt && filt.value!==LEDGER_STATE.filter)filt.value=LEDGER_STATE.filter;
 }
 
+function updateLedgerState(partial={}, opts={}){
+  LEDGER_STATE={...LEDGER_STATE,...partial};
+  if(partial.search!==undefined)LEDGER_STATE.search=String(partial.search||"");
+  if(opts.reset!==false){LEDGER_STATE.limit=50;EXPLORER_LIMIT=50;}
+  syncLedgerControls();
+  renderExplorer(false);
+}
+
+function clearLedgerFilters(){
+  LEDGER_STATE={...LEDGER_DEFAULT_STATE};
+  EXPLORER_LIMIT=50;
+  syncLedgerControls();
+  renderExplorer(false);
+}
+
+function ledgerHasTranscript(r){return !!String(r?.trans||"").trim();}
+function ledgerHasCallbackWindow(r){return !!(r?.cbPreferred && r.cbPreferred!=="Not specified");}
+function ledgerPriorityScore(r){
+  const tier=r.leadTemp==="Hot"?300:r.leadTemp==="Warm"?150:0;
+  const attention=r.frustrated?70:0;
+  const callback=r.callback?90:0;
+  const intl=classifyPhone(r.from).intl?30:0;
+  return tier+callback+attention+intl+Number(r.need||0)+(Number(r.conf||0)/10);
+}
+function ledgerSearchBlob(r){
+  const c=classifyPhone(r.from);
+  const rawPhone=String(r.from||"");
+  const digits=rawPhone.replace(/\D/g,"");
+  const normalizedPhone=(c.cc||"")+(c.national||"");
+  return [
+    rawPhone,digits,normalizedPhone,fullPhone(r.from),maskPhone(r.from),
+    c.country,c.cc,c.flag,c.intl?"international":"india",
+    directionLabel(r.direction),normalizeDirection(r.direction),
+    r.intent,r.summary,r.leadTemp,r.band,r.status,
+    r.callback?"callback follow up":"",r.frustrated?"attention frustrated issue":"",
+    r.cbReason,r.cbPreferred,r.trans,
+    String(Math.round(Number(r.conf||0))),String(Math.round(Number(r.need||0)))
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+function ledgerMatchesFilter(r, filt){
+  const c=classifyPhone(r.from);
+  if(filt==="hot")return r.leadTemp==="Hot";
+  if(filt==="frustrated")return !!r.frustrated;
+  if(filt==="callback")return !!r.callback;
+  if(filt==="intl")return !!c.intl;
+  if(filt==="india")return !c.intl;
+  if(filt==="low_conf")return Number(r.conf||0)<50;
+  if(filt==="red_amber")return /^(Red|Amber)$/i.test(String(r.band||""));
+  if(filt==="has_transcript")return ledgerHasTranscript(r);
+  if(filt==="no_transcript")return !ledgerHasTranscript(r);
+  if(filt==="has_callback_window")return ledgerHasCallbackWindow(r);
+  return true;
+}
+function getExplorerRows(){
+  const q=String(LEDGER_STATE.search||"").trim().toLowerCase();
+  const sort=LEDGER_STATE.sort||"priority_desc";
+  const filt=LEDGER_STATE.filter||"all";
+  let rows=RECORDS.slice().filter(r=>ledgerMatchesFilter(r,filt));
+  if(q){
+    const terms=q.split(/\s+/).filter(Boolean);
+    rows=rows.filter(r=>{
+      const blob=ledgerSearchBlob(r);
+      return terms.every(t=>blob.includes(t));
+    });
+  }
+  const sorters={
+    priority_desc:(a,b)=>ledgerPriorityScore(b)-ledgerPriorityScore(a)||b.ts-a.ts,
+    callback_desc:(a,b)=>(Number(!!b.callback)-Number(!!a.callback))||b.ts-a.ts,
+    time_desc:(a,b)=>b.ts-a.ts,
+    time_asc:(a,b)=>a.ts-b.ts,
+    dur_desc:(a,b)=>b.dur-a.dur,
+    dur_asc:(a,b)=>a.dur-b.dur,
+    conf_desc:(a,b)=>b.conf-a.conf,
+    low_conf:(a,b)=>a.conf-b.conf,
+    need_desc:(a,b)=>b.need-a.need,
+    intl_desc:(a,b)=>Number(classifyPhone(b.from).intl)-Number(classifyPhone(a.from).intl)||b.ts-a.ts
+  };
+  rows.sort(sorters[sort]||sorters.priority_desc);
+  return rows;
+}
+function ledgerChip(text,strong=false){
+  return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;border:1px solid ${strong?'rgba(176,138,60,.35)':'var(--line)'};background:${strong?'#fff7e8':'#f7f9fc'};color:${strong?'var(--navy)':'var(--muted)'};font-size:10.5px;font-weight:800">${esc(text)}</span>`;
+}
+function updateLedgerChrome(total,shown){
+  const chips=[];
+  chips.push(ledgerChip(`Ledger view: ${LEDGER_FILTER_LABELS[LEDGER_STATE.filter]||'Custom'}`,LEDGER_STATE.filter!=="all"));
+  chips.push(ledgerChip(LEDGER_SORT_LABELS[LEDGER_STATE.sort]||"Sorted"));
+  if(LEDGER_STATE.search.trim())chips.push(ledgerChip(`Search: ${LEDGER_STATE.search.trim()}`,true));
+  chips.push(ledgerChip(currentViewDescription()));
+  if($("ledgerActiveChips"))$("ledgerActiveChips").innerHTML=chips.join("");
+  const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filter!=="all"||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
+  if($("ledgerClearBtn"))$("ledgerClearBtn").style.display=active?"inline-flex":"none";
+  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${RECORDS.length} in selected dashboard view`;
+}
 function renderExplorer(resetLimit){
   if(!$("explorerList"))return;
-  if(resetLimit)EXPLORER_LIMIT=50;
+  if(resetLimit){LEDGER_STATE.limit=50;EXPLORER_LIMIT=50;}
+  syncLedgerControls();
   const rows=getExplorerRows();
-  $("explorerCount").textContent=`${rows.length} call${rows.length!==1?'s':''}`;
-  if(!rows.length){$("explorerList").innerHTML=emptyViewHtml("No calls match the current filters");$("explorerMore").innerHTML="";return;}
-  const shown=rows.slice(0,EXPLORER_LIMIT);
+  const shown=rows.slice(0,LEDGER_STATE.limit);
+  updateLedgerChrome(rows.length,shown.length);
+  if(!rows.length){
+    const parts=[];
+    if(LEDGER_STATE.filter!=="all")parts.push(LEDGER_FILTER_LABELS[LEDGER_STATE.filter]);
+    if(LEDGER_STATE.search.trim())parts.push(`Search: “${LEDGER_STATE.search.trim()}”`);
+    parts.push(currentViewDescription());
+    $("explorerList").innerHTML=emptyViewHtml("No enquiries match " + parts.join(" · "));
+    $("explorerMore").innerHTML="";
+    return;
+  }
   $("explorerList").innerHTML=shown.map(r=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
     const tags=[];
     if(r.frustrated)tags.push(`<span style="background:rgba(231,76,60,.15);color:${C.hot};padding:1px 6px;border-radius:3px;font-size:9px">Attention</span>`);
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
+    if(ledgerHasCallbackWindow(r))tags.push(`<span style="background:#fff7e8;color:var(--gold);padding:1px 6px;border-radius:3px;font-size:9px">Window</span>`);
     tags.unshift(directionPill(r.direction));
     return `<div onclick="explorerOpen('${esc(r.from)}')" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
       <div style="min-width:0">
@@ -2668,8 +2769,8 @@ function renderExplorer(resetLimit){
       </div>
     </div>`;
   }).join("");
-  $("explorerMore").innerHTML=rows.length>EXPLORER_LIMIT
-    ?`<button onclick="EXPLORER_LIMIT+=50;renderExplorer()" style="padding:8px 18px;background:#f8fafc;border:1px solid var(--line);border-radius:6px;color:var(--teal);font-size:11px;cursor:pointer">Show more (${rows.length-EXPLORER_LIMIT} remaining)</button>`
+  $("explorerMore").innerHTML=rows.length>LEDGER_STATE.limit
+    ?`<button onclick="LEDGER_STATE.limit+=50;EXPLORER_LIMIT=LEDGER_STATE.limit;renderExplorer(false)" style="padding:8px 18px;background:#f8fafc;border:1px solid var(--line);border-radius:6px;color:var(--teal);font-size:11px;cursor:pointer">Show more (${rows.length-LEDGER_STATE.limit} remaining)</button>`
     :"";
 }
 
