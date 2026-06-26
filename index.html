@@ -917,6 +917,16 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
 }
 </style>
 
+
+<style id="logo-session-polish">
+/* v13: reduce logo dominance while keeping brand visible; keep session active for the workday. */
+.top-logo-img{width:220px!important;max-width:min(30vw,220px)!important;height:auto!important;}
+.exec-sidebar .side-logo,.side-logo{max-width:150px!important;width:100%!important;margin:0 auto 16px!important;}
+#loginGate .login-logo{width:220px!important;max-width:92%!important;}
+@media(max-width:1180px){.top-logo-img{width:205px!important;max-width:34vw!important;}.exec-sidebar .side-logo,.side-logo{max-width:138px!important;}}
+@media(max-width:760px){.top-logo-img{width:190px!important;max-width:68vw!important;margin-bottom:6px!important;}#loginGate .login-logo{width:190px!important;}}
+@media(max-width:430px){.top-logo-img{width:168px!important;max-width:74vw!important;}.exec-sidebar .side-logo,.side-logo{max-width:130px!important;}#loginGate .login-logo{width:170px!important;}}
+</style>
 </head>
 <body>
 
@@ -939,7 +949,7 @@ const SECURITY = {
   // SHA-256 hash of password "Anya@Voice-2026!BPD" — change by hashing your own (see sha256 fn below)
   PASSWORD_HASH: "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a",
   // Session timeout in minutes
-  SESSION_TIMEOUT_MINS: 30,
+  SESSION_TIMEOUT_MINS: 720,
   // Mask phone numbers in display (full numbers in CSV export)
   MASK_PHONES: true
 };
