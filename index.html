@@ -1672,6 +1672,7 @@ function applyFilters(){
   });
   
   RECORDS=FILTERED_RECORDS;
+  invalidateLedgerRepeatCache();
   // Rebuild meta pills for the current filtered set (or honest empty-state)
   if(RECORDS.length===0){
     $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
@@ -2659,13 +2660,27 @@ function clearLedgerFilters(){
   renderExplorer(false);
 }
 
+let LEDGER_REPEAT_CACHE=null;
+let LEDGER_REPEAT_CACHE_SOURCE=null;
+let LEDGER_REPEAT_CACHE_LENGTH=-1;
+function invalidateLedgerRepeatCache(){
+  LEDGER_REPEAT_CACHE=null;
+  LEDGER_REPEAT_CACHE_SOURCE=null;
+  LEDGER_REPEAT_CACHE_LENGTH=-1;
+}
 function ledgerPhoneKey(r){
   const c=classifyPhone(r?.from);
   const normalized=String((c.cc||"")+(c.national||"")).replace(/\D/g,"");
   const raw=String(r?.from||"").replace(/\D/g,"");
-  return normalized || raw || String(r?.from||"unknown");
+  const key=normalized || raw;
+  // Do not group blank/weak/unknown phone values as serial callers.
+  // Short keys create false repeat groups and can make the ledger feel broken.
+  return key && key.length>=6 ? key : "";
 }
 function ledgerRepeatMap(){
+  if(LEDGER_REPEAT_CACHE && LEDGER_REPEAT_CACHE_SOURCE===RECORDS && LEDGER_REPEAT_CACHE_LENGTH===RECORDS.length){
+    return LEDGER_REPEAT_CACHE;
+  }
   const map=new Map();
   RECORDS.forEach(r=>{
     const key=ledgerPhoneKey(r);
@@ -2675,10 +2690,15 @@ function ledgerRepeatMap(){
     cur.latest=Math.max(cur.latest,Number(r.ts||0));
     map.set(key,cur);
   });
+  LEDGER_REPEAT_CACHE=map;
+  LEDGER_REPEAT_CACHE_SOURCE=RECORDS;
+  LEDGER_REPEAT_CACHE_LENGTH=RECORDS.length;
   return map;
 }
 function ledgerRepeatInfo(r){
-  const info=ledgerRepeatMap().get(ledgerPhoneKey(r));
+  const key=ledgerPhoneKey(r);
+  if(!key)return {count:1,latest:Number(r?.ts||0)};
+  const info=ledgerRepeatMap().get(key);
   return info||{count:1,latest:Number(r?.ts||0)};
 }
 function ledgerIsSerialCaller(r){return ledgerRepeatInfo(r).count>=2;}
