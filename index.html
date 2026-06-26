@@ -1319,9 +1319,10 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 10px">
         <input type="text" id="explorerSearch" placeholder="Search ledger: phone, theme, transcript, callback..." style="flex:1;min-width:240px;padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="updateLedgerState({search:this.value})">
         <select id="explorerSort" onchange="updateLedgerState({sort:this.value})" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
+          <option value="time_desc">Newest first</option>
           <option value="priority_desc">Priority first</option>
           <option value="callback_desc">Callback first</option>
-          <option value="time_desc">Newest first</option>
+          <option value="repeat_desc">Most repeated first</option>
           <option value="time_asc">Oldest first</option>
           <option value="dur_desc">Longest duration</option>
           <option value="dur_asc">Shortest duration</option>
@@ -1342,6 +1343,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <option value="has_transcript">Has transcript</option>
           <option value="no_transcript">No transcript</option>
           <option value="has_callback_window">Callback window detected</option>
+          <option value="serial">Serial callers</option>
         </select>
         <button type="button" id="ledgerClearBtn" onclick="clearLedgerFilters()" style="display:none;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--navy);font-size:12px;font-weight:750;cursor:pointer">Clear ledger filters</button>
       </div>
@@ -2625,11 +2627,11 @@ function exportGeo(){
 }
 
 // ===== CALL EXPLORER =====
-const LEDGER_DEFAULT_STATE={search:"",filter:"all",sort:"priority_desc",limit:50};
+const LEDGER_DEFAULT_STATE={search:"",filter:"all",sort:"time_desc",limit:50};
 let LEDGER_STATE={...LEDGER_DEFAULT_STATE};
 let EXPLORER_LIMIT=LEDGER_STATE.limit;
-const LEDGER_FILTER_LABELS={all:"All calls",hot:"Hot only",frustrated:"Attention only",callback:"Callbacks only",intl:"International only",india:"India only",low_conf:"Low confidence only",red_amber:"Red / Amber only",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window detected"};
-const LEDGER_SORT_LABELS={priority_desc:"Priority first",callback_desc:"Callback first",time_desc:"Newest first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first"};
+const LEDGER_FILTER_LABELS={all:"All calls",hot:"Hot only",frustrated:"Attention only",callback:"Callbacks only",intl:"International only",india:"India only",low_conf:"Low confidence only",red_amber:"Red / Amber only",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window detected",serial:"Serial callers"};
+const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
 
 function syncLedgerControls(){
   const s=$("explorerSearch"), sort=$("explorerSort"), filt=$("explorerFilter");
@@ -2639,8 +2641,12 @@ function syncLedgerControls(){
 }
 
 function updateLedgerState(partial={}, opts={}){
+  const isLedgerNarrowingChange=(partial.filter!==undefined || partial.search!==undefined) && partial.sort===undefined;
   LEDGER_STATE={...LEDGER_STATE,...partial};
   if(partial.search!==undefined)LEDGER_STATE.search=String(partial.search||"");
+  // Filters and search should narrow the ledger, not silently change the working order.
+  // Operational default is always latest calls first unless the user explicitly chooses a special sort.
+  if(isLedgerNarrowingChange)LEDGER_STATE.sort="time_desc";
   if(opts.reset!==false){LEDGER_STATE.limit=50;EXPLORER_LIMIT=50;}
   syncLedgerControls();
   renderExplorer(false);
@@ -2653,6 +2659,29 @@ function clearLedgerFilters(){
   renderExplorer(false);
 }
 
+function ledgerPhoneKey(r){
+  const c=classifyPhone(r?.from);
+  const normalized=String((c.cc||"")+(c.national||"")).replace(/\D/g,"");
+  const raw=String(r?.from||"").replace(/\D/g,"");
+  return normalized || raw || String(r?.from||"unknown");
+}
+function ledgerRepeatMap(){
+  const map=new Map();
+  RECORDS.forEach(r=>{
+    const key=ledgerPhoneKey(r);
+    if(!key)return;
+    const cur=map.get(key)||{count:0,latest:0};
+    cur.count+=1;
+    cur.latest=Math.max(cur.latest,Number(r.ts||0));
+    map.set(key,cur);
+  });
+  return map;
+}
+function ledgerRepeatInfo(r){
+  const info=ledgerRepeatMap().get(ledgerPhoneKey(r));
+  return info||{count:1,latest:Number(r?.ts||0)};
+}
+function ledgerIsSerialCaller(r){return ledgerRepeatInfo(r).count>=2;}
 function ledgerHasTranscript(r){return !!String(r?.trans||"").trim();}
 function ledgerHasCallbackWindow(r){return !!(r?.cbPreferred && r.cbPreferred!=="Not specified");}
 function ledgerPriorityScore(r){
@@ -2673,6 +2702,7 @@ function ledgerSearchBlob(r){
     directionLabel(r.direction),normalizeDirection(r.direction),
     r.intent,r.summary,r.leadTemp,r.band,r.status,
     r.callback?"callback follow up":"",r.frustrated?"attention frustrated issue":"",
+    ledgerIsSerialCaller(r)?`serial repeat caller ${ledgerRepeatInfo(r).count} calls`:"",
     r.cbReason,r.cbPreferred,r.trans,
     String(Math.round(Number(r.conf||0))),String(Math.round(Number(r.need||0)))
   ].filter(Boolean).join(" ").toLowerCase();
@@ -2689,11 +2719,12 @@ function ledgerMatchesFilter(r, filt){
   if(filt==="has_transcript")return ledgerHasTranscript(r);
   if(filt==="no_transcript")return !ledgerHasTranscript(r);
   if(filt==="has_callback_window")return ledgerHasCallbackWindow(r);
+  if(filt==="serial")return ledgerIsSerialCaller(r);
   return true;
 }
 function getExplorerRows(){
   const q=String(LEDGER_STATE.search||"").trim().toLowerCase();
-  const sort=LEDGER_STATE.sort||"priority_desc";
+  const sort=LEDGER_STATE.sort||"time_desc";
   const filt=LEDGER_STATE.filter||"all";
   let rows=RECORDS.slice().filter(r=>ledgerMatchesFilter(r,filt));
   if(q){
@@ -2704,18 +2735,19 @@ function getExplorerRows(){
     });
   }
   const sorters={
+    time_desc:(a,b)=>b.ts-a.ts,
     priority_desc:(a,b)=>ledgerPriorityScore(b)-ledgerPriorityScore(a)||b.ts-a.ts,
     callback_desc:(a,b)=>(Number(!!b.callback)-Number(!!a.callback))||b.ts-a.ts,
-    time_desc:(a,b)=>b.ts-a.ts,
     time_asc:(a,b)=>a.ts-b.ts,
-    dur_desc:(a,b)=>b.dur-a.dur,
-    dur_asc:(a,b)=>a.dur-b.dur,
-    conf_desc:(a,b)=>b.conf-a.conf,
-    low_conf:(a,b)=>a.conf-b.conf,
-    need_desc:(a,b)=>b.need-a.need,
-    intl_desc:(a,b)=>Number(classifyPhone(b.from).intl)-Number(classifyPhone(a.from).intl)||b.ts-a.ts
+    dur_desc:(a,b)=>(Number(b.dur||0)-Number(a.dur||0))||b.ts-a.ts,
+    dur_asc:(a,b)=>(Number(a.dur||0)-Number(b.dur||0))||b.ts-a.ts,
+    conf_desc:(a,b)=>(Number(b.conf||0)-Number(a.conf||0))||b.ts-a.ts,
+    low_conf:(a,b)=>(Number(a.conf||0)-Number(b.conf||0))||b.ts-a.ts,
+    need_desc:(a,b)=>(Number(b.need||0)-Number(a.need||0))||b.ts-a.ts,
+    intl_desc:(a,b)=>(Number(classifyPhone(b.from).intl)-Number(classifyPhone(a.from).intl))||b.ts-a.ts,
+    repeat_desc:(a,b)=>(ledgerRepeatInfo(b).count-ledgerRepeatInfo(a).count)||b.ts-a.ts
   };
-  rows.sort(sorters[sort]||sorters.priority_desc);
+  rows.sort(sorters[sort]||sorters.time_desc);
   return rows;
 }
 function ledgerChip(text,strong=false){
@@ -2754,6 +2786,11 @@ function renderExplorer(resetLimit){
     if(r.frustrated)tags.push(`<span style="background:rgba(231,76,60,.15);color:${C.hot};padding:1px 6px;border-radius:3px;font-size:9px">Attention</span>`);
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
     if(ledgerHasCallbackWindow(r))tags.push(`<span style="background:#fff7e8;color:var(--gold);padding:1px 6px;border-radius:3px;font-size:9px">Window</span>`);
+    const repeat=ledgerRepeatInfo(r);
+    if(repeat.count>=2){
+      const repeatLabel=repeat.count>=4?`${repeat.count} calls · high repeat`:`${repeat.count} calls · repeat`;
+      tags.push(`<span style="background:#eef2ff;color:var(--navy);padding:1px 6px;border-radius:3px;font-size:9px">${esc(repeatLabel)}</span>`);
+    }
     tags.unshift(directionPill(r.direction));
     return `<div onclick="explorerOpen('${esc(r.from)}')" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
       <div style="min-width:0">
