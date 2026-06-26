@@ -962,6 +962,18 @@ body.profile-open .profile-overlay{display:block;}
   .profile-accordion-body{padding:12px 13px;}
   .profile-phone-inline{display:block;margin:4px 0 0;font-size:11px;white-space:normal;}
 }
+
+/* v20: make profile/timeline interactions consistently drawer based */
+.drawer-click-card{position:relative;cursor:pointer!important;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease,background .18s ease!important;}
+.drawer-click-card:hover{transform:translateY(-1px);border-color:#b8c8dd!important;box-shadow:0 14px 32px rgba(11,31,58,.10)!important;background:#ffffff!important;}
+.drawer-click-card:focus-visible{outline:3px solid rgba(31,95,169,.22);outline-offset:3px;}
+.drawer-click-card .profile-link-btn{position:relative;z-index:2;}
+.drawer-action-hint{font-size:10.5px;color:#65758b;margin-top:7px;font-weight:800;letter-spacing:.01em;}
+.drawer-action-hint:after{content:' →';color:var(--gold);font-weight:900;}
+.callback-click-card{border-left:3px solid var(--teal)!important;}
+.callback-click-card:hover{border-left-color:var(--gold)!important;}
+.inline-nonprofile-action{position:relative;z-index:3;}
+@media(max-width:720px){.drawer-click-card:hover{transform:none;box-shadow:none!important}.drawer-action-hint{font-size:10px}}
 </style>
 
 </head>
@@ -1893,6 +1905,24 @@ function markProfileSource(el){
   if(el && el.classList)el.classList.add('profile-selected-source');
 }
 
+function handleDrawerCardKey(event){
+  if(event.key==='Enter'||event.key===' '){
+    event.preventDefault();
+    event.currentTarget.click();
+  }
+}
+
+function openProfileForPhone(phone,source='search',el=null){
+  if(el)markProfileSource(el);
+  const raw=String(phone||'').trim();
+  if(!raw)return;
+  const search=$('searchMobile');
+  if(search)search.value=maskPhone(raw);
+  const legacyTimeline=$('timelinePanel');
+  if(legacyTimeline)legacyTimeline.style.display='none';
+  searchUserByMobile(raw,source);
+}
+
 function closeUserSearch(){
   const el=$("userSearchResult"), overlay=$("profileOverlay");
   if(el){
@@ -2406,21 +2436,23 @@ function paintCallbacks(recs){
 
     const moreSection=moreCount>0?`
       <div id="more_${phoneKey}" style="display:none">${rest.slice().reverse().map(renderCall).join("")}</div>
-      <div onclick="const el=document.getElementById('more_${phoneKey}');const btn=document.getElementById('btn_${phoneKey}');if(el.style.display==='none'){el.style.display='block';btn.textContent='▲ Show less';}else{el.style.display='none';btn.textContent='▼ +${moreCount} more request${moreCount>1?'s':''}'}"
+      <div class="inline-nonprofile-action" onclick="event.stopPropagation();const el=document.getElementById('more_${phoneKey}');const btn=document.getElementById('btn_${phoneKey}');if(el.style.display==='none'){el.style.display='block';btn.textContent='▲ Show less';}else{el.style.display='none';btn.textContent='▼ +${moreCount} more request${moreCount>1?'s':''}'}"
         id="btn_${phoneKey}"
+        role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
         style="padding:7px;color:var(--teal);font-size:10px;text-align:center;cursor:pointer;border-top:1px solid #1a2332;margin-top:4px;user-select:none;border-radius:4px">
         ▼ +${moreCount} more request${moreCount>1?"s":""}
       </div>`:"";
 
-    return`<div data-profile-source="callback" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
+    return`<div data-profile-source="callback" class="drawer-click-card callback-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone('${esc(ph)}','callback',this)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:16px">
           <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${maskPhone(ph)}</b>
           <span style="font-size:10px;color:var(--teal);font-weight:600">${totalDur} mins</span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();markProfileSource(this.closest('[data-profile-source]')||this);searchUserByMobile('${esc(ph)}','callback')">View profile</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} callback${calls.length>1?"s":""}</span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone('${esc(ph)}','callback',this.closest('[data-profile-source]')||this)">Open drawer</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} callback${calls.length>1?"s":""}</span></div>
       </div>
       ${directionMix(calls)}
+      <div class="drawer-action-hint">Click anywhere on this callback card to open the profile drawer</div>
       ${renderCall(latest)}
       ${moreSection}
     </div>`;
@@ -3018,8 +3050,7 @@ function paintHottestLeads(records){
 function openLeadProfile(i){
   const l=window.HOTTEST_LEADS&&window.HOTTEST_LEADS[i];
   if(!l)return;
-  const search=$("searchMobile"); if(search)search.value=maskPhone(l.phone);
-  searchUserByMobile(l.phone,"priority");
+  openProfileForPhone(l.phone,"priority");
 }
 
 function paintSerialCallers(records){
@@ -3027,7 +3058,7 @@ function paintSerialCallers(records){
   if(!serial.length){$("serialCallers").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No serial engagers (3+ calls).</div>";return;}
   
   $("serialCallers").innerHTML=serial.map((s,i)=>`
-    <div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="markProfileSource(this);showSerialTimeline(${i})">
+    <div class="drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="markProfileSource(this);showSerialTimeline(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
         <b style="font-family:'Inter',monospace;font-size:13px">${maskPhone(s.phone)}</b>
         <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${s.total} calls</span>
@@ -3038,33 +3069,23 @@ function paintSerialCallers(records){
         <div style="grid-column:1/-1"><b style="color:var(--teal)">${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
       </div>
       ${directionMix(s.calls)}
-      <div style="font-size:11px;color:var(--faint);margin-top:6px">High engagement • View timeline →</div>
+      <div class="drawer-action-hint">High engagement • Open profile timeline in drawer</div>
     </div>
   `).join("");
   window.SERIAL_CALLERS=serial;
 }
 
 function showSerialTimeline(idx){
-  const s=window.SERIAL_CALLERS[idx];
-  $("timelineLabel").innerHTML=`<span>${maskPhone(s.phone)}</span><button type="button" class="timeline-profile-btn" onclick="searchUserByMobile(window.SERIAL_CALLERS[${idx}].phone,'repeat')">View profile</button>`;
-  $("timelineMeta").innerHTML=`<span style="font-size:12px">${s.total} calls • <b style="color:var(--hot)">${s.frustrated}</b> attention • <b style="color:var(--green)">${s.general}</b> general • <b style="color:var(--teal)">${s.totalDur} mins</b> | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</span>`;
-  $("timeline").innerHTML=s.calls.map((c,i)=>{
-    const date=formatCallTimeWithWeekday(c);
-    const icon=c.frustrated?'Attention':'General';
-    const tag=c.frustrated?`<b style="color:var(--hot)">Attention</b>`:` <b style="color:var(--green)">General</b>`;
-    return`<div style="padding:12px;border-left:2px solid ${c.frustrated?'var(--hot)':'var(--green)'};margin-left:10px;margin-bottom:12px;background:#f8fafc;border-radius:6px">
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-        <b>${icon} call ${i+1} ${tag} ${directionPill(c.direction)}</b>
-        <span style="color:var(--muted)">${date}</span>
-      </div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.4">
-        <b>Intent:</b> ${esc(c.intent)}<br>
-        <b>Duration:</b> ${formatDuration(c.dur)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
-        <span style="font-size:10px">${esc(c.summary)}</span>
-      </div>
-    </div>`;
-  }).join("");
-  $("timelinePanel").style.display="block";
+  const s=window.SERIAL_CALLERS&&window.SERIAL_CALLERS[idx];
+  if(!s)return;
+  const legacyTimeline=$('timelinePanel');
+  if(legacyTimeline)legacyTimeline.style.display='none';
+  openProfileForPhone(s.phone,'repeat');
+  const drawer=$('userSearchResult');
+  if(drawer){
+    const accordions=drawer.querySelectorAll('details.profile-accordion');
+    if(accordions[1])accordions[1].open=true;
+  }
 }
 
 // === CSV EXPORT FUNCTIONS ===
