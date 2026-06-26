@@ -82,6 +82,13 @@ input:focus,select:focus{border-color:#b9c9df;box-shadow:0 0 0 4px rgba(47,100,1
   .topbar{flex-direction:column}.brand{align-items:flex-start;flex-direction:column;gap:10px}.logoBox{width:160px;height:50px}.card{padding:18px;border-radius:22px}.preview{grid-template-columns:1fr}.actions .btn{width:100%}
 }
 </style>
+<style id="admin-session-polish">
+/* v3: align logo scale with main dashboard and keep admin session active for the workday. */
+.logoBox{width:150px!important;height:48px!important;padding:6px!important;}
+.gateCard .logoBox{width:170px!important;height:54px!important;}
+@media(max-width:900px){.logoBox{width:132px!important;height:44px!important}.gateCard .logoBox{width:156px!important;height:50px!important}}
+</style>
+
 </head>
 <body>
 <div id="adminGate">
@@ -90,7 +97,7 @@ input:focus,select:focus{border-color:#b9c9df;box-shadow:0 0 0 4px rgba(47,100,1
     <div class="sectionLabel">Admin only</div>
     <h2>Data Upload Console</h2>
     <p class="help">Publish the latest Anya voice analytics export securely to the dashboard data path.</p>
-    <div class="field" style="text-align:left"><label for="adminPassword">Admin password</label><input type="password" id="adminPassword" placeholder="Enter dashboard/admin password" onkeyup="if(event.key==='Enter')unlockAdmin()"></div>
+    <div class="field" style="text-align:left"><label for="adminPassword">Admin password</label><input type="password" id="adminPassword" placeholder="Enter admin password" onkeyup="if(event.key==='Enter')unlockAdmin()"></div>
     <div class="actions"><button class="btn primary" onclick="unlockAdmin()">Unlock console</button></div>
     <div id="gateStatus" class="status warn hidden"></div>
   </div>
@@ -129,7 +136,7 @@ input:focus,select:focus{border-color:#b9c9df;box-shadow:0 0 0 4px rgba(47,100,1
         </div>
         <div class="actions">
           <button id="publishBtn" class="btn primary" onclick="publishData()" disabled>Encrypt & publish</button>
-          <a class="btn gold" href="./index.html" target="_blank" rel="noopener">Open dashboard</a>
+          <a class="btn gold" href="../index.html" target="_blank" rel="noopener">Open dashboard</a>
         </div>
         <div id="publishStatus" class="status hidden"></div>
       </div>
@@ -181,19 +188,47 @@ const DATA_MAGIC='AANYAENC1';
 const TOKEN_VAULT_KEY='anya_admin_token_vault_v1';
 const REPO_SETTINGS_KEY='anya_admin_repo_settings_v1';
 const SESSION_TOKEN_KEY='anya_admin_github_token_session';
+const ADMIN_SESSION_MINS=720;
+const ADMIN_AUTH_TIME_KEY='anya_admin_auth_time_v1';
+const ADMIN_PASSPHRASE_KEY='anya_admin_passphrase_session_v1';
 let ADMIN_PASSPHRASE='';
 let selectedFile=null;
 const $=id=>document.getElementById(id);
 function showStatus(id,msg,type='warn'){const el=$(id);if(!el)return;el.className='status '+type;el.innerHTML=msg;el.classList.remove('hidden');}
 function hideStatus(id){const el=$(id);if(el)el.classList.add('hidden');}
 async function sha256(text){const data=new TextEncoder().encode(text);const hash=await crypto.subtle.digest('SHA-256',data);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');}
+function showAdminApp(){
+  $('adminGate').classList.add('hidden');
+  $('adminApp').classList.remove('hidden');
+  loadConnectionSettings();
+  loadSessionToken();
+  refreshVaultState();
+}
+function rememberAdminSession(passphrase){
+  sessionStorage.setItem(ADMIN_AUTH_TIME_KEY,Date.now().toString());
+  sessionStorage.setItem(ADMIN_PASSPHRASE_KEY,passphrase);
+}
+function checkExistingAdminSession(){
+  const pass=sessionStorage.getItem(ADMIN_PASSPHRASE_KEY)||'';
+  const authTime=Number(sessionStorage.getItem(ADMIN_AUTH_TIME_KEY)||0);
+  const timeout=ADMIN_SESSION_MINS*60*1000;
+  if(pass && authTime && Date.now()-authTime<timeout){
+    ADMIN_PASSPHRASE=pass;
+    rememberAdminSession(pass);
+    showAdminApp();
+    return true;
+  }
+  sessionStorage.removeItem(ADMIN_AUTH_TIME_KEY);
+  sessionStorage.removeItem(ADMIN_PASSPHRASE_KEY);
+  return false;
+}
 async function unlockAdmin(){
   const pwd=$('adminPassword').value||'';
   if(!pwd){showStatus('gateStatus','Please enter the admin password.','err');return;}
   if(await sha256(pwd)!==ADMIN_PASSWORD_HASH){showStatus('gateStatus','Incorrect password.','err');$('adminPassword').value='';return;}
   ADMIN_PASSPHRASE=pwd;
-  $('adminGate').classList.add('hidden');$('adminApp').classList.remove('hidden');
-  loadConnectionSettings();loadSessionToken();refreshVaultState();
+  rememberAdminSession(pwd);
+  showAdminApp();
 }
 function bytesToBase64(bytes){let binary='';const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk){binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));}return btoa(binary);}
 function base64ToBytes(b64){const bin=atob(b64);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
@@ -256,7 +291,7 @@ async function publishData(){
   finally{$('publishBtn').disabled=!selectedFile;}
 }
 function escapeHtml(s){return String(s||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-window.addEventListener('DOMContentLoaded',()=>{setupUpload();setupTokenMode();refreshVaultState();});
+window.addEventListener('DOMContentLoaded',()=>{setupUpload();setupTokenMode();if(!checkExistingAdminSession())refreshVaultState();});
 </script>
 </body>
 </html>
