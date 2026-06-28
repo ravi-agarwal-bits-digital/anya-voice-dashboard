@@ -1014,12 +1014,18 @@ body.profile-open .profile-overlay{display:block;}
 .brief-action-badge{font-size:10px;font-weight:900;border-radius:999px;background:#fff7e8;color:var(--gold);border:1px solid rgba(176,138,60,.28);padding:3px 8px;white-space:nowrap}
 .brief-action-meta{font-size:12px;color:var(--muted);line-height:1.55}
 .brief-empty{padding:22px;border:1px dashed var(--line);border-radius:18px;background:#f8fafc;color:var(--muted);font-size:13px;text-align:center}
+.summary-jump-btn{padding:6px 12px!important;border-radius:999px!important;border:1px solid rgba(176,138,60,.34)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:0 8px 18px rgba(176,138,60,.08)!important}
+.summary-jump-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important}
+.summary-jump-btn.active{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 22px rgba(11,31,58,.14)!important}
+.management-brief.summary-focus{animation:summaryFocusPulse 1.2s ease 1}
+@keyframes summaryFocusPulse{0%{filter:drop-shadow(0 0 0 rgba(176,138,60,0))}35%{filter:drop-shadow(0 14px 24px rgba(176,138,60,.18))}100%{filter:drop-shadow(0 0 0 rgba(176,138,60,0))}}
+@media(max-width:720px){.summary-jump-btn{width:100%;justify-content:center;text-align:center;padding:9px 12px!important}}
 @media(max-width:980px){.brief-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.brief-grid{grid-template-columns:1fr}.brief-cover{padding:20px}.brief-cover h3{font-size:27px}}
 @media(max-width:560px){.brief-kpi-grid{grid-template-columns:1fr}.brief-toolbar{display:grid;gap:12px}.brief-delta-row{display:grid}.brief-delta-val{margin-left:0}.brief-cover h3{font-size:24px}}
 @media print{
   @page{size:A4;margin:14mm}
   body{background:#fff!important;color:#0b1f3a!important}
-  .exec-sidebar,#reportView>header,.hero,.strip,section:not(#sec-brief),footer,#kpiOverlay,#kpiPanel,#profileOverlay,#userSearchResult,.brief-toolbar,.brief-print-btn{display:none!important}
+  .exec-sidebar,#reportView>header,.hero,.strip,section:not(#sec-brief),footer,#kpiOverlay,#kpiPanel,#profileOverlay,#userSearchResult,.brief-toolbar,.brief-print-btn,.summary-jump-btn{display:none!important}
   #dashboardContent,#mainShell,#mainWrap,#reportView,#sec-brief{display:block!important;visibility:visible!important}
   .app-shell{display:block!important;padding:0!important}
   .wrap{max-width:none!important;padding:0!important;margin:0!important}
@@ -1257,7 +1263,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   <div class="side-compact-brand"><div class="side-compact-title">Anya</div><div class="side-compact-sub">Voice dashboard</div></div>
   <nav class="side-nav">
     <a class="side-link active" href="#sec-overview"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg></span><span>Overview</span></a>
-    <a class="side-link" href="#sec-brief"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Brief</span></a>
+    <a class="side-link" href="#sec-brief" title="Management Summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Mgmt Summary</span></a>
     <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Demand</span></a>
     <a class="side-link" href="#sec-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI advisor</span></a>
     <a class="side-link" href="#sec-themes"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
@@ -1323,6 +1329,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <button type="button" class="dir-btn" id="dir-outbound" data-dir="outbound" onclick="setDirectionFilter('outbound', event)" aria-pressed="false">Outbound</button>
         </div>
           <span id="directionCurrent" class="direction-current all" aria-live="polite">All calls</span>
+          <button type="button" id="openMgmtSummaryBtn" class="summary-jump-btn" onclick="openManagementSummary()" title="Open management summary for the selected view">Mgmt Summary</button>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
@@ -1344,11 +1351,11 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 
   <section id="sec-brief" class="management-brief">
-    <div class="shead"><span class="n">00.5</span><h2>Management brief</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()" style="margin-left:auto">Export / Save PDF</button></div>
+    <div class="shead"><span class="n">00.5</span><h2>Management Summary</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()" style="margin-left:auto">Export / Save PDF</button></div>
     <div class="brief-cover">
       <div class="brief-toolbar">
-        <div class="brief-period-controls" aria-label="Management brief period">
-          <span style="font-size:11px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.12em">Brief period</span>
+        <div class="brief-period-controls" aria-label="Management summary period">
+          <span style="font-size:11px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.12em">Summary period</span>
           <button type="button" class="brief-chip" data-brief-period="yesterday" onclick="setBriefPeriod('yesterday')">Yesterday</button>
           <button type="button" class="brief-chip" data-brief-period="week" onclick="setBriefPeriod('week')">Last 7 days</button>
           <button type="button" class="brief-chip" data-brief-period="month" onclick="setBriefPeriod('month')">This month</button>
@@ -1357,7 +1364,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         <div class="brief-actions"><button type="button" onclick="scrollToWithStickyOffset(document.getElementById('sec-explorer'))">Open ledger</button></div>
       </div>
       <div class="brief-eyebrow">Leadership snapshot</div>
-      <h3 id="briefTitle">Management summary</h3>
+      <h3 id="briefTitle">Management Summary</h3>
       <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
       <div class="brief-kpi-grid" id="briefKpis"></div>
     </div>
@@ -1529,7 +1536,11 @@ function updateMobileNavShadow(){
 function syncSidebarActive(forceId){
   const links=[...document.querySelectorAll('.side-link')];
   if(!links.length)return;
-  const setActive=(id)=>links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
+  const setActive=(id)=>{
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
+    const summaryBtn=$('openMgmtSummaryBtn');
+    if(summaryBtn)summaryBtn.classList.toggle('active',id==='sec-brief');
+  };
   if(forceId){setActive(forceId);return;}
   const report=document.getElementById('reportView');
   if(!report || report.offsetParent===null){setActive('sec-overview');return;}
@@ -1754,6 +1765,7 @@ function quickFilter(type){
   $("filterFromDate").value=fmt(from);
   $("filterToDate").value=fmt(to);
   $("customFilterPanel").style.display="none";
+  setManagementSummaryToCurrentRange();
   applyFilters();
   updateFilterButtons(type);
 }
@@ -1764,6 +1776,7 @@ function toggleCustomFilter(){
 }
 
 function applyCustomFilter(){
+  setManagementSummaryToCurrentRange();
   applyFilters();
   $("customFilterPanel").style.display="none";
   updateFilterButtons("custom");
@@ -1788,7 +1801,38 @@ function updateFilterButtons(active){
   }
 }
 
+
+function isManagementSummaryVisible(){
+  const el=$('sec-brief');
+  if(!el)return false;
+  const rect=el.getBoundingClientRect();
+  const vh=window.innerHeight||document.documentElement.clientHeight||0;
+  return rect.top<vh*0.72 && rect.bottom>120;
+}
+function focusManagementSummary(){
+  const el=$('sec-brief');
+  if(!el)return;
+  scrollToWithStickyOffset(el);
+  syncSidebarActive('sec-brief');
+  const btn=$('openMgmtSummaryBtn');
+  if(btn)btn.classList.add('active');
+  el.classList.remove('summary-focus');
+  void el.offsetWidth;
+  el.classList.add('summary-focus');
+  setTimeout(()=>{if(el)el.classList.remove('summary-focus');},1400);
+}
+function openManagementSummary(){
+  BRIEF_STATE.period='custom';
+  paintManagementBrief();
+  setTimeout(focusManagementSummary,40);
+}
+function setManagementSummaryToCurrentRange(){
+  BRIEF_STATE.period='custom';
+  updateBriefChips();
+}
+
 function applyFilters(){
+  const keepManagementSummaryVisible=isManagementSummaryVisible() || location.hash==="#sec-brief";
   updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
   const toDate=$("filterToDate").value;
@@ -1843,7 +1887,7 @@ function applyFilters(){
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
   paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer(true);
-  try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
+  try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
   closeUserSearch();
 }
 
@@ -1932,7 +1976,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
-    const label=source==="callback"?"Opened from the Priority follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from Priority prospects":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Brief":"Opened from mobile search";
+    const label=source==="callback"?"Opened from the Priority follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from Priority prospects":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
     note.textContent=label+". Profile appears here with the full call timeline.";
   }
   revealUserProfile(source);
@@ -2583,6 +2627,7 @@ function setBriefPeriod(period){
 function setBriefFromCurrentRange(){
   BRIEF_STATE.period='custom';
   paintManagementBrief();
+  setTimeout(focusManagementSummary,30);
 }
 function updateBriefChips(){
   document.querySelectorAll('[data-brief-period]').forEach(btn=>{
@@ -2699,7 +2744,7 @@ function paintManagementBrief(){
   const cur=briefPack(recs),old=briefPack(prev);
   const dateLabel=range.from&&range.to?(range.from===range.to?range.from:`${range.from} to ${range.to}`):currentViewDescription();
   const title=$('briefTitle'),summary=$('briefSummary'),kpis=$('briefKpis'),deltas=$('briefDeltas'),insights=$('briefInsights'),process=$('briefProcess');
-  if(title)title.textContent=`${range.label} brief`;
+  if(title)title.textContent=`${range.label} summary`;
   if(!cur.n){
     if(summary)summary.innerHTML=`No enquiries found for <b>${esc(dateLabel)}</b> in the ${esc(currentDirectionLabel())} view. Try another brief period or switch to All Calls.`;
     if(kpis)kpis.innerHTML='';
