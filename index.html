@@ -980,9 +980,13 @@ body.profile-open .profile-overlay{display:block;}
 <style id="management-brief-theme">
 .management-brief{scroll-margin-top:24px}
 .brief-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
-.brief-period-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.brief-period-controls .brief-chip{padding:8px 13px!important;border-radius:999px!important;border:1px solid var(--line)!important;background:#fff!important;color:var(--navy)!important;font-size:12px!important;font-weight:850!important;cursor:pointer!important}
-.brief-period-controls .brief-chip.active{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 20px rgba(11,31,58,.14)!important}
+.brief-period-controls{display:flex!important;flex-wrap:wrap!important;gap:8px!important;align-items:center!important;position:relative!important;z-index:2!important;visibility:visible!important;opacity:1!important}
+.brief-period-label{font-size:11px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.12em;display:inline-flex;align-items:center;margin-right:2px}
+.brief-period-controls .brief-chip{display:inline-flex!important;align-items:center!important;gap:6px!important;padding:8px 13px!important;border-radius:999px!important;border:1px solid var(--line)!important;background:#fff!important;color:var(--navy)!important;font-size:12px!important;font-weight:850!important;cursor:pointer!important;visibility:visible!important;opacity:1!important;white-space:nowrap!important}
+.brief-period-controls .brief-chip.active,.brief-period-controls .brief-chip[aria-pressed="true"]{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 20px rgba(11,31,58,.14)!important}
+.brief-period-controls .brief-chip.active:before,.brief-period-controls .brief-chip[aria-pressed="true"]:before{content:"✓";font-size:11px;font-weight:900;color:inherit}
+.brief-period-status{display:inline-flex!important;align-items:center!important;gap:6px!important;padding:7px 11px!important;border-radius:999px!important;background:#f7f9fc!important;border:1px dashed #cbd7e7!important;color:var(--muted)!important;font-size:11.5px!important;font-weight:800!important;white-space:nowrap!important;visibility:visible!important;opacity:1!important}
+.brief-period-status b{color:var(--navy);font-weight:900}
 .brief-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .brief-actions button,.brief-print-btn{padding:8px 14px!important;border-radius:999px!important;background:#fff!important;border:1px solid var(--line)!important;color:var(--navy)!important;font-size:12px!important;font-weight:850!important;cursor:pointer!important}
 .brief-actions button:hover,.brief-print-btn:hover{border-color:var(--gold)!important;background:#f7f9fc!important}
@@ -1021,7 +1025,7 @@ body.profile-open .profile-overlay{display:block;}
 @keyframes summaryFocusPulse{0%{filter:drop-shadow(0 0 0 rgba(176,138,60,0))}35%{filter:drop-shadow(0 14px 24px rgba(176,138,60,.18))}100%{filter:drop-shadow(0 0 0 rgba(176,138,60,0))}}
 @media(max-width:720px){.summary-jump-btn{width:100%;justify-content:center;text-align:center;padding:9px 12px!important}}
 @media(max-width:980px){.brief-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.brief-grid{grid-template-columns:1fr}.brief-cover{padding:20px}.brief-cover h3{font-size:27px}}
-@media(max-width:560px){.brief-kpi-grid{grid-template-columns:1fr}.brief-toolbar{display:grid;gap:12px}.brief-delta-row{display:grid}.brief-delta-val{margin-left:0}.brief-cover h3{font-size:24px}}
+@media(max-width:560px){.brief-kpi-grid{grid-template-columns:1fr}.brief-toolbar{display:grid;gap:12px}.brief-period-controls{gap:7px!important}.brief-period-label,.brief-period-status{width:100%;justify-content:flex-start}.brief-period-controls .brief-chip{padding:8px 11px!important;font-size:11.5px!important}.brief-delta-row{display:grid}.brief-delta-val{margin-left:0}.brief-cover h3{font-size:24px}}
 @media print{
   @page{size:A4;margin:14mm}
   body{background:#fff!important;color:#0b1f3a!important}
@@ -1355,11 +1359,12 @@ window.addEventListener('DOMContentLoaded',()=>{
     <div class="brief-cover">
       <div class="brief-toolbar">
         <div class="brief-period-controls" aria-label="Management summary period">
-          <span style="font-size:11px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.12em">Summary period</span>
+          <span class="brief-period-label">Summary period</span>
           <button type="button" class="brief-chip" data-brief-period="yesterday" onclick="setBriefPeriod('yesterday')">Yesterday</button>
           <button type="button" class="brief-chip" data-brief-period="week" onclick="setBriefPeriod('week')">Last 7 days</button>
           <button type="button" class="brief-chip" data-brief-period="month" onclick="setBriefPeriod('month')">This month</button>
           <button type="button" class="brief-chip" data-brief-period="custom" onclick="setBriefFromCurrentRange()">Current range</button>
+          <span id="briefPeriodStatus" class="brief-period-status">Showing: <b>Last 7 days</b></span>
         </div>
         <div class="brief-actions"><button type="button" onclick="scrollToWithStickyOffset(document.getElementById('sec-explorer'))">Open ledger</button></div>
       </div>
@@ -1765,7 +1770,7 @@ function quickFilter(type){
   $("filterFromDate").value=fmt(from);
   $("filterToDate").value=fmt(to);
   $("customFilterPanel").style.display="none";
-  setManagementSummaryToCurrentRange();
+  syncManagementSummaryPeriodFromDashboardFilter(type);
   applyFilters();
   updateFilterButtons(type);
 }
@@ -1776,7 +1781,7 @@ function toggleCustomFilter(){
 }
 
 function applyCustomFilter(){
-  setManagementSummaryToCurrentRange();
+  syncManagementSummaryPeriodFromDashboardFilter('custom');
   applyFilters();
   $("customFilterPanel").style.display="none";
   updateFilterButtons("custom");
@@ -1829,6 +1834,21 @@ function openManagementSummary(){
 function setManagementSummaryToCurrentRange(){
   BRIEF_STATE.period='custom';
   updateBriefChips();
+}
+function syncManagementSummaryPeriodFromDashboardFilter(type){
+  // Keep the Management Summary period chip visibly aligned with the date filter the user just applied.
+  // Only use Current range when the global range does not exactly match a built-in summary chip.
+  if(type==='yesterday'||type==='week'){BRIEF_STATE.period=type;}
+  else if(type==='today'||type==='month'||type==='all'||type==='custom'){BRIEF_STATE.period='custom';}
+  else{BRIEF_STATE.period='custom';}
+  updateBriefChips();
+}
+function briefPeriodUiLabel(){
+  const p=BRIEF_STATE.period||'week';
+  if(p==='yesterday')return 'Yesterday';
+  if(p==='week')return 'Last 7 days';
+  if(p==='month')return 'This month';
+  return 'Current range';
 }
 
 function applyFilters(){
@@ -2621,20 +2641,34 @@ function currentBriefRange(){
 }
 function setBriefPeriod(period){
   BRIEF_STATE.period=period;
+  updateBriefChips();
   paintManagementBrief();
   setTimeout(()=>{const el=$('sec-brief');if(el)scrollToWithStickyOffset(el);},30);
 }
 function setBriefFromCurrentRange(){
   BRIEF_STATE.period='custom';
+  updateBriefChips();
   paintManagementBrief();
   setTimeout(focusManagementSummary,30);
 }
 function updateBriefChips(){
+  const controls=document.querySelector('.brief-period-controls');
+  if(controls){controls.style.display='flex';controls.style.visibility='visible';controls.style.opacity='1';}
   document.querySelectorAll('[data-brief-period]').forEach(btn=>{
     const on=(btn.dataset.briefPeriod||'')===(BRIEF_STATE.period||'week');
     btn.classList.toggle('active',on);
     btn.setAttribute('aria-pressed',on?'true':'false');
+    btn.style.display='inline-flex';
+    btn.style.visibility='visible';
+    btn.style.opacity='1';
   });
+  const status=$('briefPeriodStatus');
+  if(status){
+    status.style.display='inline-flex';
+    status.style.visibility='visible';
+    status.style.opacity='1';
+    status.innerHTML=`Showing: <b>${esc(briefPeriodUiLabel())}</b>`;
+  }
 }
 function previousRangeFor(fromIso,toIso){
   const from=parseIsoLocalDate(fromIso),to=parseIsoLocalDate(toIso);
