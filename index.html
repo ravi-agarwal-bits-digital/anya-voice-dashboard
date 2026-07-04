@@ -2448,6 +2448,38 @@ function chooseWorkbookRows(wb){
   return candidates[0]||null;
 }
 
+
+const INBOUND_LEAD_PHONE_FIELDS=['From','Caller','Caller Number','Source','Source Number','Phone','Phone Number','Mobile','Mobile Number','Contact','Contact Number','User Phone','Customer Phone','Lead Phone','Student Phone'];
+const OUTBOUND_LEAD_PHONE_FIELDS=['To','Recipient','Recipient Number','Destination','Destination Number','Dialed Number','Callee','Callee Number','Customer Phone','Lead Phone','Student Phone','Phone','Phone Number','Mobile','Mobile Number','Contact','Contact Number','User Phone'];
+const GENERIC_LEAD_PHONE_FIELDS=['Lead Phone','Student Phone','Customer Phone','Mobile','Mobile Number','Phone','Phone Number','Contact','Contact Number','User Phone','From','To','Caller','Caller Number','Recipient','Destination','Callee'];
+function isUsablePhoneCandidate(v){
+  const s=String(v||'').trim();
+  const digits=s.replace(/\D/g,'');
+  if(!s||!digits||digits.length<6)return false;
+  if(/^0+$/.test(digits))return false;
+  if(/^1+$|^9+$|^12345/.test(digits))return false;
+  return true;
+}
+function firstUsablePhone(row,aliases){
+  for(const a of aliases){
+    const v=pickField(row,[a]);
+    if(isUsablePhoneCandidate(v))return String(v).trim();
+  }
+  return '';
+}
+function resolveLeadPhone(row,direction){
+  const dir=normalizeDirection(direction);
+  if(dir==='outbound'){
+    // In outbound exports, From is usually the BITS/system dialer number and To is the actual learner/lead.
+    return firstUsablePhone(row,OUTBOUND_LEAD_PHONE_FIELDS) || firstUsablePhone(row,INBOUND_LEAD_PHONE_FIELDS) || 'unknown';
+  }
+  if(dir==='inbound'){
+    // In inbound exports, From is the learner/lead and To is usually the BITS receiving number.
+    return firstUsablePhone(row,INBOUND_LEAD_PHONE_FIELDS) || firstUsablePhone(row,OUTBOUND_LEAD_PHONE_FIELDS) || 'unknown';
+  }
+  return firstUsablePhone(row,GENERIC_LEAD_PHONE_FIELDS) || 'unknown';
+}
+
 function rowToRecord(r){
   const dtStr=pickField(r,['Created At (IST)','Created At','Timestamp','Call Time','Call Date','Date','Started At','Start Time','created_at','createdAt']);
   const dt=parseDateFull(dtStr);
@@ -2457,6 +2489,9 @@ function rowToRecord(r){
   if(!summary){const cleanTrans=trans.replace(/\s+/g,' ').trim();summary=cleanTrans.length>120?cleanTrans.slice(0,120)+'...':cleanTrans;}
   const bodyText=(trans+' '+summary).trim();
   const direction=normalizeDirection(pickField(r,['Direction','direction','Call Direction','CallDirection','Type','Call Type','call_direction','direction_type','Inbound/Outbound']));
+  const rawFrom=String(pickField(r,['From','Caller','Caller Number','Source','Source Number'])||'').trim();
+  const rawTo=String(pickField(r,['To','Recipient','Recipient Number','Destination','Destination Number','Dialed Number','Callee','Callee Number'])||'').trim();
+  const leadPhone=resolveLeadPhone(r,direction);
   const intent=intentOf(bodyText);
   const callbackReq=/callback|call me|call back|please call|ring me|ring back|contact me|get back|follow.{0,5}up/i.test(bodyText);
   const need=Number(pickField(r,['Need Score','Need','Lead Need Score','NeedScore']))||0;
@@ -2479,7 +2514,7 @@ function rowToRecord(r){
     status:String(pickField(r,['Status','Call Status'])||'').toLowerCase(),leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
     conf:Number(pickField(r,['Bot Conf.','Bot Conf','Bot Confidence','AI Confidence','Confidence','Model Confidence']))||0,need,
     band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:preferredCallbackWindow(r,trans,summary,dt?dt.iso:null),frustrated,summary,
-    from:String(pickField(r,['From','Phone','Phone Number','Mobile','Mobile Number','Caller','Caller Number','Contact','User Phone'])||'unknown'),trans
+    from:leadPhone,leadPhone,rawFrom,rawTo,trans
   };
 }
 
