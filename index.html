@@ -1894,7 +1894,7 @@ function applyFilters(){
     $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
   }else{
     const dts=RECORDS.map(r=>r.d).sort();const dmn=dts[0],dmx=dts[dts.length-1];
-    const tMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+    const tMins=sumBilledMinutes(RECORDS);
     $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   }
   const o=aggregate(RECORDS);
@@ -1942,7 +1942,7 @@ function searchUserByMobile(mobile, source="search"){
   const general=userCalls.length-frustrated;
   const avgConf=Math.round(userCalls.reduce((a,c)=>a+c.conf,0)/userCalls.length);
   const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
-  const totalDur=Math.round(userCalls.reduce((a,c)=>a+c.dur,0)/60);
+  const totalDur=sumBilledMinutes(userCalls);
   const totalCost=totalDur*5;
   
   // Lead temperature breakdown
@@ -2169,6 +2169,17 @@ function formatDuration(seconds){
   const mins=Math.floor(seconds/60);
   const secs=Math.round(seconds%60);
   return mins>0?`${mins}m ${secs}s`:`${secs}s`;
+}
+
+// Billing: provider charges per call, rounded UP to the next whole minute
+// (e.g. Exotel/Twilio-style telecom billing) — a 10s call costs the same as
+// a 55s call. Round each call first, then sum — never sum raw seconds across
+// calls and round once. Zero-duration (missed) calls correctly bill 0 mins.
+function billedMinutes(seconds){
+  return Math.ceil(Number(seconds||0)/60);
+}
+function sumBilledMinutes(records){
+  return (records||[]).reduce((a,r)=>a+billedMinutes(r.dur),0);
 }
 
 // XSS protection — escape any Excel-sourced string before injecting via innerHTML
@@ -2607,7 +2618,7 @@ function paintCallbacks(recs){
   
   cbList.innerHTML=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length).map(([ph,calls])=>{
     const phoneKey=ph.replace(/\W/g,'_');
-    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    const totalDur=sumBilledMinutes(calls);
     
     const renderCall=(c)=>`
       <div style="padding:10px;background:#ffffff;border-radius:6px;border-left:2px solid var(--teal);margin-bottom:6px;font-size:10px">
@@ -2750,7 +2761,7 @@ function briefPack(recs){
   const inbound=recs.filter(r=>normalizeDirection(r.direction)==='inbound').length;
   const outbound=recs.filter(r=>normalizeDirection(r.direction)==='outbound').length;
   const unknown=Math.max(0,recs.length-inbound-outbound);
-  return{n:recs.length,unique:uniqueLeadCount(recs),callbacks:callbacks.length,callbackLeads:uniqueLeadCount(callbacks),hot:o.hot,warm:o.warm,cold:o.cold,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,lowConf,redAmber,cbNoWindow,intl:o.intl,india:o.india,inbound,outbound,unknown,totalMins:Math.round(o.totalDur/60),avgConf:Math.round(o.avgConf||0),green:o.green,topIntent:topIntentFor(recs)};
+  return{n:recs.length,unique:uniqueLeadCount(recs),callbacks:callbacks.length,callbackLeads:uniqueLeadCount(callbacks),hot:o.hot,warm:o.warm,cold:o.cold,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,lowConf,redAmber,cbNoWindow,intl:o.intl,india:o.india,inbound,outbound,unknown,totalMins:sumBilledMinutes(recs),avgConf:Math.round(o.avgConf||0),green:o.green,topIntent:topIntentFor(recs)};
 }
 function pctBrief(num,den){return den?Math.round(num/den*100):0;}
 function deltaClass(cur,prev){if(cur>prev)return'up';if(cur<prev)return'down';return'flat';}
@@ -2888,7 +2899,7 @@ function boot(){
   updateFilterButtons("all");
   updateDirectionButtons();
   
-  const totalMins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+  const totalMins=sumBilledMinutes(RECORDS);
   const totalCost=totalMins*5;
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
@@ -2911,7 +2922,7 @@ function paintHealth(o){
 
 function paintKPIs(o){
   const pct=a=>o.n?Math.round(a/o.n*100):0;
-  const totalMins=Math.round(o.totalDur/60);
+  const totalMins=sumBilledMinutes(RECORDS);
   const totalCost=totalMins*5;
   const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
   const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
@@ -2961,7 +2972,7 @@ function openKpiPanel(key){
   const n=RECORDS.length||1;
   // Stat blocks per key
   if(key==="all"){
-    const mins=Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/60);
+    const mins=sumBilledMinutes(RECORDS);
     stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Hot",RECORDS.filter(r=>r.leadTemp==="Hot").length],["Frustrated",RECORDS.filter(r=>r.frustrated).length],["Callbacks",RECORDS.filter(r=>r.callback).length],["International",RECORDS.filter(r=>classifyPhone(r.from).intl).length]];
   }else if(key==="hot"){
     const h=rows;const avgC=h.length?Math.round(h.reduce((a,r)=>a+r.conf,0)/h.length):0;
@@ -3381,9 +3392,9 @@ function paintFrustBreak(o){
 
 function paintFrustCost(o){
   const frustrated=RECORDS.filter(r=>r.frustrated);
-  const frustMinutes=frustrated.reduce((a,r)=>a+r.dur,0)/60;
-  const frustCost=Math.round(frustMinutes*5);
-  $("frustCost").innerHTML=`<div style="font-size:32px;font-weight:900;color:var(--hot);margin-bottom:12px">₹${frustCost}</div><div style="font-size:12px;color:var(--muted);line-height:1.6"><b>${Math.round(frustMinutes)} minutes</b> of frustrated calls<br>${frustrated.length} calls × avg ${Math.round(frustrated[0]?.dur||0)}s<br><br><span style="color:var(--faint)">At ₹5/min cost</span></div>`;
+  const frustMinutes=sumBilledMinutes(frustrated);
+  const frustCost=frustMinutes*5;
+  $("frustCost").innerHTML=`<div style="font-size:32px;font-weight:900;color:var(--hot);margin-bottom:12px">₹${frustCost}</div><div style="font-size:12px;color:var(--muted);line-height:1.6"><b>${frustMinutes} minutes</b> of frustrated calls<br>${frustrated.length} calls × avg ${Math.round(frustrated[0]?.dur||0)}s<br><br><span style="color:var(--faint)">At ₹5/min cost</span></div>`;
 }
 
 // Shared helper: group records by phone number (built once, reused by all sections)
@@ -3402,7 +3413,7 @@ function findSerialCallers(records){
   const serial=Object.entries(byPhone).map(([ph,calls])=>{
     const frustrated=calls.filter(c=>c.frustrated);
     const general=calls.filter(c=>!c.frustrated);
-    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    const totalDur=sumBilledMinutes(calls);
     return{phone:ph,total:calls.length,frustrated:frustrated.length,general:general.length,totalDur,calls:calls.sort((a,b)=>b.ts-a.ts)};
   }).filter(s=>s.total>=3).sort((a,b)=>b.total-a.total);
   return serial;
@@ -3418,7 +3429,7 @@ function paintHottestLeads(records){
     const frustrated=calls.filter(c=>c.frustrated).length;
     const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
     const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
-    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    const totalDur=sumBilledMinutes(calls);
     
     // Lead score: Hot=3, Warm=2, Cold=1 + call frequency + need + confidence
     const leadScore=(hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2;
@@ -3533,7 +3544,7 @@ function exportHottestLeads(){
     const frustrated=calls.filter(c=>c.frustrated).length;
     const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
     const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
-    const totalDur=Math.round(calls.reduce((a,c)=>a+c.dur,0)/60);
+    const totalDur=sumBilledMinutes(calls);
     const leadScore=Math.round((hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2);
     const intents={};calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
     const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
