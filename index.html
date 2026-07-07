@@ -351,11 +351,15 @@ footer b{color:var(--navy)!important}
 .opf-rowlabel{font-size:11.5px;font-weight:800;color:var(--muted)}
 .opf-heatcell{border-radius:10px;padding:10px 4px;text-align:center;font-size:12px;font-weight:800}
 .opf-heatcell-empty{background:#f1f4f9;color:var(--faint);font-weight:600}
+.tabular{font-variant-numeric:tabular-nums}
 .opf-cmp-table{width:100%;border-collapse:collapse;font-size:13px}
 .opf-cmp-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:800;padding:0 12px 10px;border-bottom:1px solid var(--line)}
 .opf-cmp-table td{padding:11px 12px;border-bottom:1px solid var(--line2)}
 .opf-cmp-table th:first-child,.opf-cmp-table td:first-child{padding-left:0}
 .opf-cmp-table tr:last-child td{border-bottom:none}
+.opf-rate-cell{display:flex;flex-direction:column;gap:5px;min-width:64px}
+.opf-rate-bar{height:5px;background:#edf2f7;border-radius:4px;overflow:hidden}
+.opf-rate-bar div{height:100%;background:var(--navy);border-radius:4px}
 .opf-dirlabel{display:inline-flex;align-items:center;gap:6px;font-weight:800}
 .opf-dirdot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .opf-dirdot.opf-inbound{background:var(--sage)}
@@ -1387,10 +1391,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     <div class="shead"><span class="n">00.7</span><h2>Outbound Connect Performance</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Built from the Call Status column already present in the voice export.</div>
     <div class="strip" id="outboundPerfKpis"></div>
-    <div class="grid2" style="margin-top:24px">
-      <div class="panel"><h4>Disposition breakdown</h4><div class="cap">Every outbound dial in the selected period, by outcome.</div><div id="dispositionBreak"></div></div>
-      <div class="panel"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate for the 1st, 2nd, 3rd+ dial to the same lead.</div><div id="redialCurve"></div></div>
-    </div>
+    <div class="panel" style="margin-top:24px"><h4>Disposition breakdown</h4><div class="cap">Every outbound dial in the selected period, by outcome.</div><div id="dispositionBreak"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead.</div><div id="redialCurve"></div></div>
     <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block. Darker = higher connect rate.</div><div class="opf-heatmap" id="dialHeatmap"></div></div>
   </section>
 
@@ -2509,21 +2511,46 @@ function paintRedialCurve(obRecs){
   const el=$('redialCurve');
   if(!el)return;
   const byPhone=groupByPhone(obRecs);
-  const buckets=[{n:0,c:0},{n:0,c:0},{n:0,c:0},{n:0,c:0}]; // attempt 1, 2, 3, 4+
+  // Per-attempt-number success rate (every dial that was anyone's Nth call, connected or not) is a
+  // different question from "of leads we do reach, which try got there" -- both are tracked here so
+  // the one panel answers "keep redialing?" and "how many tries does it usually take?" together,
+  // instead of spreading them across separate charts.
+  const buckets=[{n:0,c:0,durSum:0,durN:0},{n:0,c:0,durSum:0,durN:0},{n:0,c:0,durSum:0,durN:0},{n:0,c:0,durSum:0,durN:0}];
+  const firstSuccessBuckets=[0,0,0,0];
+  let everConnected=0,neverReached=0,neverReachedAttempts=0;
   Object.values(byPhone).forEach(calls=>{
-    calls.slice().sort((a,b)=>a.ts-b.ts).forEach((c,i)=>{
+    const sorted=calls.slice().sort((a,b)=>a.ts-b.ts);
+    let firstConnectIdx=-1;
+    sorted.forEach((c,i)=>{
       const bi=Math.min(i,3);
       buckets[bi].n++;
-      if(normalizeDisposition(c)==='connected')buckets[bi].c++;
+      if(normalizeDisposition(c)==='connected'){
+        buckets[bi].c++;
+        buckets[bi].durSum+=Number(c.dur||0);
+        buckets[bi].durN++;
+        if(firstConnectIdx===-1)firstConnectIdx=i;
+      }
     });
+    if(firstConnectIdx>-1){everConnected++;firstSuccessBuckets[Math.min(firstConnectIdx,3)]++;}
+    else{neverReached++;neverReachedAttempts+=sorted.length;}
   });
   if(!buckets.some(b=>b.n)){el.innerHTML=emptyViewHtml('No outbound attempts in this range.');return;}
   const labels=['Attempt 1','Attempt 2','Attempt 3','Attempt 4+'];
-  const colors=['#0b1f3a','#132f55','#b08a3c','#d6b979'];
-  el.innerHTML=buckets.map((b,i)=>{
-    const pct=b.n?Math.round(b.c/b.n*100):0;
-    return `<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[i]}</span><b>${pct}% <span style="color:var(--faint);font-weight:400">(${b.n} dials)</span></b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[i]};height:100%;width:${pct}%"></div></div></div>`;
+  const rows=buckets.map((b,i)=>{
+    const connectPct=b.n?Math.round(b.c/b.n*100):0;
+    const sharePct=everConnected?Math.round(firstSuccessBuckets[i]/everConnected*100):0;
+    const avgDur=b.durN?fmtDurLabel(b.durSum/b.durN):'&mdash;';
+    return `<tr><td>${labels[i]}</td><td class="tabular">${b.n}</td>`+
+      `<td><div class="opf-rate-cell"><b class="tabular">${connectPct}%</b><div class="opf-rate-bar"><div style="width:${connectPct}%"></div></div></div></td>`+
+      `<td class="tabular">${everConnected?sharePct+'%':'&mdash;'}</td>`+
+      `<td class="tabular">${avgDur}</td></tr>`;
   }).join('');
+  const neverLine=neverReached
+    ?`<div class="cap" style="margin-top:12px;font-size:12px">${neverReached} lead${neverReached>1?'s':''} never reached in this range, averaging ${(neverReachedAttempts/neverReached).toFixed(1)} attempt${neverReachedAttempts===neverReached?'':'s'} before dialing stopped.</div>`
+    :'';
+  el.innerHTML=`<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr>`+
+    `<th>Attempt</th><th>Dials</th><th>Connect rate</th><th>Share of eventual connects</th><th>Avg duration (connected)</th>`+
+    `</tr></thead><tbody>${rows}</tbody></table></div>${neverLine}`;
 }
 function paintDialHeatmap(obRecs){
   const el=$('dialHeatmap');
