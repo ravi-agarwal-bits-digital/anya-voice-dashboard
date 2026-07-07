@@ -2428,12 +2428,18 @@ function paintDirectionSplit(){
   const inbound=base.filter(r=>normalizeDirection(r.direction)==='inbound').length;
   const outbound=base.filter(r=>normalizeDirection(r.direction)==='outbound').length;
   const unknown=Math.max(0,n-inbound-outbound);
-  const card=(cls,label,val,note)=>{const selectedClass=(cls==='all'&&SELECTED_DIRECTION==='all')||(cls===SELECTED_DIRECTION)?' selected':'';return `<div class="direction-card ${cls}${selectedClass}"><span class="dc-share">${n?Math.round(val/n*100):0}%</span><div class="dc-label">${label}</div><div class="dc-value">${val}</div><div class="dc-note">${note}</div></div>`;};
+  const card=(cls,label,val,note,pred,useRecordsBase)=>{
+    const selectedClass=(cls==='all'&&SELECTED_DIRECTION==='all')||(cls===SELECTED_DIRECTION)?' selected':'';
+    const baseRef=useRecordsBase?'RECORDS':'window.__dirBase';
+    const click=pred?` onclick="openFilteredPanel('${esc(label)}',${pred},${baseRef})" style="cursor:pointer"`:'';
+    return `<div class="direction-card ${cls}${selectedClass}"${click}><span class="dc-share">${n?Math.round(val/n*100):0}%</span><div class="dc-label">${label}</div><div class="dc-value">${val}</div><div class="dc-note">${note}</div></div>`;
+  };
+  window.__dirBase=base;
   const selected=currentDirectionLabel();
-  el.innerHTML=card('all','Current view',RECORDS.length,`${selected} after active date and direction filters.`)+
-    card('inbound','Inbound',inbound,'Calls initiated by prospects/users within the selected date range.')+
-    card('outbound','Outbound',outbound,'Calls initiated outward for follow-up, counselling, or engagement.')+
-    (unknown?card('unknown','Unknown',unknown,'Direction missing or unmapped in the export. Included only in All Calls.'): '');
+  el.innerHTML=card('all','Current view',RECORDS.length,`${selected} after active date and direction filters.`,()=>true,true)+
+    card('inbound','Inbound',inbound,'Calls initiated by prospects/users within the selected date range.',r=>normalizeDirection(r.direction)==='inbound')+
+    card('outbound','Outbound',outbound,'Calls initiated outward for follow-up, counselling, or engagement.',r=>normalizeDirection(r.direction)==='outbound')+
+    (unknown?card('unknown','Unknown',unknown,'Direction missing or unmapped in the export. Included only in All Calls.',r=>{const d=normalizeDirection(r.direction);return d!=='inbound'&&d!=='outbound';}): '');
 }
 
 // ===== OUTBOUND CONNECT PERFORMANCE =====
@@ -2481,17 +2487,21 @@ function paintDirectionCompare(){
   if(!el)return;
   const ib=directionStats('inbound'), ob=directionStats('outbound');
   if(!ib || !ob){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
+  window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='inbound');
+  window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
   const rows=[
-    ['Connect / answer rate',ib.connectPct+'%',ob.connectPct+'%'],
-    ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%'],
-    ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec)],
-    ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%'],
-    ['Quality pass rate (Green)',ib.greenPct+'%',ob.greenPct+'%']
+    ['Connect / answer rate',ib.connectPct+'%',ob.connectPct+'%',"r=>normalizeDisposition(r)==='connected'"],
+    ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%',"r=>r.leadTemp==='Hot'"],
+    ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec),'()=>true'],
+    ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
+    ['Quality pass rate (Green)',ib.greenPct+'%',ob.greenPct+'%',"r=>r.band==='Green'"]
   ];
   el.innerHTML=`<table class="opf-cmp-table"><thead><tr><th>Metric</th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
-    `<tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
+    `<tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td>`+
+      `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
+      `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
 }
 function paintDispositionBreak(obRecs){
   const el=$('dispositionBreak');
@@ -2504,7 +2514,7 @@ function paintDispositionBreak(obRecs){
   const colors={connected:C.teal,no_answer:C.hot,voicemail:C.indigo,busy:C.warm,failed:C.cold,unknown:C.muted};
   el.innerHTML=order.filter(k=>buckets[k]>0).map(k=>{
     const pct=Math.round(buckets[k]/n*100);
-    return `<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[k]}</span><b>${buckets[k]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[k]};height:100%;width:${pct}%"></div></div></div>`;
+    return `<div style="margin-bottom:14px;cursor:pointer" onclick="openFilteredPanel('${esc(labels[k])} (outbound)',r=>normalizeDisposition(r)==='${k}',window.__obRecs)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[k]}</span><b>${buckets[k]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[k]};height:100%;width:${pct}%"></div></div></div>`;
   }).join('');
 }
 function paintRedialCurve(obRecs){
@@ -2515,7 +2525,7 @@ function paintRedialCurve(obRecs){
   // different question from "of leads we do reach, which try got there" -- both are tracked here so
   // the one panel answers "keep redialing?" and "how many tries does it usually take?" together,
   // instead of spreading them across separate charts.
-  const buckets=[{n:0,c:0,durSum:0,durN:0},{n:0,c:0,durSum:0,durN:0},{n:0,c:0,durSum:0,durN:0},{n:0,c:0,durSum:0,durN:0}];
+  const buckets=[{n:0,c:0,durSum:0,durN:0,recs:[]},{n:0,c:0,durSum:0,durN:0,recs:[]},{n:0,c:0,durSum:0,durN:0,recs:[]},{n:0,c:0,durSum:0,durN:0,recs:[]}];
   const firstSuccessBuckets=[0,0,0,0];
   let everConnected=0,neverReached=0,neverReachedAttempts=0;
   Object.values(byPhone).forEach(calls=>{
@@ -2524,6 +2534,7 @@ function paintRedialCurve(obRecs){
     sorted.forEach((c,i)=>{
       const bi=Math.min(i,3);
       buckets[bi].n++;
+      buckets[bi].recs.push(c);
       if(normalizeDisposition(c)==='connected'){
         buckets[bi].c++;
         buckets[bi].durSum+=Number(c.dur||0);
@@ -2535,12 +2546,13 @@ function paintRedialCurve(obRecs){
     else{neverReached++;neverReachedAttempts+=sorted.length;}
   });
   if(!buckets.some(b=>b.n)){el.innerHTML=emptyViewHtml('No outbound attempts in this range.');return;}
+  window.__redialBuckets=buckets.map(b=>b.recs);
   const labels=['Attempt 1','Attempt 2','Attempt 3','Attempt 4+'];
   const rows=buckets.map((b,i)=>{
     const connectPct=b.n?Math.round(b.c/b.n*100):0;
     const sharePct=everConnected?Math.round(firstSuccessBuckets[i]/everConnected*100):0;
     const avgDur=b.durN?fmtDurLabel(b.durSum/b.durN):'&mdash;';
-    return `<tr><td>${labels[i]}</td><td class="tabular">${b.n}</td>`+
+    return `<tr style="cursor:pointer" onclick="openFilteredPanel('${labels[i]} (outbound)',()=>true,window.__redialBuckets[${i}])"><td>${labels[i]}</td><td class="tabular">${b.n}</td>`+
       `<td><div class="opf-rate-cell"><b class="tabular">${connectPct}%</b><div class="opf-rate-bar"><div style="width:${connectPct}%"></div></div></div></td>`+
       `<td class="tabular">${everConnected?sharePct+'%':'&mdash;'}</td>`+
       `<td class="tabular">${avgDur}</td></tr>`;
@@ -2558,7 +2570,7 @@ function paintDialHeatmap(obRecs){
   const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const blockDefs=[[0,4],[4,8],[8,12],[12,16],[16,20],[20,24]];
   const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}-${String(b[1]).padStart(2,'0')}`);
-  const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0})));
+  const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0,recs:[]})));
   obRecs.forEach(r=>{
     if(!r.d)return;
     const parts=r.d.split('-').map(Number);
@@ -2566,8 +2578,10 @@ function paintDialHeatmap(obRecs){
     const bi=blockDefs.findIndex(b=>r.h>=b[0] && r.h<b[1]);
     if(bi<0)return;
     grid[wd][bi].n++;
+    grid[wd][bi].recs.push(r);
     if(normalizeDisposition(r)==='connected')grid[wd][bi].connected++;
   });
+  window.__heatmapCells=grid;
   const stops=[[231,236,243],[201,214,232],[147,174,208],[77,106,153],[36,58,94],[11,31,58]];
   function heatColor(pct){
     const t=Math.max(0,Math.min(1,pct/75));
@@ -2578,10 +2592,10 @@ function paintDialHeatmap(obRecs){
   let html='<div></div>'+blockLabels.map(l=>`<div class="opf-hdr">${l}</div>`).join('');
   dayNames.forEach((day,ri)=>{
     html+=`<div class="opf-rowlabel">${day}</div>`;
-    grid[ri].forEach(cell=>{
+    grid[ri].forEach((cell,bi)=>{
       if(!cell.n){html+='<div class="opf-heatcell opf-heatcell-empty">–</div>';return;}
       const pct=Math.round(cell.connected/cell.n*100);
-      html+=`<div class="opf-heatcell" style="background:${heatColor(pct)};color:${pct>45?'#fff':'#0b1f3a'}" title="${cell.n} dials">${pct}%</div>`;
+      html+=`<div class="opf-heatcell" style="background:${heatColor(pct)};color:${pct>45?'#fff':'#0b1f3a'};cursor:pointer" title="${cell.n} dials -- click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)">${pct}%</div>`;
     });
   });
   el.innerHTML=html;
@@ -2618,12 +2632,13 @@ function paintOutboundPerf(){
     if(idx>-1){connectedLeads++;attemptsSum+=idx+1;}
   });
   const avgAttempts=connectedLeads?(attemptsSum/connectedLeads).toFixed(1):'0.0';
+  window.__obRecs=obRecs;
   if(kpiEl)kpiEl.innerHTML=[
-    ["good",connectPct+"%","Connect rate ("+buckets.connected+" of "+n+" dials)"],
-    ["hot",noAnswerPct+"%","No-answer rate"],
-    ["neut",voicemailPct+"%","Voicemail rate"],
-    ["neut",avgAttempts,"Avg attempts per connected lead"]
-  ].map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
+    ["good",connectPct+"%","Connect rate ("+buckets.connected+" of "+n+" dials)",r=>normalizeDisposition(r)==='connected'],
+    ["hot",noAnswerPct+"%","No-answer rate",r=>normalizeDisposition(r)==='no_answer'],
+    ["neut",voicemailPct+"%","Voicemail rate",r=>normalizeDisposition(r)==='voicemail'],
+    ["neut",avgAttempts,"Avg attempts per connected lead",()=>true]
+  ].map(c=>`<div class="kpi ${c[0]}" onclick="openFilteredPanel('${esc(c[2])}',${c[3]},window.__obRecs)" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
 
   paintDispositionBreak(obRecs);
   paintRedialCurve(obRecs);
@@ -2989,21 +3004,22 @@ function paintManagementBrief(){
   const curIn=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='inbound')):null;
   const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
   const kpiDefs=[
-    ['good','Enquiries','n',false],
-    ['hot','Callbacks','callbacks',false],
-    ['neut','Priority prospects','hot',false],
-    ['good','AI confidence','avgConf',true],
-    ['neut','Attention signals','friction',false]
+    ['good','Enquiries','n',false,()=>true],
+    ['hot','Callbacks','callbacks',false,r=>r.callback],
+    ['neut','Priority prospects','hot',false,r=>r.leadTemp==='Hot'],
+    ['good','AI confidence','avgConf',true,()=>true],
+    ['neut','Attention signals','friction',false,r=>r.frustrated]
   ];
-  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,isPct])=>{
+  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,isPct,pred])=>{
     const val=cur[key],prevVal=old[key];
     const fmt=n=>isPct?n+'%':n;
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
     const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key])} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key])} out</div>`:'';
-    return `<div class="kpi ${cls}"><div class="b"></div><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
+    return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
   }).join('');
+  window.__briefRecs=recs;
 }
 function printManagementBrief(){
   paintManagementBrief();
@@ -3055,15 +3071,16 @@ function paintKPIs(o){
   const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
   const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
   const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
-  // 4th field = drill-down key (empty = not clickable). Only count/set-based KPIs drill down.
+  // 4th field = drill-down key -- every KPI here is now a count/set over the same "all" record set,
+  // even the averages (minutes, cost, duration), so clicking any of them shows what it was computed from.
   const cards=[
     ["neut",o.n,"Total enquiries","all"],
-    ["hot",totalMins+" mins","Advisory minutes",""],
-    ["hot","₹"+totalCost,"Estimated operating cost",""],
+    ["hot",totalMins+" mins","Advisory minutes","all"],
+    ["hot","₹"+totalCost,"Estimated operating cost","all"],
     ["hot",pct(o.hot)+"%","Priority prospects ("+o.hot+")","hot"],
     ["good",o.india+" India · "+o.intl+" International","India / International","geo"],
     ["good",Math.round(o.avgConf)+"%","AI confidence","conf"],
-    ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration",""],
+    ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration","all"],
     ["good",pct(o.green)+"%","Quality pass rate","green"]
   ];
   $("kpis").innerHTML=cards.map(c=>{
@@ -3084,9 +3101,48 @@ function jumpToSection(id){
 }
 
 // ===== KPI DRILL-DOWN SIDEBAR =====
+// Shared by the handful of hardcoded keys below (openKpiPanel) and by openFilteredPanel, which every
+// other chart/bar/KPI across the dashboard calls directly with its own predicate -- one panel
+// implementation, so every clickable number opens the same "here are the actual calls" view.
 function closeKpiPanel(){
   $("kpiPanel").style.transform='translateX(100%)';
   $("kpiOverlay").style.display='none';
+}
+function showKpiPanel(title,bodyHtml){
+  $("kpiPanelTitle").textContent=title;
+  $("kpiPanelBody").innerHTML=bodyHtml;
+  $("kpiOverlay").style.display='block';
+  $("kpiPanel").style.transform='translateX(0)';
+}
+function statsGridHtml(stats){
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">${stats.map(s=>`<div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:12px"><div style="font-size:20px;font-weight:800;font-family:'Source Serif 4',serif;color:var(--teal)">${s[1]}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(String(s[0]))}</div></div>`).join("")}</div>`;
+}
+function recordListHtml(rows){
+  if(!rows.length)return emptyViewHtml("No calls match this selection");
+  const sorted=rows.slice().sort((a,b)=>b.ts-a.ts).slice(0,100);
+  return `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${rows.length} record${rows.length!==1?'s':''}${rows.length>100?' (showing latest 100)':''}</div>`+
+    sorted.map(r=>{
+      const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
+      return `<div onclick="closeKpiPanel();explorerOpen('${esc(r.from)}')" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'Inter',monospace;color:var(--cream)">${maskPhone(r.from)}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
+        <div style="color:var(--muted);font-size:10px">${esc(r.intent)} · ${formatDuration(r.dur)} · Conf ${Math.round(r.conf)}% · ${formatCallTime(r)}</div>
+        ${r.summary?`<div style="color:var(--faint);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.summary)}</div>`:""}
+      </div>`;
+    }).join("");
+}
+function defaultDrillStats(rows){
+  const n=rows.length;
+  if(!n)return[["Matching calls",0]];
+  const avgConf=Math.round(rows.reduce((a,r)=>a+r.conf,0)/n);
+  const avgNeed=Math.round(rows.reduce((a,r)=>a+r.need,0)/n);
+  return[["Matching calls",n],["Avg confidence",avgConf+"%"],["Avg need",avgNeed],["Hot leads",rows.filter(r=>r.leadTemp==="Hot").length],["Callbacks",rows.filter(r=>r.callback).length],["International",rows.filter(r=>classifyPhone(r.from).intl).length]];
+}
+// The one function nearly every chart/bar/KPI across the dashboard calls on click: filter down to the
+// exact calls behind a number and show them. baseRows defaults to the current filtered view (RECORDS);
+// pass a different base (e.g. outboundRecordsInView()) when the chart itself is scoped differently.
+function openFilteredPanel(title,predicate,baseRows){
+  const rows=(baseRows||RECORDS).filter(predicate);
+  showKpiPanel(title, statsGridHtml(defaultDrillStats(rows)) + recordListHtml(rows));
 }
 function openKpiPanel(key){
   // Build the record set + title for each drill-down key
@@ -3118,71 +3174,52 @@ function openKpiPanel(key){
     stats=[["Avg confidence",avgC+"%"],["High (≥80%)",cc.high],["Mid (50-79%)",cc.mid],["Low (<50%)",cc.low]];
   }
 
-  $("kpiPanelTitle").textContent=title;
-  const statsHtml=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">${stats.map(s=>`<div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:12px"><div style="font-size:20px;font-weight:800;font-family:'Source Serif 4',serif;color:var(--teal)">${s[1]}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(String(s[0]))}</div></div>`).join("")}</div>`;
-
-  // Record list (cap to keep panel snappy)
-  let listHtml="";
-  if(key!=="conf"){
-    const sorted=rows.sort((a,b)=>b.ts-a.ts).slice(0,100);
-    listHtml=`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${rows.length} record${rows.length!==1?'s':''}${rows.length>100?' (showing latest 100)':''}</div>`+
-      sorted.map(r=>{
-        const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
-        return `<div onclick="closeKpiPanel();explorerOpen('${esc(r.from)}')" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
-          <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'Inter',monospace;color:var(--cream)">${maskPhone(r.from)}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
-          <div style="color:var(--muted);font-size:10px">${esc(r.intent)} · ${formatDuration(r.dur)} · Conf ${Math.round(r.conf)}% · ${formatCallTime(r)}</div>
-          ${r.summary?`<div style="color:var(--faint);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.summary)}</div>`:""}
-        </div>`;
-      }).join("");
-  }else{
-    listHtml=`<p style="font-size:12px;color:var(--muted);line-height:1.6">Anya's confidence is the model's certainty in its answers. Higher confidence strongly correlates with hot leads — see the "Call outcomes by confidence" panel in Section 02 for the conversion breakdown.</p>`;
-  }
-
-  $("kpiPanelBody").innerHTML=statsHtml+listHtml;
-  $("kpiOverlay").style.display='block';
-  $("kpiPanel").style.transform='translateX(0)';
+  const listHtml=key!=="conf"
+    ?recordListHtml(rows)
+    :`<p style="font-size:12px;color:var(--muted);line-height:1.6">Anya's confidence is the model's certainty in its answers. Higher confidence strongly correlates with hot leads — see the "Call outcomes by confidence" panel in Section 02 for the conversion breakdown.</p>`;
+  showKpiPanel(title, statsGridHtml(stats)+listHtml);
 }
 
 function paintFunnel(o){
   if(!o.n){$("funnel").innerHTML=emptyViewHtml("No calls available for this view");return;}
   const pct=a=>Math.round(a/o.n*100);
   const F=[
-    [o.n,"Calls started","#5a9bd8",100],
-    [o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*60)+30],
-    [o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+20],
-    [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",Math.round(o.cold/o.n*40)+12]
+    [o.n,"Calls started","#5a9bd8",100,()=>true],
+    [o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*60)+30,r=>r.leadTemp==='Hot'],
+    [o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+20,r=>r.leadTemp==='Warm'],
+    [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",Math.round(o.cold/o.n*40)+12,r=>r.leadTemp!=='Hot'&&r.leadTemp!=='Warm']
   ];
-  let h="";F.forEach((f,i)=>{h+=`<div class="fstep" style="background:${f[2]};width:${f[3]}%"><span class="fn">${f[0]}</span><span class="ft">${f[1]}</span><span class="fp">${pct(f[0])}%</span></div>`;});
+  let h="";F.forEach((f,i)=>{h+=`<div class="fstep" style="background:${f[2]};width:${f[3]}%;cursor:pointer" onclick="openFilteredPanel('${esc(f[1])}',${f[4]})"><span class="fn">${f[0]}</span><span class="ft">${f[1]}</span><span class="fp">${pct(f[0])}%</span></div>`;});
   $("funnel").innerHTML=h;
 }
 
 function paintTempQual(o){
   const temps=[["Hot",o.confQual.Hot],["Warm",o.confQual.Warm],["Cold",o.confQual.Cold]];
-  $("tempQual").innerHTML=temps.map(t=>{const e=t[1];const c=e.n?Math.round(e.conf/e.n):0,n=e.n?Math.round(e.need/e.n):0;return `<div style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span><b>${t[0]}</b> (${e.n} calls)</span><span style="color:var(--muted)">Conf <b>${c}%</b> · Need <b>${n}</b></span></div><div style="background:#0c121b;border-radius:5px;height:12px;overflow:hidden"><div style="background:${C.teal};height:100%;width:${Math.min(c/100*100,100)}%"></div></div></div>`;}).join("");
+  $("tempQual").innerHTML=temps.map(t=>{const e=t[1];const c=e.n?Math.round(e.conf/e.n):0,n=e.n?Math.round(e.need/e.n):0;return `<div style="margin-bottom:16px;cursor:pointer" onclick="openFilteredPanel('${t[0]} leads',r=>r.leadTemp==='${t[0]}')"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span><b>${t[0]}</b> (${e.n} calls)</span><span style="color:var(--muted)">Conf <b>${c}%</b> · Need <b>${n}</b></span></div><div style="background:#0c121b;border-radius:5px;height:12px;overflow:hidden"><div style="background:${C.teal};height:100%;width:${Math.min(c/100*100,100)}%"></div></div></div>`;}).join("");
 }
 
 function paintConfDist(o){
   const sorted=Object.entries(o.confBands).sort((a,b)=>Number(a[0])-Number(b[0]));
   if(!sorted.length){$("confDist").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No confidence data in this range.</div>`;return;}
   const max=Math.max(...sorted.map(d=>d[1]),1);
-  $("confDist").innerHTML=sorted.map(d=>`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${d[0]}% confidence</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:linear-gradient(90deg,${C.teal},${C.green});height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
+  $("confDist").innerHTML=sorted.map(d=>`<div style="margin-bottom:14px;cursor:pointer" onclick="openFilteredPanel('${d[0]}% confidence band',r=>Math.round(r.conf/20)*20===${Number(d[0])})"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${d[0]}% confidence</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:linear-gradient(90deg,${C.teal},${C.green});height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
 }
 
 function paintConfImpact(o){
   const cc=o.confConv;
   if(!cc||(cc.low.n+cc.mid.n+cc.high.n)===0){$("confImpact").innerHTML=`<div style="color:var(--faint);text-align:center;padding:30px">No data in this range.</div>`;return;}
   const pct=b=>b.n?Math.round(b.hot/b.n*100):0;
-  const row=(label,band,col)=>`<div style="padding:11px 0;border-bottom:1px solid var(--line)">
+  const row=(label,band,col,pred)=>`<div style="padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="openFilteredPanel('${label.replace(/&lt;|&gt;/g,'')}',${pred})">
     <div style="font-size:13.5px;display:flex;justify-content:space-between;margin-bottom:5px"><span>${label} <span style="color:var(--faint)">(${band.n} calls)</span></span><b style="color:${col}">${pct(band)}% hot</b></div>
     <div style="background:#0c121b;border-radius:5px;height:6px"><div style="background:${col};height:100%;border-radius:5px;width:${pct(band)}%"></div></div>
   </div>`;
-  $("confImpact").innerHTML=row("Low confidence (&lt;50%)",cc.low,C.muted)+row("Mid confidence (50-80%)",cc.mid,C.teal)+row("High confidence (&gt;80%)",cc.high,C.green);
+  $("confImpact").innerHTML=row("Low confidence (&lt;50%)",cc.low,C.muted,"r=>r.conf<50")+row("Mid confidence (50-80%)",cc.mid,C.teal,"r=>r.conf>=50&&r.conf<80")+row("High confidence (&gt;80%)",cc.high,C.green,"r=>r.conf>=80");
 }
 
 function paintIntents(o){
   const sorted=Object.entries(o.intent).filter(d=>d[1]>0).sort((a,b)=>b[1]-a[1]);
   if(!sorted.length){$("intents").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No intent data in this range.</div>`;return;}
-  $("intents").innerHTML=sorted.map(d=>`<div class="intitem"><span class="in">${esc(d[0])}</span><span class="ct">${d[1]}</span></div>`).join("");
+  $("intents").innerHTML=sorted.map(d=>`<div class="intitem" style="cursor:pointer" onclick="openFilteredPanel('${esc(d[0])} theme',r=>r.intent==='${esc(d[0]).replace(/'/g,"\\'")}')"><span class="in">${esc(d[0])}</span><span class="ct">${d[1]}</span></div>`).join("");
 }
 
 function paintDurBands(o){
@@ -3192,7 +3229,8 @@ function paintDurBands(o){
   if(!sorted.length){$("durBands").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px">No duration data.</div>`;return;}
   const max=Math.max(...sorted.map(d=>d[1]),1);
   const col={"<30s":C.teal,"30-90s":C.green,"90-180s":C.amber,"180s+":C.hot};
-  $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
+  const durPred={"<30s":"r=>r.dur<=30","30-90s":"r=>r.dur>30&&r.dur<=90","90-180s":"r=>r.dur>90&&r.dur<=180","180s+":"r=>r.dur>180"};
+  $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${d[0]} duration',${durPred[d[0]]})"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
 }
 
 function paintMsgImpact(o){
@@ -3200,9 +3238,9 @@ function paintMsgImpact(o){
   const h0=o.msgQual[0].hot||0;
   const h1=o.msgQual[1]?.hot||0;
   const h2=o.msgQual[2]?.hot||0;
-  $("msgImpact").innerHTML=`<div style="padding:11px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between"><span style="font-size:13px">Short (&lt;5 msg)</span><b style="color:${C.muted}">${Math.round(h0)}% hot</b></div>
-    <div style="padding:11px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between"><span style="font-size:13px">Medium (5-20 msg)</span><b style="color:${C.teal}">${Math.round(h1)}% hot</b></div>
-    <div style="padding:11px 0;display:flex;justify-content:space-between"><span style="font-size:13px">Long (&gt;20 msg)</span><b style="color:${C.hot}">${Math.round(h2)}% hot</b></div>`;
+  $("msgImpact").innerHTML=`<div style="padding:11px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;cursor:pointer" onclick="openFilteredPanel('Short conversations (&lt;5 msg)',r=>r.msg<5)"><span style="font-size:13px">Short (&lt;5 msg)</span><b style="color:${C.muted}">${Math.round(h0)}% hot</b></div>
+    <div style="padding:11px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;cursor:pointer" onclick="openFilteredPanel('Medium conversations (5-20 msg)',r=>r.msg>=5&&r.msg<=20)"><span style="font-size:13px">Medium (5-20 msg)</span><b style="color:${C.teal}">${Math.round(h1)}% hot</b></div>
+    <div style="padding:11px 0;display:flex;justify-content:space-between;cursor:pointer" onclick="openFilteredPanel('Long conversations (&gt;20 msg)',r=>r.msg>20)"><span style="font-size:13px">Long (&gt;20 msg)</span><b style="color:${C.hot}">${Math.round(h2)}% hot</b></div>`;
 }
 
 function dayChart(daily){
@@ -3240,25 +3278,27 @@ function showChartDetail(type,key,val){
     const el=$("dayDetail");if(!el)return;
     const dt=new Date(key);const wd=isNaN(dt)?"":dt.toLocaleDateString('en-IN',{weekday:'long'});
     el.innerHTML=`Date <b>${key}</b>${wd?" ("+wd+")":""} — <b>${val}</b> call${val!==1?'s':''}`;
+    openFilteredPanel(`${key} calls`,r=>r.d===key);
   }else{
     const el=$("hourDetail");if(!el)return;
     const h=key;const label=`${h%12||12}:00 ${h<12?'AM':'PM'} – ${(h+1)%12||12}:00 ${(h+1)<12||(h+1)===24?'AM':'PM'}`;
     el.innerHTML=`Hour <b>${label}</b> — <b>${val}</b> call${val!==1?'s':''}`;
+    openFilteredPanel(`${label} calls`,r=>r.h===h);
   }
 }
 
 function paintBandBars(o){
   const tot=o.green+o.amber+o.red;
   if(!tot){$("bandBars").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No review band data in this range.</div>`;return;}
-  const data=[{l:"Green (pass)",v:o.green,c:C.green},{l:"Amber (review)",v:o.amber,c:C.amber},{l:"Red (fail)",v:o.red,c:C.hot}];
-  $("bandBars").innerHTML=data.map(d=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
+  const data=[{l:"Green (pass)",v:o.green,c:C.green,b:"Green"},{l:"Amber (review)",v:o.amber,c:C.amber,b:"Amber"},{l:"Red (fail)",v:o.red,c:C.hot,b:"Red"}];
+  $("bandBars").innerHTML=data.map(d=>`<div style="margin-bottom:15px;cursor:pointer" onclick="openFilteredPanel('${d.l}',r=>r.band==='${d.b}')"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
 }
 
 function paintGeo(o){
   const tot=o.india+o.intl;
   if(!tot){$("geoSplit").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No data in this range.</div>`;$("geoCountries").innerHTML="";return;}
-  const split=[{l:"India",v:o.india,c:C.teal},{l:"International",v:o.intl,c:C.warm}];
-  $("geoSplit").innerHTML=split.map(d=>`<div style="margin-bottom:15px"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
+  const split=[{l:"India",v:o.india,c:C.teal,intl:false},{l:"International",v:o.intl,c:C.warm,intl:true}];
+  $("geoSplit").innerHTML=split.map(d=>`<div style="margin-bottom:15px;cursor:pointer" onclick="openFilteredPanel('${d.l} leads',r=>classifyPhone(r.from).intl===${d.intl})"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
 
   // International leads grouped by country
   const byCountry={};
@@ -3269,7 +3309,7 @@ function paintGeo(o){
   const entries=Object.entries(byCountry).sort((a,b)=>b[1]-a[1]);
   if(!entries.length){$("geoCountries").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No international leads in this range.</div>`;return;}
   const max=Math.max(...entries.map(e=>e[1]),1);
-  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v}</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
+  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px;cursor:pointer" onclick="openFilteredPanel('${k}',r=>esc(classifyPhone(r.from).country)==='${k}')"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v}</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
 }
 
 function exportGeo(){
@@ -3512,9 +3552,16 @@ function paintFrustBreak(o){
   causes.other=frustrated.length-(causes.high_need+causes.callback_issue+causes.access_issue+causes.technical);
   const labels={high_need:"High Intent/Need",callback_issue:"Callback/Follow-up",access_issue:"Access/Enrollment",technical:"Technical Issue",other:"Other"};
   const colors={high_need:C.hot,callback_issue:C.warm,access_issue:C.amber,technical:C.coral,other:C.muted};
+  const preds={
+    high_need:"r=>r.frustrated&&r.need>75",
+    callback_issue:"r=>r.frustrated&&/callback|call.*back/i.test(r.trans)",
+    access_issue:"r=>r.frustrated&&/access|enrolled|student/i.test(r.trans)",
+    technical:"r=>r.frustrated&&/audio|technical|connection/i.test(r.trans)",
+    other:"r=>r.frustrated&&!(r.need>75)&&!/callback|call.*back/i.test(r.trans)&&!/access|enrolled|student/i.test(r.trans)&&!/audio|technical|connection/i.test(r.trans)"
+  };
   $("frustBreak").innerHTML=Object.entries(causes).filter(e=>e[1]>0).map(e=>{
     const pct=Math.round(e[1]/frustrated.length*100);
-    return`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[e[0]]}</span><b>${e[1]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[e[0]]};height:100%;width:${e[1]/frustrated.length*100}%"></div></div></div>`;
+    return`<div style="margin-bottom:14px;cursor:pointer" onclick="openFilteredPanel('${labels[e[0]]} (attention)',${preds[e[0]]})"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[e[0]]}</span><b>${e[1]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[e[0]]};height:100%;width:${e[1]/frustrated.length*100}%"></div></div></div>`;
   }).join("");
 }
 
@@ -3522,7 +3569,7 @@ function paintFrustCost(o){
   const frustrated=RECORDS.filter(r=>r.frustrated);
   const frustMinutes=sumBilledMinutes(frustrated);
   const frustCost=frustMinutes*5;
-  $("frustCost").innerHTML=`<div style="font-size:32px;font-weight:900;color:var(--hot);margin-bottom:12px">₹${frustCost}</div><div style="font-size:12px;color:var(--muted);line-height:1.6"><b>${frustMinutes} minutes</b> of frustrated calls<br>${frustrated.length} calls × avg ${Math.round(frustrated[0]?.dur||0)}s<br><br><span style="color:var(--faint)">At ₹5/min cost</span></div>`;
+  $("frustCost").innerHTML=`<div style="cursor:pointer" onclick="openFilteredPanel('Attention-required calls',r=>r.frustrated)"><div style="font-size:32px;font-weight:900;color:var(--hot);margin-bottom:12px">₹${frustCost}</div><div style="font-size:12px;color:var(--muted);line-height:1.6"><b>${frustMinutes} minutes</b> of frustrated calls<br>${frustrated.length} calls × avg ${Math.round(frustrated[0]?.dur||0)}s<br><br><span style="color:var(--faint)">At ₹5/min cost</span></div></div>`;
 }
 
 // Shared helper: group records by phone number (built once, reused by all sections)
