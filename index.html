@@ -343,6 +343,33 @@ footer b{color:var(--navy)!important}
 .callback-preferred.unspecified b{color:#7a8797!important}
 </style>
 
+<style id="outbound-connect-performance">
+.opf-scope-note{display:inline-flex;align-items:center;font-size:11px;font-weight:700;color:var(--gold);background:#fff8ea;border:1px solid rgba(176,138,60,.3);border-radius:999px;padding:4px 10px;margin-left:8px;vertical-align:middle}
+.opf-hidden-note{text-align:center;color:var(--faint);font-size:12.5px;padding:26px;border:1px dashed var(--line);border-radius:20px;background:#fff}
+.opf-heatmap{display:grid;grid-template-columns:56px repeat(6,1fr);gap:6px;align-items:center;margin-top:6px}
+.opf-hdr{font-size:10.5px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;text-align:center;padding-bottom:4px}
+.opf-rowlabel{font-size:11.5px;font-weight:800;color:var(--muted)}
+.opf-heatcell{border-radius:10px;padding:10px 4px;text-align:center;font-size:12px;font-weight:800}
+.opf-heatcell-empty{background:#f1f4f9;color:var(--faint);font-weight:600}
+.opf-cmp-table{width:100%;border-collapse:collapse;font-size:13px}
+.opf-cmp-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:800;padding:0 12px 10px;border-bottom:1px solid var(--line)}
+.opf-cmp-table td{padding:11px 12px;border-bottom:1px solid var(--line2)}
+.opf-cmp-table th:first-child,.opf-cmp-table td:first-child{padding-left:0}
+.opf-cmp-table tr:last-child td{border-bottom:none}
+.opf-dirlabel{display:inline-flex;align-items:center;gap:6px;font-weight:800}
+.opf-dirdot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.opf-dirdot.opf-inbound{background:var(--sage)}
+.opf-dirdot.opf-outbound{background:var(--gold)}
+.opf-sla-strip{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.opf-sla-chip{display:flex;align-items:center;gap:8px;border-radius:14px;padding:9px 13px;font-size:12.5px;font-weight:700;border:1px solid var(--line2);background:#f8fafc}
+.opf-sla-n{font-family:'Source Serif 4',Georgia,serif;font-size:18px;font-weight:700}
+.opf-sla-chip.opf-ontime .opf-sla-n{color:var(--sage)}
+.opf-sla-chip.opf-due .opf-sla-n{color:var(--amber)}
+.opf-sla-chip.opf-overdue{background:rgba(163,58,58,.06);border-color:rgba(163,58,58,.22)}
+.opf-sla-chip.opf-overdue .opf-sla-n{color:var(--burgundy)}
+@media(max-width:860px){.opf-heatmap{grid-template-columns:44px repeat(6,1fr);gap:4px}.opf-heatcell{padding:7px 2px;font-size:10.5px}}
+</style>
+
 <style id="load-state-hardening">
 /* Loading/error states must not show the dashboard chrome/sidebar */
 body.dashboard-loading #mainShell,
@@ -1390,6 +1417,26 @@ window.addEventListener('DOMContentLoaded',()=>{
   <section id="sec-direction" class="direction-overview">
     <div class="shead"><span class="n">00</span><h2>Call Flow Overview</h2></div>
     <div class="direction-summary" id="directionSummary"></div>
+    <div class="panel" style="margin-top:16px">
+      <div class="shead" style="margin-bottom:14px"><h4 style="font-family:'Source Serif 4',serif;font-size:15px;font-weight:600">Inbound vs Outbound at a glance</h4></div>
+      <div class="cap" style="margin-top:-8px;margin-bottom:4px">Same metrics, both directions, side by side &mdash; always shown regardless of the view toggle above.</div>
+      <div style="overflow-x:auto" id="dirCompareTable"></div>
+    </div>
+  </section>
+
+  <section id="sec-outbound-perf">
+    <div class="shead"><span class="n">00.7</span><h2>Outbound Connect Performance</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">Built from the Call Status column already present in the voice export.</div>
+    <div class="strip" id="outboundPerfKpis"></div>
+    <div class="grid2" style="margin-top:24px">
+      <div class="panel"><h4>Disposition breakdown</h4><div class="cap">Every outbound dial in the selected period, by outcome.</div><div id="dispositionBreak"></div></div>
+      <div class="panel"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate for the 1st, 2nd, 3rd+ dial to the same lead.</div><div id="redialCurve"></div></div>
+    </div>
+    <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block. Darker = higher connect rate.</div><div class="opf-heatmap" id="dialHeatmap"></div></div>
+  </section>
+
+  <section id="sec-outbound-perf-hidden" style="display:none">
+    <div class="opf-hidden-note">Outbound Connect Performance is hidden in Inbound view &mdash; connect, no-answer, and voicemail rates aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
   </section>
 
   <!-- Profile drawer: opens in-place without scrolling the dashboard -->
@@ -1468,6 +1515,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 
   <section id="sec-callbacks"><div class="shead"><span class="n">09</span><h2>Callback requests</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
     <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number, reason, and detected callback window where available. <b id="cbCount" style="color:var(--hot)"></b> calls requiring follow-up.</div>
+    <div id="cbSla" style="margin-bottom:16px"></div>
     <div class="queue-filter-label">Callback queue filter</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
     <div id="cbList" style="max-height:600px;overflow-y:auto"></div></div></section>
 
@@ -1590,7 +1638,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   updateMobileNavShadow();
 });
 
-const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
+const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",indigo:"#5b47d6",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
 const $=id=>document.getElementById(id);
 let RECORDS=[], SRC="";
 
@@ -1910,7 +1958,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
   closeUserSearch();
 }
@@ -2204,9 +2252,10 @@ function titleCaseSmall(s){
   return String(s||'').replace(/\b\w/g,m=>m.toUpperCase());
 }
 
-function preferredCallbackWindow(row, transcript, summary, callIso){
+function resolveCallbackWindow(row, transcript, summary, callIso){
   // Detected callback window is extracted from transcript/summary and normalized to an actual date + time when possible.
   // We deliberately do not invent a callback window when both date and timing are missing.
+  // Returns {date, label}: `date` is a real Date (or null) so callers can do SLA/aging math; `label` is the display string.
   const months={jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,sept:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
   const monNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const weekdays={sunday:0,sun:0,monday:1,mon:1,tuesday:2,tue:2,tues:2,wednesday:3,wed:3,thursday:4,thu:4,thur:4,thurs:4,friday:5,fri:5,saturday:6,sat:6};
@@ -2317,12 +2366,12 @@ function preferredCallbackWindow(row, transcript, summary, callIso){
     for(const scope of candidateScopes(source)){
       const d=resolveDate(scope);
       const t=extractTime(scope);
-      if(d && t)return `${fmtDate(d)} · ${t}`;
-      if(t)return `${fmtDate(base)} · ${t}`;
-      if(d)return `${fmtDate(d)} · Time not specified`;
+      if(d && t)return{date:d,label:`${fmtDate(d)} · ${t}`};
+      if(t)return{date:base,label:`${fmtDate(base)} · ${t}`};
+      if(d)return{date:d,label:`${fmtDate(d)} · Time not specified`};
     }
   }
-  return 'Not specified';
+  return{date:null,label:'Not specified'};
 }
 
 function normFieldName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
@@ -2441,6 +2490,212 @@ function paintDirectionSplit(){
     (unknown?card('unknown','Unknown',unknown,'Direction missing or unmapped in the export. Included only in All Calls.'): '');
 }
 
+// ===== OUTBOUND CONNECT PERFORMANCE =====
+// Classifies each call's outcome from the "Status"/"Call Status" export column (parsed into r.status
+// but otherwise unused elsewhere in the dashboard). Falls back to call shape (duration/messages) when
+// the status text is blank or doesn't match a known dialer vocabulary, so a missing/unfamiliar Status
+// column degrades to "unknown" instead of a wrong bucket.
+function normalizeDisposition(r){
+  const s=String(r.status||'');
+  if(/voicemail|voice\s*mail|answering\s*machine|\bvm\b/.test(s))return 'voicemail';
+  if(/no.?answer|unanswered|not\s*answered|no\s*response|missed|ring.?out/.test(s))return 'no_answer';
+  if(/\bbusy\b/.test(s))return 'busy';
+  if(/fail|error|drop|reject|declin|invalid|do.?not.?call|\bdnc\b|blocked|congestion|cancel|disconnect/.test(s))return 'failed';
+  if(/answer|connect|complete|success|\btalk/.test(s))return 'connected';
+  if(!s){
+    if(r.dur>=10 && (r.msg>0 || r.trans))return 'connected';
+    if(r.dur===0)return 'no_answer';
+  }
+  return 'unknown';
+}
+function dispositionCounts(recs){
+  const buckets={connected:0,no_answer:0,voicemail:0,busy:0,failed:0,unknown:0};
+  recs.forEach(r=>{buckets[normalizeDisposition(r)]++;});
+  return buckets;
+}
+// Outbound Connect Performance is scoped to outbound calls only, regardless of the All/Inbound/Outbound
+// toggle — blending in inbound calls (which are connected by definition) would inflate the connect rate.
+function outboundRecordsInView(){
+  return ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)==='outbound');
+}
+function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
+function directionStats(dir){
+  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)===dir);
+  const n=recs.length;
+  if(!n)return null;
+  const connected=recs.filter(r=>normalizeDisposition(r)==='connected').length;
+  const hot=recs.filter(r=>r.leadTemp==='Hot').length;
+  const green=recs.filter(r=>r.band==='Green').length;
+  const avgDurSec=recs.reduce((a,r)=>a+r.dur,0)/n;
+  const avgConf=recs.reduce((a,r)=>a+r.conf,0)/n;
+  return{n,connectPct:Math.round(connected/n*100),hotPct:Math.round(hot/n*100),avgDurSec,avgConf:Math.round(avgConf),greenPct:Math.round(green/n*100)};
+}
+function paintDirectionCompare(){
+  const el=$('dirCompareTable');
+  if(!el)return;
+  const ib=directionStats('inbound'), ob=directionStats('outbound');
+  if(!ib || !ob){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
+  const rows=[
+    ['Connect / answer rate',ib.connectPct+'%',ob.connectPct+'%'],
+    ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%'],
+    ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec)],
+    ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%'],
+    ['Quality pass rate (Green)',ib.greenPct+'%',ob.greenPct+'%']
+  ];
+  el.innerHTML=`<table class="opf-cmp-table"><thead><tr><th>Metric</th>`+
+    `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
+    `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
+    `<tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
+}
+function paintDispositionBreak(obRecs){
+  const el=$('dispositionBreak');
+  if(!el)return;
+  const n=obRecs.length;
+  if(!n){el.innerHTML=emptyViewHtml('No outbound calls in this range.');return;}
+  const buckets=dispositionCounts(obRecs);
+  const order=['connected','no_answer','voicemail','busy','failed','unknown'];
+  const labels={connected:'Connected',no_answer:'No answer',voicemail:'Voicemail',busy:'Busy',failed:'Failed / dropped',unknown:'Unknown'};
+  const colors={connected:C.teal,no_answer:C.hot,voicemail:C.indigo,busy:C.warm,failed:C.cold,unknown:C.muted};
+  el.innerHTML=order.filter(k=>buckets[k]>0).map(k=>{
+    const pct=Math.round(buckets[k]/n*100);
+    return `<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[k]}</span><b>${buckets[k]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[k]};height:100%;width:${pct}%"></div></div></div>`;
+  }).join('');
+}
+function paintRedialCurve(obRecs){
+  const el=$('redialCurve');
+  if(!el)return;
+  const byPhone=groupByPhone(obRecs);
+  const buckets=[{n:0,c:0},{n:0,c:0},{n:0,c:0},{n:0,c:0}]; // attempt 1, 2, 3, 4+
+  Object.values(byPhone).forEach(calls=>{
+    calls.slice().sort((a,b)=>a.ts-b.ts).forEach((c,i)=>{
+      const bi=Math.min(i,3);
+      buckets[bi].n++;
+      if(normalizeDisposition(c)==='connected')buckets[bi].c++;
+    });
+  });
+  if(!buckets.some(b=>b.n)){el.innerHTML=emptyViewHtml('No outbound attempts in this range.');return;}
+  const labels=['Attempt 1','Attempt 2','Attempt 3','Attempt 4+'];
+  const colors=['#0b1f3a','#132f55','#b08a3c','#d6b979'];
+  el.innerHTML=buckets.map((b,i)=>{
+    const pct=b.n?Math.round(b.c/b.n*100):0;
+    return `<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[i]}</span><b>${pct}% <span style="color:var(--faint);font-weight:400">(${b.n} dials)</span></b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[i]};height:100%;width:${pct}%"></div></div></div>`;
+  }).join('');
+}
+function paintDialHeatmap(obRecs){
+  const el=$('dialHeatmap');
+  if(!el)return;
+  const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const blockDefs=[[0,4],[4,8],[8,12],[12,16],[16,20],[20,24]];
+  const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}-${String(b[1]).padStart(2,'0')}`);
+  const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0})));
+  obRecs.forEach(r=>{
+    if(!r.d)return;
+    const parts=r.d.split('-').map(Number);
+    const wd=(new Date(parts[0],parts[1]-1,parts[2]).getDay()+6)%7; // 0=Mon..6=Sun
+    const bi=blockDefs.findIndex(b=>r.h>=b[0] && r.h<b[1]);
+    if(bi<0)return;
+    grid[wd][bi].n++;
+    if(normalizeDisposition(r)==='connected')grid[wd][bi].connected++;
+  });
+  const stops=[[231,236,243],[201,214,232],[147,174,208],[77,106,153],[36,58,94],[11,31,58]];
+  function heatColor(pct){
+    const t=Math.max(0,Math.min(1,pct/75));
+    const idx=t*(stops.length-1),i0=Math.floor(idx),i1=Math.min(stops.length-1,i0+1),f=idx-i0;
+    const c0=stops[i0],c1=stops[i1];
+    return `rgb(${Math.round(c0[0]+(c1[0]-c0[0])*f)},${Math.round(c0[1]+(c1[1]-c0[1])*f)},${Math.round(c0[2]+(c1[2]-c0[2])*f)})`;
+  }
+  let html='<div></div>'+blockLabels.map(l=>`<div class="opf-hdr">${l}</div>`).join('');
+  dayNames.forEach((day,ri)=>{
+    html+=`<div class="opf-rowlabel">${day}</div>`;
+    grid[ri].forEach(cell=>{
+      if(!cell.n){html+='<div class="opf-heatcell opf-heatcell-empty">–</div>';return;}
+      const pct=Math.round(cell.connected/cell.n*100);
+      html+=`<div class="opf-heatcell" style="background:${heatColor(pct)};color:${pct>45?'#fff':'#0b1f3a'}" title="${cell.n} dials">${pct}%</div>`;
+    });
+  });
+  el.innerHTML=html;
+}
+function paintOutboundPerf(){
+  const secPerf=$('sec-outbound-perf'), secHidden=$('sec-outbound-perf-hidden');
+  if(SELECTED_DIRECTION==='inbound'){
+    if(secPerf)secPerf.style.display='none';
+    if(secHidden)secHidden.style.display='block';
+    return;
+  }
+  if(secPerf)secPerf.style.display='';
+  if(secHidden)secHidden.style.display='none';
+  const scopeNote=$('outboundScopeNote');
+  if(scopeNote)scopeNote.style.display=(SELECTED_DIRECTION==='all')?'inline-flex':'none';
+
+  const obRecs=outboundRecordsInView();
+  const n=obRecs.length;
+  const kpiEl=$('outboundPerfKpis');
+  if(!n){
+    if(kpiEl)kpiEl.innerHTML=emptyViewHtml('No outbound calls in this range.');
+    paintDispositionBreak(obRecs);paintRedialCurve(obRecs);paintDialHeatmap(obRecs);
+    return;
+  }
+  const buckets=dispositionCounts(obRecs);
+  const connectPct=Math.round(buckets.connected/n*100);
+  const noAnswerPct=Math.round(buckets.no_answer/n*100);
+  const voicemailPct=Math.round(buckets.voicemail/n*100);
+  const byPhone=groupByPhone(obRecs);
+  let connectedLeads=0,attemptsSum=0;
+  Object.values(byPhone).forEach(calls=>{
+    const sorted=calls.slice().sort((a,b)=>a.ts-b.ts);
+    const idx=sorted.findIndex(c=>normalizeDisposition(c)==='connected');
+    if(idx>-1){connectedLeads++;attemptsSum+=idx+1;}
+  });
+  const avgAttempts=connectedLeads?(attemptsSum/connectedLeads).toFixed(1):'0.0';
+  if(kpiEl)kpiEl.innerHTML=[
+    ["good",connectPct+"%","Connect rate ("+buckets.connected+" of "+n+" dials)"],
+    ["hot",noAnswerPct+"%","No-answer rate"],
+    ["neut",voicemailPct+"%","Voicemail rate"],
+    ["neut",avgAttempts,"Avg attempts per connected lead"]
+  ].map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
+
+  paintDispositionBreak(obRecs);
+  paintRedialCurve(obRecs);
+  paintDialHeatmap(obRecs);
+}
+
+// ===== CALLBACK SLA =====
+// Ages each callback request's detected preferred window against the most recent call timestamp in the
+// export (this is a static offline report, not a live clock) — not outbound-specific, since callback
+// requests already come from both directions today.
+function datasetAsOf(){
+  if(!ALL_RECORDS_BACKUP.length)return new Date();
+  return new Date(Math.max(...ALL_RECORDS_BACKUP.map(r=>r.ts))*1000);
+}
+function datasetAsOfLabel(d){
+  const monNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${String(d.getDate()).padStart(2,'0')} ${monNames[d.getMonth()]} ${d.getFullYear()}`;
+}
+function classifyCallbackAging(r,asOf){
+  if(!r.cbPreferredDate)return 'ontime'; // no detected deadline -> nothing to be overdue against
+  const d=new Date(r.cbPreferredDate.getFullYear(),r.cbPreferredDate.getMonth(),r.cbPreferredDate.getDate());
+  const ref=new Date(asOf.getFullYear(),asOf.getMonth(),asOf.getDate());
+  if(d<ref)return 'overdue';
+  if(d.getTime()===ref.getTime())return 'due';
+  return 'ontime';
+}
+function paintCallbackSLA(recs){
+  const el=$('cbSla');
+  if(!el)return;
+  const cbs=recs.filter(r=>r.callback);
+  if(!cbs.length){el.innerHTML='';return;}
+  const asOf=datasetAsOf();
+  const counts={ontime:0,due:0,overdue:0};
+  cbs.forEach(r=>{counts[classifyCallbackAging(r,asOf)]++;});
+  el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Callback SLA</div>`+
+    `<div class="opf-sla-strip">`+
+    `<div class="opf-sla-chip opf-ontime"><span class="opf-sla-n">${counts.ontime}</span><span>On time</span></div>`+
+    `<div class="opf-sla-chip opf-due"><span class="opf-sla-n">${counts.due}</span><span>Due today</span></div>`+
+    `<div class="opf-sla-chip opf-overdue"><span class="opf-sla-n">${counts.overdue}</span><span>Overdue</span></div>`+
+    `</div>`+
+    `<div class="cap" style="font-size:12px;margin-top:2px">Aged against each caller's detected callback window, as of the latest call in this export (${datasetAsOfLabel(asOf)}). Recomputes with the view toggle above, same as the rest of this section.</div>`;
+}
+
 function scoreSheetRows(rows,name){
   if(!rows||!rows.length)return 0;
   const headers=Object.keys(rows[0]||{}).map(normFieldName).join('|');
@@ -2520,6 +2775,7 @@ function rowToRecord(r){
   else if(/technical|audio|connection|quality|issue/.test(low))cbReason='Technical support';
   else if(/eligib|qualify|require/.test(low))cbReason='Eligibility check';
   const dateObj=dt?new Date(Number(dt.iso.split('-')[0]),Number(dt.iso.split('-')[1])-1,Number(dt.iso.split('-')[2]),dt.h,dt.m,0):new Date();
+  const cbWindow=resolveCallbackWindow(r,trans,summary,dt?dt.iso:null);
   return{
     d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,
     callId:String(pickField(r,['Call ID','CallId','ID','Conversation ID','Session ID'])||''),ts:Math.floor(dateObj.getTime()/1000),
@@ -2527,7 +2783,7 @@ function rowToRecord(r){
     msg:Number(pickField(r,['Messages','Message Count','Total Messages','Turns']))||0,
     status:String(pickField(r,['Status','Call Status'])||'').toLowerCase(),leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
     conf:Number(pickField(r,['Bot Conf.','Bot Conf','Bot Confidence','AI Confidence','Confidence','Model Confidence']))||0,need,
-    band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:preferredCallbackWindow(r,trans,summary,dt?dt.iso:null),frustrated,summary,
+    band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:cbWindow.label,cbPreferredDate:cbWindow.date,frustrated,summary,
     from:leadPhone,leadPhone,rawFrom,rawTo,trans
   };
 }
@@ -2582,6 +2838,7 @@ let CB_FILTERS=new Set(); // empty = show all; otherwise show only selected inte
 function paintCallbacks(recs){
   const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
+  try{paintCallbackSLA(recs);}catch(e){console.warn("paintCallbackSLA error:",e);}
   const cbs=recs.filter(r=>r.callback);
   if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callback requests detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
   
@@ -2904,7 +3161,7 @@ function boot(){
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
