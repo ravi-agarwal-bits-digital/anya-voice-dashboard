@@ -367,6 +367,15 @@ footer b{color:var(--navy)!important}
 .opf-sla-chip.opf-due .opf-sla-n{color:var(--amber)}
 .opf-sla-chip.opf-overdue{background:rgba(163,58,58,.06);border-color:rgba(163,58,58,.22)}
 .opf-sla-chip.opf-overdue .opf-sla-n{color:var(--burgundy)}
+/* The chips are real <button>s so they're keyboard/focus accessible, but this theme has a global
+   button{...!important} reset (see line ~173) that would flatten their color-coding. Override it
+   scoped to #cbSla, same specificity-war pattern the existing .cbfilt.on rule already uses. */
+#cbSla .opf-sla-chip{cursor:pointer!important;background:#f8fafc!important;border:1px solid var(--line2)!important;box-shadow:none!important;transition:.15s ease!important}
+#cbSla .opf-sla-chip:hover{background:#eef2f7!important;border-color:#c3ccd8!important;transform:none!important}
+#cbSla .opf-sla-chip.opf-overdue{background:rgba(163,58,58,.06)!important;border-color:rgba(163,58,58,.22)!important}
+#cbSla .opf-sla-chip.opf-overdue:hover{background:rgba(163,58,58,.11)!important}
+#cbSla .opf-sla-chip.opf-sla-active{border-color:var(--navy)!important;box-shadow:0 0 0 2px rgba(11,31,58,.16)!important}
+#cbSla .opf-sla-chip.opf-sla-active.opf-overdue{border-color:var(--burgundy)!important;box-shadow:0 0 0 2px rgba(163,58,58,.22)!important}
 @media(max-width:860px){.opf-heatmap{grid-template-columns:44px repeat(6,1fr);gap:4px}.opf-heatcell{padding:7px 2px;font-size:10.5px}}
 </style>
 
@@ -2679,21 +2688,33 @@ function classifyCallbackAging(r,asOf){
   if(d.getTime()===ref.getTime())return 'due';
   return 'ontime';
 }
-function paintCallbackSLA(recs){
+let CB_SLA_FILTER='all'; // 'all' | 'ontime' | 'due' | 'overdue' -- set by clicking a Callback SLA chip; click the active one again to clear
+function paintCallbackSLA(recs,asOf){
   const el=$('cbSla');
   if(!el)return;
   const cbs=recs.filter(r=>r.callback);
   if(!cbs.length){el.innerHTML='';return;}
-  const asOf=datasetAsOf();
+  asOf=asOf||datasetAsOf();
   const counts={ontime:0,due:0,overdue:0};
   cbs.forEach(r=>{counts[classifyCallbackAging(r,asOf)]++;});
+  const chip=(key,label,count)=>{
+    const active=CB_SLA_FILTER===key;
+    return `<button type="button" class="opf-sla-chip opf-${key}${active?' opf-sla-active':''}" data-sla="${key}" aria-pressed="${active}"><span class="opf-sla-n">${count}</span><span>${esc(label)}</span></button>`;
+  };
   el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Callback SLA</div>`+
     `<div class="opf-sla-strip">`+
-    `<div class="opf-sla-chip opf-ontime"><span class="opf-sla-n">${counts.ontime}</span><span>On time</span></div>`+
-    `<div class="opf-sla-chip opf-due"><span class="opf-sla-n">${counts.due}</span><span>Due today</span></div>`+
-    `<div class="opf-sla-chip opf-overdue"><span class="opf-sla-n">${counts.overdue}</span><span>Overdue</span></div>`+
+    chip('ontime','On time',counts.ontime)+
+    chip('due','Due today',counts.due)+
+    chip('overdue','Overdue',counts.overdue)+
     `</div>`+
-    `<div class="cap" style="font-size:12px;margin-top:2px">Aged against each caller's detected callback window, as of the latest call in this export (${datasetAsOfLabel(asOf)}). Recomputes with the view toggle above, same as the rest of this section.</div>`;
+    `<div class="cap" style="font-size:12px;margin-top:2px">Aged against each caller's detected callback window, as of the latest call in this export (${datasetAsOfLabel(asOf)}). Click a chip to filter the list below${CB_SLA_FILTER!=='all'?' — click it again to clear':''}.</div>`;
+  el.querySelectorAll('.opf-sla-chip').forEach(btn=>{
+    btn.onclick=()=>{
+      const key=btn.dataset.sla;
+      CB_SLA_FILTER=(CB_SLA_FILTER===key)?'all':key;
+      paintCallbacks(recs);
+    };
+  });
 }
 
 function scoreSheetRows(rows,name){
@@ -2838,10 +2859,13 @@ let CB_FILTERS=new Set(); // empty = show all; otherwise show only selected inte
 function paintCallbacks(recs){
   const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
-  try{paintCallbackSLA(recs);}catch(e){console.warn("paintCallbackSLA error:",e);}
-  const cbs=recs.filter(r=>r.callback);
-  if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callback requests detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
-  
+  const asOf=datasetAsOf();
+  try{paintCallbackSLA(recs,asOf);}catch(e){console.warn("paintCallbackSLA error:",e);}
+  const cbsAll=recs.filter(r=>r.callback);
+  if(!cbsAll.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callback requests detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
+  const cbs=CB_SLA_FILTER==='all'?cbsAll:cbsAll.filter(r=>classifyCallbackAging(r,asOf)===CB_SLA_FILTER);
+  if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callbacks match the selected SLA filter");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
+
   // Group by phone number
   const byPhone=groupByPhone(cbs);
   
