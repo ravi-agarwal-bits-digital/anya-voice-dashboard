@@ -1027,6 +1027,9 @@ body.profile-open .profile-overlay{display:block;}
 .brief-cover .strip{margin:18px 0 0}
 .kpi-delta{font-size:11px;font-weight:800;margin-top:7px;display:flex;align-items:center;gap:4px}
 .kpi-delta.up{color:var(--sage)}.kpi-delta.down{color:var(--burgundy)}.kpi-delta.flat{color:var(--faint)}
+.kpi-split{font-size:11px;font-weight:700;color:var(--muted);margin-top:5px;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.kpi-split .opf-dirdot{margin-left:6px}
+.kpi-split .opf-dirdot:first-child{margin-left:0}
 .summary-jump-btn{padding:6px 12px!important;border-radius:999px!important;border:1px solid rgba(176,138,60,.34)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:0 8px 18px rgba(176,138,60,.08)!important}
 .summary-jump-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important}
 .summary-jump-btn.active{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 22px rgba(11,31,58,.14)!important}
@@ -2924,7 +2927,7 @@ function topIntentFor(recs){
   return top?{name:top[0],count:top[1]}:{name:'None',count:0};
 }
 function briefPack(recs){
-  return{n:recs.length,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,topIntent:topIntentFor(recs)};
+  return{n:recs.length,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,avgConf:recs.length?Math.round(recs.reduce((a,r)=>a+Number(r.conf||0),0)/recs.length):0,topIntent:topIntentFor(recs)};
 }
 function pctBrief(num,den){return den?Math.round(num/den*100):0;}
 function deltaClass(cur,prev){if(cur>prev)return'up';if(cur<prev)return'down';return'flat';}
@@ -2952,17 +2955,27 @@ function paintManagementBrief(){
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
   if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
   const hasPrev=prev.length>0;
+  // Bifurcate by direction so a leader can see the inbound/outbound mix behind each headline number
+  // without having to flip the All/Inbound/Outbound toggle -- only meaningful in the "All calls" view,
+  // since under a single-direction filter the split would trivially be 100/0.
+  const showSplit=SELECTED_DIRECTION==='all';
+  const curIn=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='inbound')):null;
+  const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
   const kpiDefs=[
-    ['good','Enquiries',cur.n,old.n],
-    ['hot','Callbacks',cur.callbacks,old.callbacks],
-    ['neut','Priority prospects',cur.hot,old.hot],
-    ['neut','Attention signals',cur.friction,old.friction]
+    ['good','Enquiries','n',false],
+    ['hot','Callbacks','callbacks',false],
+    ['neut','Priority prospects','hot',false],
+    ['good','AI confidence','avgConf',true],
+    ['neut','Attention signals','friction',false]
   ];
-  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,val,prevVal])=>{
+  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,isPct])=>{
+    const val=cur[key],prevVal=old[key];
+    const fmt=n=>isPct?n+'%':n;
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
-    return `<div class="kpi ${cls}"><div class="b"></div><div class="v">${val}</div><div class="l">${esc(label)}</div>${delta}</div>`;
+    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key])} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key])} out</div>`:'';
+    return `<div class="kpi ${cls}"><div class="b"></div><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
   }).join('');
 }
 function printManagementBrief(){
