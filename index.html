@@ -1652,7 +1652,6 @@ window.addEventListener('DOMContentLoaded',()=>{
       e.preventDefault();
       scrollToWithStickyOffset(el);
       syncSidebarActive(el.id);
-      history.replaceState(null,'',a.getAttribute('href'));
     }
   }));
   window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
@@ -1947,7 +1946,7 @@ function briefPeriodUiLabel(){
 }
 
 function applyFilters(){
-  const keepManagementSummaryVisible=isManagementSummaryVisible() || location.hash==="#sec-brief";
+  const keepManagementSummaryVisible=isManagementSummaryVisible();
   updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
   const toDate=$("filterToDate").value;
