@@ -1018,6 +1018,25 @@ body.profile-open .profile-overlay{display:block;}
 
 
 <style id="management-brief-theme">
+/* Management Summary is an on-demand drawer (opened via the header/sidebar "Mgmt Summary" controls),
+   not part of the normal page scroll -- same slide-over language as the Lead Profile drawer. */
+.mgmt-summary-overlay{display:none;position:fixed;inset:0;background:rgba(11,31,58,.42);backdrop-filter:blur(3px);z-index:230}
+body.mgmt-summary-open .mgmt-summary-overlay{display:block}
+#sec-brief.management-brief{
+  position:fixed!important;top:0!important;right:0!important;height:100vh!important;
+  width:min(640px,94vw)!important;margin:0!important;background:#fff!important;border:0!important;
+  border-left:1px solid var(--line)!important;border-radius:0!important;
+  box-shadow:-28px 0 70px rgba(11,31,58,.20)!important;z-index:231!important;
+  transform:translateX(108%)!important;visibility:hidden!important;
+  transition:transform .26s ease,visibility 0s .26s!important;
+  overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;
+  padding:22px 24px 30px!important;scroll-margin-top:0!important;
+}
+#sec-brief.management-brief.mgmt-summary-visible{
+  transform:translateX(0)!important;visibility:visible!important;transition:transform .26s ease,visibility 0s 0s!important;
+}
+#sec-brief .shead .brief-print-btn{margin-left:auto}
+@media(max-width:720px){#sec-brief.management-brief{width:100vw!important;max-width:100vw!important;padding:18px 16px 24px!important}}
 .management-brief{scroll-margin-top:24px}
 .brief-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
 .brief-period-controls{display:flex!important;flex-wrap:wrap!important;gap:8px!important;align-items:center!important;position:relative!important;z-index:2!important;visibility:visible!important;opacity:1!important}
@@ -1069,15 +1088,16 @@ body.profile-open .profile-overlay{display:block;}
 @media print{
   @page{size:A4;margin:14mm}
   body{background:#fff!important;color:#0b1f3a!important}
-  .exec-sidebar,#reportView>header,.hero,.strip,section:not(#sec-brief),footer,#kpiOverlay,#kpiPanel,#profileOverlay,#userSearchResult,.brief-toolbar,.brief-print-btn,.summary-jump-btn{display:none!important}
+  .exec-sidebar,#reportView>header,.hero,.strip,section:not(#sec-brief),footer,#kpiOverlay,#kpiPanel,#profileOverlay,#userSearchResult,.mgmt-summary-overlay,.brief-toolbar,.brief-print-btn,#sec-brief .profile-drawer-close,.summary-jump-btn{display:none!important}
   #dashboardContent,#mainShell,#mainWrap,#reportView,#sec-brief{display:block!important;visibility:visible!important}
   .app-shell{display:block!important;padding:0!important}
   .wrap{max-width:none!important;padding:0!important;margin:0!important}
+  /* Undo the on-screen drawer positioning -- print wants the full one-pager in normal document flow. */
+  #sec-brief.management-brief{position:static!important;top:auto!important;right:auto!important;height:auto!important;width:auto!important;max-width:none!important;transform:none!important;visibility:visible!important;box-shadow:none!important;border-left:0!important}
   #sec-brief{margin:0!important;break-after:auto!important;scroll-margin-top:0!important}
   #sec-brief .shead{margin-bottom:10px!important}
   .brief-cover,.brief-panel,.brief-kpi{box-shadow:none!important;break-inside:avoid!important;border-color:#d9e2ef!important}
   .brief-cover{padding:18px!important;border-radius:18px!important}
-  .brief-kpi-grid{grid-template-columns:repeat(4,1fr)!important;gap:8px!important}
   .brief-grid{grid-template-columns:1fr 1fr!important;gap:10px!important;margin-top:10px!important}
   .brief-cover h3{font-size:25px!important}.brief-summary-text{font-size:12px!important}.brief-panel{padding:14px!important;border-radius:16px!important}.brief-action-card{box-shadow:none!important;background:#fff!important}
 }
@@ -1394,8 +1414,12 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 
 
-  <section id="sec-brief" class="management-brief">
-    <div class="shead"><span class="n">00.5</span><h2>Management Summary</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()" style="margin-left:auto">Export / Save PDF</button></div>
+  <div id="mgmtSummaryOverlay" class="mgmt-summary-overlay" onclick="closeManagementSummary()" aria-hidden="true"></div>
+  <section id="sec-brief" class="management-brief" aria-hidden="true" aria-label="Management summary drawer">
+    <div class="shead"><span class="n">00.5</span><h2>Management Summary</h2>
+      <button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button>
+      <button type="button" class="profile-drawer-close" onclick="closeManagementSummary()" aria-label="Close management summary" style="margin-left:8px">✕</button>
+    </div>
     <div class="brief-cover">
       <div class="brief-toolbar">
         <div class="brief-period-controls" aria-label="Management summary period">
@@ -1406,20 +1430,15 @@ window.addEventListener('DOMContentLoaded',()=>{
           <button type="button" class="brief-chip" data-brief-period="custom" onclick="setBriefFromCurrentRange()">Current range</button>
           <span id="briefPeriodStatus" class="brief-period-status">Showing: <b>Last 7 days</b></span>
         </div>
-        <div class="brief-actions"><button type="button" onclick="scrollToWithStickyOffset(document.getElementById('sec-explorer'))">Open ledger</button></div>
+        <div class="brief-actions"><button type="button" onclick="closeManagementSummary();scrollToWithStickyOffset(document.getElementById('sec-explorer'))">Open ledger</button></div>
       </div>
       <div class="brief-eyebrow">Leadership snapshot</div>
       <h3 id="briefTitle">Management Summary</h3>
       <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
-      <div class="brief-kpi-grid" id="briefKpis"></div>
     </div>
     <div class="brief-grid">
       <div class="brief-panel"><h4>What changed vs previous period</h4><div id="briefDeltas"></div></div>
-      <div class="brief-panel"><h4>Top insights</h4><ol class="brief-list" id="briefInsights"></ol></div>
-    </div>
-    <div class="brief-grid">
       <div class="brief-panel"><h4>Top follow-up actions</h4><div id="briefActions" class="brief-actions-list"></div></div>
-      <div class="brief-panel"><h4>Bot and process improvement signals</h4><ol class="brief-list" id="briefProcess"></ol></div>
     </div>
   </section>
 
@@ -1623,6 +1642,11 @@ function syncSidebarActive(forceId){
 window.addEventListener('DOMContentLoaded',()=>{
   const links=[...document.querySelectorAll('.side-link')];
   links.forEach(a=>a.addEventListener('click',e=>{
+    if(a.getAttribute('href')==='#sec-brief'){
+      e.preventDefault();
+      openManagementSummary();
+      return;
+    }
     const el=document.querySelector(a.getAttribute('href'));
     if(el){
       e.preventDefault();
@@ -1868,29 +1892,39 @@ function updateFilterButtons(active){
 }
 
 
+// Management Summary is an on-demand drawer, not part of the normal scroll -- "visible" means "open".
 function isManagementSummaryVisible(){
-  const el=$('sec-brief');
-  if(!el)return false;
-  const rect=el.getBoundingClientRect();
-  const vh=window.innerHeight||document.documentElement.clientHeight||0;
-  return rect.top<vh*0.72 && rect.bottom>120;
+  return document.body.classList.contains('mgmt-summary-open');
 }
+// Drawer content is already kept fresh by paintManagementBrief() on every render; this just keeps
+// the sidebar/header button highlighted while it's open. Kept as a separate function because other
+// call sites (post-filter re-renders) call it by name to mean "the summary is the current focus".
 function focusManagementSummary(){
-  const el=$('sec-brief');
-  if(!el)return;
-  scrollToWithStickyOffset(el);
+  if(!isManagementSummaryVisible())return;
   syncSidebarActive('sec-brief');
-  const btn=$('openMgmtSummaryBtn');
-  if(btn)btn.classList.add('active');
-  el.classList.remove('summary-focus');
-  void el.offsetWidth;
-  el.classList.add('summary-focus');
-  setTimeout(()=>{if(el)el.classList.remove('summary-focus');},1400);
 }
 function openManagementSummary(){
   BRIEF_STATE.period='custom';
   paintManagementBrief();
-  setTimeout(focusManagementSummary,40);
+  const el=$('sec-brief'),overlay=$('mgmtSummaryOverlay');
+  if(!el)return;
+  el.setAttribute('aria-hidden','false');
+  if(overlay)overlay.setAttribute('aria-hidden','false');
+  document.body.classList.add('mgmt-summary-open');
+  requestAnimationFrame(()=>el.classList.add('mgmt-summary-visible'));
+  syncSidebarActive('sec-brief');
+  const btn=$('openMgmtSummaryBtn');
+  if(btn)btn.classList.add('active');
+}
+function closeManagementSummary(){
+  const el=$('sec-brief'),overlay=$('mgmtSummaryOverlay');
+  if(el){
+    el.classList.remove('mgmt-summary-visible');
+    el.setAttribute('aria-hidden','true');
+  }
+  if(overlay)overlay.setAttribute('aria-hidden','true');
+  document.body.classList.remove('mgmt-summary-open');
+  syncSidebarActive();
 }
 function setManagementSummaryToCurrentRange(){
   BRIEF_STATE.period='custom';
@@ -2156,6 +2190,7 @@ window.addEventListener('keydown',e=>{
     if(profile && profile.classList.contains('profile-visible')) closeUserSearch();
     const kpi=$("kpiPanel");
     if(kpi && kpi.style.transform==='translateX(0px)') closeKpiPanel();
+    if(isManagementSummaryVisible()) closeManagementSummary();
   }
 });
 
@@ -2973,7 +3008,6 @@ function setBriefPeriod(period){
   BRIEF_STATE.period=period;
   updateBriefChips();
   paintManagementBrief();
-  setTimeout(()=>{const el=$('sec-brief');if(el)scrollToWithStickyOffset(el);},30);
 }
 function setBriefFromCurrentRange(){
   BRIEF_STATE.period='custom';
@@ -3058,7 +3092,6 @@ function deltaRow(label,cur,prev,suffix=''){
   const sign=cls==='up'?'Up':cls==='down'?'Down':'Flat';
   return `<div class="brief-delta-row"><span class="brief-delta-label">${esc(label)}</span><span>${esc(String(cur)+suffix)} now vs ${esc(String(prev)+suffix)} previous</span><span class="brief-delta-val ${cls}">${sign} ${esc(text)}</span></div>`;
 }
-function briefKpi(label,value,note){return `<div class="brief-kpi"><div class="bk-label">${esc(label)}</div><div class="bk-value">${esc(value)}</div><div class="bk-note">${esc(note)}</div></div>`;}
 function briefLeadGroups(recs){
   const groups=new Map();
   recs.forEach(r=>{
@@ -3095,9 +3128,6 @@ function paintBriefActions(recs){
     </div>`;
   }).join('');
 }
-function numberedList(items){
-  return items.map((txt,i)=>`<li><span class="brief-num">${i+1}</span><span>${txt}</span></li>`).join('');
-}
 function paintManagementBrief(){
   if(!$('sec-brief'))return;
   updateBriefChips();
@@ -3107,30 +3137,17 @@ function paintManagementBrief(){
   const prev=prevRange?recordsInRange(prevRange.from,prevRange.to):[];
   const cur=briefPack(recs),old=briefPack(prev);
   const dateLabel=range.from&&range.to?(range.from===range.to?range.from:`${range.from} to ${range.to}`):currentViewDescription();
-  const title=$('briefTitle'),summary=$('briefSummary'),kpis=$('briefKpis'),deltas=$('briefDeltas'),insights=$('briefInsights'),process=$('briefProcess');
+  const title=$('briefTitle'),summary=$('briefSummary'),deltas=$('briefDeltas');
   if(title)title.textContent=`${range.label} summary`;
   if(!cur.n){
     if(summary)summary.innerHTML=`No enquiries found for <b>${esc(dateLabel)}</b> in the ${esc(currentDirectionLabel())} view. Try another brief period or switch to All Calls.`;
-    if(kpis)kpis.innerHTML='';
     if(deltas)deltas.innerHTML='<div class="brief-empty">No comparison available because the selected period has no calls.</div>';
-    if(insights)insights.innerHTML='';
-    if(process)process.innerHTML='';
     paintBriefActions([]);
     return;
   }
-  const cbPct=pctBrief(cur.callbacks,cur.n),hotPct=pctBrief(cur.hot,cur.n),frictionPct=pctBrief(cur.friction,cur.n),intlPct=pctBrief(cur.intl,cur.n);
+  const cbPct=pctBrief(cur.callbacks,cur.n),hotPct=pctBrief(cur.hot,cur.n);
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
   if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
-  if(kpis)kpis.innerHTML=[
-    briefKpi('Enquiries',String(cur.n),`${cur.unique} unique leads`),
-    briefKpi('Callbacks',String(cur.callbacks),`${cur.callbackLeads} lead(s), ${cbPct}% of enquiries`),
-    briefKpi('Priority prospects',`${hotPct}%`,`${cur.hot} hot enquiries`),
-    briefKpi('Repeat callers',String(cur.serial),'2+ calls from same mobile'),
-    briefKpi('Intl. leads',`${intlPct}%`,`${cur.intl} international / ${cur.india} India`),
-    briefKpi('Avg confidence',`${cur.avgConf}%`,`${cur.lowConf} low-confidence call(s)`),
-    briefKpi('Attention signals',String(cur.friction),`${frictionPct}% of enquiries`),
-    briefKpi('Direction split',`${cur.inbound}/${cur.outbound}`,`Inbound / outbound, ${cur.unknown} unknown`)
-  ].join('');
   if(deltas){
     if(!prev.length)deltas.innerHTML='<div class="brief-empty">Previous period has no matching calls, so percentage movement is not meaningful yet.</div>';
     else deltas.innerHTML=[
@@ -3142,20 +3159,6 @@ function paintManagementBrief(){
       deltaRow('Repeat callers',cur.serial,old.serial)
     ].join('');
   }
-  const insightItems=[];
-  insightItems.push(`<b>${esc(cur.topIntent.name)}</b> was the leading theme with ${cur.topIntent.count} enquiry${cur.topIntent.count!==1?'ies':'y'}.`);
-  if(cur.callbacks)insightItems.push(`<b>${cur.callbacks} callback request${cur.callbacks>1?'s':''}</b> need follow-up; ${cur.cbNoWindow} do not mention a clear callback window.`);
-  if(cur.serial)insightItems.push(`<b>${cur.serial} repeat caller${cur.serial>1?'s':''}</b> indicate either strong intent or unresolved counselling need.`);
-  if(cur.intl)insightItems.push(`<b>${cur.intl} international enquiry${cur.intl>1?'ies':'y'}</b> appeared in this period, useful for counsellor routing and timezone-aware follow-up.`);
-  if(cur.friction)insightItems.push(`<b>${cur.friction} attention signal${cur.friction>1?'s':''}</b> suggest process, bot answer, or follow-up friction.`);
-  if(insights)insights.innerHTML=numberedList(insightItems.slice(0,5));
-  const processItems=[];
-  if(cur.lowConf)processItems.push(`<b>${cur.lowConf} low-confidence interaction${cur.lowConf>1?'s':''}</b> should be reviewed for bot knowledge-base improvement.`);
-  if(cur.redAmber)processItems.push(`<b>${cur.redAmber} red/amber review band call${cur.redAmber>1?'s':''}</b> need quality review.`);
-  if(cur.cbNoWindow)processItems.push(`<b>${cur.cbNoWindow} callback request${cur.cbNoWindow>1?'s':''}</b> lacked a detected callback window; counsellors may need to confirm timing.`);
-  if(cur.friction)processItems.push(`Review repeated friction around <b>${esc(cur.topIntent.name)}</b> and convert common answers into clearer bot guidance.`);
-  if(!processItems.length)processItems.push('No major process or bot-improvement signal detected for this period.');
-  if(process)process.innerHTML=numberedList(processItems.slice(0,5));
   paintBriefActions(recs);
 }
 function printManagementBrief(){
