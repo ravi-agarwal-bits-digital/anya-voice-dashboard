@@ -343,6 +343,18 @@ footer b{color:var(--navy)!important}
 .callback-preferred.unspecified b{color:#7a8797!important}
 </style>
 
+<style id="ledger-filter-chips">
+#explorerFilterChips{display:flex;flex-wrap:wrap;gap:18px 26px;margin:14px 0 8px;padding-top:14px;border-top:1px solid var(--line2)}
+.ledger-chip-group{display:flex;flex-direction:column;gap:8px}
+.ledger-group-label{font-size:10px;color:var(--faint);font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.ledger-chip-row{display:flex;flex-wrap:wrap;gap:7px}
+#explorerFilterChips .cbfilt.on,#explorerFilterChips .cbfilt[aria-pressed="true"]{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 22px rgba(11,31,58,.16)!important}
+#explorerFilterChips .cbfilt.on::before,#explorerFilterChips .cbfilt[aria-pressed="true"]::before{content:'✓';display:inline-block;margin-right:6px;font-weight:900;color:#fff}
+.ledger-achip{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;border:1px solid rgba(176,138,60,.35);background:#fff7e8;color:var(--navy);font-size:10.5px;font-weight:800}
+.ledger-achip b{cursor:pointer;color:var(--burgundy);font-size:12px;font-weight:900}
+@media screen and (max-width:720px){#explorerFilterChips{gap:14px}}
+</style>
+
 <style id="outbound-connect-performance">
 .opf-scope-note{display:inline-flex;align-items:center;font-size:11px;font-weight:700;color:var(--gold);background:#fff8ea;border:1px solid rgba(176,138,60,.3);border-radius:999px;padding:4px 10px;margin-left:8px;vertical-align:middle}
 .opf-hidden-note{text-align:center;color:var(--faint);font-size:12.5px;padding:26px;border:1px dashed var(--line);border-radius:20px;background:#fff}
@@ -570,7 +582,7 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
   #cbFilters{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;gap:8px!important;padding:7px!important;-webkit-overflow-scrolling:touch!important;}
   #cbFilters .cbfilt{flex:0 0 auto!important;white-space:nowrap!important;}
   #explorerSearch{min-width:220px!important;}
-  #explorerSort,#explorerFilter{min-width:max-content!important;}
+  #explorerSort{min-width:max-content!important;}
   #sec-explorer .panel>div[style*="display:flex"]{flex-wrap:nowrap!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;padding-bottom:6px!important;}
   .transcript-box{max-height:44vh!important;}
   #userSearchResult{scroll-margin-top:92px!important;}
@@ -1037,6 +1049,9 @@ body.profile-open .profile-overlay{display:block;}
 .summary-jump-btn{padding:6px 12px!important;border-radius:999px!important;border:1px solid rgba(176,138,60,.34)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:0 8px 18px rgba(176,138,60,.08)!important}
 .summary-jump-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important}
 .summary-jump-btn.active{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;border-color:var(--navy)!important;box-shadow:0 10px 22px rgba(11,31,58,.14)!important}
+.brief-print-btn{padding:8px 16px!important;border-radius:999px!important;border:1px solid var(--line)!important;background:#fff!important;color:var(--navy)!important;font-size:11.5px!important;font-weight:800!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:var(--soft-shadow)!important}
+.brief-print-btn:hover{background:#f6f8fc!important;border-color:var(--gold)!important;transform:translateY(-1px)!important}
+@media screen and (max-width:720px){.brief-print-btn{width:100%;text-align:center}}
 .management-brief.summary-focus{animation:summaryFocusPulse 1.2s ease 1}
 @keyframes summaryFocusPulse{0%{filter:drop-shadow(0 0 0 rgba(176,138,60,0))}35%{filter:drop-shadow(0 14px 24px rgba(176,138,60,.18))}100%{filter:drop-shadow(0 0 0 rgba(176,138,60,0))}}
 @media screen and (max-width:720px){.summary-jump-btn{width:100%;justify-content:center;text-align:center;padding:9px 12px!important}}
@@ -1492,33 +1507,62 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 10px">
         <input type="text" id="explorerSearch" placeholder="Search ledger: phone, theme, transcript, callback..." style="flex:1;min-width:240px;padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="updateLedgerState({search:this.value})">
         <select id="explorerSort" onchange="updateLedgerState({sort:this.value})" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
-          <option value="time_desc">Newest first</option>
-          <option value="priority_desc">Priority first</option>
-          <option value="callback_desc">Callback first</option>
-          <option value="repeat_desc">Most repeated first</option>
-          <option value="time_asc">Oldest first</option>
-          <option value="dur_desc">Longest duration</option>
-          <option value="dur_asc">Shortest duration</option>
-          <option value="conf_desc">Highest confidence</option>
-          <option value="low_conf">Low confidence first</option>
-          <option value="need_desc">Highest need</option>
-          <option value="intl_desc">International first</option>
-        </select>
-        <select id="explorerFilter" onchange="updateLedgerState({filter:this.value})" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
-          <option value="all">All calls</option>
-          <option value="hot">Hot only</option>
-          <option value="frustrated">Attention only</option>
-          <option value="callback">Callbacks only</option>
-          <option value="intl">International only</option>
-          <option value="india">India only</option>
-          <option value="low_conf">Low confidence only</option>
-          <option value="red_amber">Red / Amber only</option>
-          <option value="has_transcript">Has transcript</option>
-          <option value="no_transcript">No transcript</option>
-          <option value="has_callback_window">Callback window detected</option>
-          <option value="serial">Serial callers</option>
+          <optgroup label="Recency">
+            <option value="time_desc">Newest first</option>
+            <option value="time_asc">Oldest first</option>
+          </optgroup>
+          <optgroup label="Priority">
+            <option value="priority_desc">Priority first</option>
+            <option value="callback_desc">Callback first</option>
+            <option value="need_desc">Highest need</option>
+            <option value="repeat_desc">Most repeated first</option>
+          </optgroup>
+          <optgroup label="Duration">
+            <option value="dur_desc">Longest duration</option>
+            <option value="dur_asc">Shortest duration</option>
+          </optgroup>
+          <optgroup label="Confidence">
+            <option value="conf_desc">Highest confidence</option>
+            <option value="low_conf">Low confidence first</option>
+          </optgroup>
+          <optgroup label="Reach">
+            <option value="intl_desc">International first</option>
+          </optgroup>
         </select>
         <button type="button" id="ledgerClearBtn" onclick="clearLedgerFilters()" style="display:none;padding:8px 12px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--navy);font-size:12px;font-weight:750;cursor:pointer">Clear ledger filters</button>
+      </div>
+      <div id="explorerFilterChips">
+        <div class="ledger-chip-group">
+          <span class="ledger-group-label">Lead quality</span>
+          <div class="ledger-chip-row">
+            <button type="button" class="cbfilt" data-f="hot" onclick="toggleLedgerFilter('hot')">Hot only</button>
+            <button type="button" class="cbfilt" data-f="low_conf" onclick="toggleLedgerFilter('low_conf')">Low confidence</button>
+            <button type="button" class="cbfilt" data-f="red_amber" onclick="toggleLedgerFilter('red_amber')">Red / Amber</button>
+          </div>
+        </div>
+        <div class="ledger-chip-group">
+          <span class="ledger-group-label">Signals</span>
+          <div class="ledger-chip-row">
+            <button type="button" class="cbfilt" data-f="frustrated" onclick="toggleLedgerFilter('frustrated')">Attention</button>
+            <button type="button" class="cbfilt" data-f="callback" onclick="toggleLedgerFilter('callback')">Callback requested</button>
+            <button type="button" class="cbfilt" data-f="has_callback_window" onclick="toggleLedgerFilter('has_callback_window')">Callback window</button>
+            <button type="button" class="cbfilt" data-f="serial" onclick="toggleLedgerFilter('serial')">Serial caller</button>
+          </div>
+        </div>
+        <div class="ledger-chip-group">
+          <span class="ledger-group-label">Geography</span>
+          <div class="ledger-chip-row">
+            <button type="button" class="cbfilt" data-f="india" onclick="toggleLedgerFilter('india')">India</button>
+            <button type="button" class="cbfilt" data-f="intl" onclick="toggleLedgerFilter('intl')">International</button>
+          </div>
+        </div>
+        <div class="ledger-chip-group">
+          <span class="ledger-group-label">Transcript</span>
+          <div class="ledger-chip-row">
+            <button type="button" class="cbfilt" data-f="has_transcript" onclick="toggleLedgerFilter('has_transcript')">Has transcript</button>
+            <button type="button" class="cbfilt" data-f="no_transcript" onclick="toggleLedgerFilter('no_transcript')">No transcript</button>
+          </div>
+        </div>
       </div>
       <div id="ledgerActiveChips" style="display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px"></div>
       <div id="explorerCount" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
@@ -2853,7 +2897,7 @@ function paintCallbacks(recs){
   const intentChips=intents.map(i=>`<button class="cbfilt ${CB_FILTERS.has(i)?"on":""}" aria-pressed="${CB_FILTERS.has(i)?"true":"false"}" data-filt="${esc(i)}">${esc(i)}</button>`).join("");
   cbFilters.setAttribute("data-active",showAll?"all":"filtered");
   cbFilters.innerHTML=allChip+intentChips;
-  document.querySelectorAll(".cbfilt").forEach(b=>b.onclick=()=>{
+  cbFilters.querySelectorAll(".cbfilt").forEach(b=>b.onclick=()=>{
     const f=b.dataset.filt;
     if(f==="__all__"){
       CB_FILTERS.clear(); // reset to show everything
@@ -3324,21 +3368,29 @@ function exportGeo(){
 }
 
 // ===== CALL EXPLORER =====
-const LEDGER_DEFAULT_STATE={search:"",filter:"all",sort:"time_desc",limit:50};
-let LEDGER_STATE={...LEDGER_DEFAULT_STATE};
+const LEDGER_DEFAULT_STATE={search:"",sort:"time_desc",limit:50};
+let LEDGER_STATE={search:"",filters:new Set(),sort:"time_desc",limit:50};
 let EXPLORER_LIMIT=LEDGER_STATE.limit;
-const LEDGER_FILTER_LABELS={all:"All calls",hot:"Hot only",frustrated:"Attention only",callback:"Callbacks only",intl:"International only",india:"India only",low_conf:"Low confidence only",red_amber:"Red / Amber only",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window detected",serial:"Serial callers"};
+const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Callback requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window",serial:"Serial caller"};
+// Chips within a group combine with OR; the groups themselves combine with AND (facet-search semantics),
+// so e.g. "Hot" + "India" narrows to hot leads in India, while "Has transcript" + "No transcript" (same
+// group) reads as either -- selecting a mutually-exclusive pair is equivalent to not filtering on it.
+const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo",has_transcript:"trans",no_transcript:"trans"};
 const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
 
 function syncLedgerControls(){
-  const s=$("explorerSearch"), sort=$("explorerSort"), filt=$("explorerFilter");
+  const s=$("explorerSearch"), sort=$("explorerSort");
   if(s && s.value!==LEDGER_STATE.search)s.value=LEDGER_STATE.search;
   if(sort && sort.value!==LEDGER_STATE.sort)sort.value=LEDGER_STATE.sort;
-  if(filt && filt.value!==LEDGER_STATE.filter)filt.value=LEDGER_STATE.filter;
+  document.querySelectorAll("#explorerFilterChips .cbfilt").forEach(btn=>{
+    const on=LEDGER_STATE.filters.has(btn.dataset.f);
+    btn.classList.toggle("on",on);
+    btn.setAttribute("aria-pressed",on?"true":"false");
+  });
 }
 
 function updateLedgerState(partial={}, opts={}){
-  const isLedgerNarrowingChange=(partial.filter!==undefined || partial.search!==undefined) && partial.sort===undefined;
+  const isLedgerNarrowingChange=(partial.filters!==undefined || partial.search!==undefined) && partial.sort===undefined;
   LEDGER_STATE={...LEDGER_STATE,...partial};
   if(partial.search!==undefined)LEDGER_STATE.search=String(partial.search||"");
   // Filters and search should narrow the ledger, not silently change the working order.
@@ -3349,8 +3401,14 @@ function updateLedgerState(partial={}, opts={}){
   renderExplorer(false);
 }
 
+function toggleLedgerFilter(key){
+  const filters=new Set(LEDGER_STATE.filters);
+  if(filters.has(key))filters.delete(key); else filters.add(key);
+  updateLedgerState({filters});
+}
+
 function clearLedgerFilters(){
-  LEDGER_STATE={...LEDGER_DEFAULT_STATE};
+  LEDGER_STATE={search:"",filters:new Set(),sort:LEDGER_DEFAULT_STATE.sort,limit:LEDGER_DEFAULT_STATE.limit};
   EXPLORER_LIMIT=50;
   syncLedgerControls();
   renderExplorer(false);
@@ -3438,11 +3496,19 @@ function ledgerMatchesFilter(r, filt){
   if(filt==="serial")return ledgerIsSerialCaller(r);
   return true;
 }
+function ledgerMatchesActiveFilters(r){
+  if(!LEDGER_STATE.filters.size)return true;
+  const byGroup={};
+  LEDGER_STATE.filters.forEach(f=>{
+    const g=LEDGER_FILTER_GROUPS[f]||f;
+    (byGroup[g]=byGroup[g]||[]).push(f);
+  });
+  return Object.values(byGroup).every(fs=>fs.some(f=>ledgerMatchesFilter(r,f)));
+}
 function getExplorerRows(){
   const q=String(LEDGER_STATE.search||"").trim().toLowerCase();
   const sort=LEDGER_STATE.sort||"time_desc";
-  const filt=LEDGER_STATE.filter||"all";
-  let rows=RECORDS.slice().filter(r=>ledgerMatchesFilter(r,filt));
+  let rows=RECORDS.slice().filter(ledgerMatchesActiveFilters);
   if(q){
     const terms=q.split(/\s+/).filter(Boolean);
     rows=rows.filter(r=>{
@@ -3469,14 +3535,17 @@ function getExplorerRows(){
 function ledgerChip(text,strong=false){
   return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;border:1px solid ${strong?'rgba(176,138,60,.35)':'var(--line)'};background:${strong?'#fff7e8':'#f7f9fc'};color:${strong?'var(--navy)':'var(--muted)'};font-size:10.5px;font-weight:800">${esc(text)}</span>`;
 }
+function ledgerActiveFilterChip(key){
+  return `<span class="ledger-achip">${esc(LEDGER_FILTER_LABELS[key]||key)}<b onclick="toggleLedgerFilter('${key}')" role="button" aria-label="Remove filter">&times;</b></span>`;
+}
 function updateLedgerChrome(total,shown){
   const chips=[];
-  chips.push(ledgerChip(`Ledger view: ${LEDGER_FILTER_LABELS[LEDGER_STATE.filter]||'Custom'}`,LEDGER_STATE.filter!=="all"));
+  LEDGER_STATE.filters.forEach(f=>chips.push(ledgerActiveFilterChip(f)));
   chips.push(ledgerChip(LEDGER_SORT_LABELS[LEDGER_STATE.sort]||"Sorted"));
   if(LEDGER_STATE.search.trim())chips.push(ledgerChip(`Search: ${LEDGER_STATE.search.trim()}`,true));
   chips.push(ledgerChip(currentViewDescription()));
   if($("ledgerActiveChips"))$("ledgerActiveChips").innerHTML=chips.join("");
-  const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filter!=="all"||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
+  const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filters.size||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
   if($("ledgerClearBtn"))$("ledgerClearBtn").style.display=active?"inline-flex":"none";
   if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${RECORDS.length} in selected dashboard view`;
 }
@@ -3489,7 +3558,7 @@ function renderExplorer(resetLimit){
   updateLedgerChrome(rows.length,shown.length);
   if(!rows.length){
     const parts=[];
-    if(LEDGER_STATE.filter!=="all")parts.push(LEDGER_FILTER_LABELS[LEDGER_STATE.filter]);
+    if(LEDGER_STATE.filters.size)parts.push([...LEDGER_STATE.filters].map(f=>LEDGER_FILTER_LABELS[f]).join(" + "));
     if(LEDGER_STATE.search.trim())parts.push(`Search: “${LEDGER_STATE.search.trim()}”`);
     parts.push(currentViewDescription());
     $("explorerList").innerHTML=emptyViewHtml("No enquiries match " + parts.join(" · "));
