@@ -1,18 +1,83 @@
 # Anya Voice Dashboard
 
-Static, password-gated analytics dashboard for BITS Pilani Digital voice-call data.
+Repository for the BITS Pilani Digital Anya voice analytics dashboard.
 
-## Production paths
+This project is maintained as a static web application. The production dashboard and administration page are served from the canonical files listed below.
 
-- `index.html` — live dashboard
-- `admin/index.html` — live data publishing console
-- `data/voice_analytics.xlsx` — current encrypted dataset
-- `assets/` — logo, favicons, and the local SheetJS runtime
+## Repository structure
 
-The live dataset uses the legacy-compatible `AANYAENC1` encrypted format. Do not rename or move the production paths without updating both the dashboard and admin console.
+```text
+.
+├── index.html
+├── README.md
+├── admin/
+│   └── index.html
+├── assets/
+│   ├── logo.jpg
+│   ├── favicon.ico
+│   ├── favicon-16.png
+│   ├── favicon-32.png
+│   ├── apple-touch-icon.png
+│   └── xlsx.full.min.js
+├── data/
+│   ├── .gitkeep
+│   └── voice_analytics.xlsx
+└── _archive/
+    ├── README.md
+    ├── legacy-admin/
+    └── legacy-dashboards/
+```
 
-## Archived material
+## Canonical files
 
-Superseded dashboard versions and the retired admin console are retained under `_archive/`. The underscore-prefixed directory keeps these files outside the normal GitHub Pages build while preserving them for reference.
+| Path | Purpose |
+| --- | --- |
+| `index.html` | Current dashboard |
+| `admin/index.html` | Current administration page |
+| `assets/` | Shared visual and runtime assets |
+| `data/voice_analytics.xlsx` | Current application data file |
+| `_archive/` | Superseded files retained for reference |
 
-Git history remains the authoritative version history. New releases should update the canonical files rather than adding another `index-vN.html` file.
+Only `index.html` and `admin/index.html` should be treated as active application entry points.
+
+## Archived files
+
+The `_archive/` directory contains superseded dashboard and administration files. These files are retained only for historical reference.
+
+- Do not deploy archived files as active pages.
+- Do not use archived files as the baseline for new changes.
+- Use Git history and tags for version tracking.
+- Do not add new `index-vN.html` files to the repository root.
+
+## Making changes
+
+1. Start from the latest `main` branch.
+2. Create a focused working branch.
+3. Update the canonical production file.
+4. Keep unrelated changes out of the same pull request.
+5. Validate the dashboard before merging.
+6. Document the change and verification performed in the pull request.
+
+## Minimum validation
+
+Before merging a dashboard change:
+
+- Confirm the page loads without JavaScript syntax errors.
+- Check that HTML IDs remain unique.
+- Verify the current application data loads successfully.
+- Test the primary filters and interactive panels.
+- Check desktop and mobile layouts.
+- Confirm the administration page still targets the expected production file when relevant.
+
+## Repository hygiene
+
+- Keep the repository root limited to active files and documentation.
+- Keep shared assets under `assets/`.
+- Keep retired implementations under `_archive/`.
+- Never commit credentials, access tokens, plaintext passwords or unapproved raw data.
+- Review third-party assets before updating them.
+- Use pull requests for production changes.
+
+## Ownership
+
+Maintained for BITS Pilani Digital.
