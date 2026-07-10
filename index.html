@@ -379,12 +379,17 @@ footer b{color:var(--navy)!important}
 .opf-funnel-track{background:#eef2f7;border-radius:8px;height:34px;overflow:hidden}
 .opf-funnel-fill{height:100%;border-radius:8px;display:flex;align-items:center;padding-left:12px;color:#fff;font-family:'Source Serif 4',Georgia,serif;font-weight:700;font-size:15px;letter-spacing:-.02em;min-width:fit-content;transition:width .5s cubic-bezier(.2,.8,.2,1)}
 .opf-funnel-pct{font-size:11.5px;color:var(--muted);text-align:right;font-weight:700}
+.opf-funnel-leak{display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:center;padding:3px 8px 7px;cursor:pointer}
+.opf-funnel-leak>div:last-child{font-size:11.5px;color:var(--burgundy);background:rgba(163,58,58,.06);border:1px dashed rgba(163,58,58,.32);border-radius:9px;padding:5px 11px;transition:.14s}
+.opf-funnel-leak:hover>div:last-child{background:rgba(163,58,58,.11)}
+.opf-funnel-leak .opf-leak-x{font-weight:900}
+.opf-funnel-leak .opf-leak-sub{color:var(--muted);font-weight:600}
 .opf-hit-summary{font-size:12.5px;color:var(--navy);line-height:1.6;background:rgba(163,58,58,.06);border:1px solid rgba(163,58,58,.2);border-radius:12px;padding:11px 13px;margin-bottom:12px}
 .opf-hit-summary b{color:var(--burgundy)}
 .opf-bestwin{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--navy);background:#f6f9f7;border:1px solid rgba(36,120,88,.25);border-radius:12px;padding:10px 13px;margin-bottom:12px}
 .opf-bestwin b{color:var(--sage)}
 .opf-bestwin-dot{width:9px;height:9px;border-radius:50%;background:var(--sage);flex-shrink:0}
-@media screen and (max-width:720px){.opf-funnel-step{grid-template-columns:110px 1fr 64px;gap:8px}.opf-funnel-label{font-size:11px}.opf-funnel-pct{font-size:10px}}
+@media screen and (max-width:720px){.opf-funnel-step{grid-template-columns:110px 1fr 64px;gap:8px}.opf-funnel-label{font-size:11px}.opf-funnel-pct{font-size:10px}.opf-funnel-leak{grid-template-columns:110px 1fr;gap:8px}}
 /* Toggle shared by Conversion-by-intent and Dial-timing panels */
 .iq-toggle{display:inline-flex;background:var(--paper2,#f8fafc);border:1px solid var(--line);border-radius:12px;padding:4px;gap:3px;margin:4px 0 14px}
 .iq-toggle button{font-family:'Inter',system-ui,sans-serif!important;font-size:12px!important;font-weight:800!important;color:var(--muted)!important;background:transparent!important;border:0!important;border-radius:9px!important;padding:7px 13px!important;cursor:pointer!important;box-shadow:none!important;transition:.15s}
@@ -983,8 +988,8 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
     flex:1 1 185px!important;
     width:auto!important;
     min-width:170px!important;
-    padding:7px 10px!important;
-    font-size:11px!important;
+    padding:8px 12px 8px 34px!important;
+    font-size:12px!important;
   }
 
   /* Tighter first-screen content after the header. */
@@ -1170,6 +1175,20 @@ body.profile-open .profile-overlay{display:block;}
 .anom .anom-why{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:2px}
 .anom .anom-why b{color:var(--navy);font-weight:700}
 @media screen and (max-width:760px){.anom-grid{grid-template-columns:1fr}.rule{grid-template-columns:1fr auto}.rule-col{display:none}.conc-col .cn{display:none}}
+/* Prominent lead-search box in the header (was near-invisible white-on-white).
+   Visual props are scoped #reportView #searchMobile to outrank the global "#reportView input" reset;
+   sizing stays at #searchMobile so the mobile media queries can still override width/padding. */
+#reportView #searchMobile{
+  border:1.5px solid var(--gold)!important;
+  border-radius:999px!important;
+  background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b08a3c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.35-4.35'/%3E%3C/svg%3E") no-repeat 13px center!important;
+  background-size:16px!important;
+  color:var(--navy)!important;
+}
+#reportView #searchMobile:focus{border-color:var(--navy)!important;box-shadow:0 0 0 3px rgba(11,31,58,.14)!important;outline:none!important}
+#reportView #searchMobile::placeholder{color:#98a2b3!important;font-weight:500!important}
+#searchMobile{width:230px!important;padding:9px 14px 9px 36px!important;font-size:13px!important;font-weight:600!important;box-shadow:0 6px 16px rgba(176,138,60,.16)!important}
+#searchMobile::-webkit-search-cancel-button{cursor:pointer}
 /* Export-CSV button inside slide-over drawers */
 .drawer-csv-btn{padding:6px 13px!important;border-radius:999px!important;border:1px solid var(--gold)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
 .drawer-csv-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important;transform:translateY(-1px)!important}
@@ -1474,7 +1493,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
-          <input type="text" id="searchMobile" placeholder="Search profile by mobile" style="padding:6px 10px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;width:180px" oninput="debouncedSearch(this.value)">
+          <input type="search" id="searchMobile" placeholder="Search a lead by mobile…" aria-label="Search a lead by mobile number" oninput="debouncedSearch(this.value)">
         </div>
       </div>
     </div>
@@ -1521,7 +1540,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     <div class="shead"><span class="n">00.7</span><h2>Outbound Performance &amp; Conversion</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Every outbound dial — connected, failed and initiated — deduplicated by Call ID. Reach and connectivity come from all dials; lead quality comes from the calls that connected.</div>
     <div class="strip" id="outboundPerfKpis"></div>
-    <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Numbers dialed &rarr; reached &rarr; connected &rarr; hot leads. Each stage shows what fraction of the previous survived. Click any bar for the calls behind it.</div><div id="outboundFunnel"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Dials placed &rarr; connected &rarr; hot leads. The red row is the failed-call leakage &mdash; dials that never connected. Click any bar (or the leakage) for the calls behind it.</div><div id="outboundFunnel"></div></div>
     <div class="grid2" style="margin-top:24px">
       <div class="panel"><h4>Reach &amp; disposition</h4><div class="cap">Every outbound dial by outcome. <b>Initiated</b> = a dial logged with no terminal status (didn't connect).</div><div id="dispositionBreak"></div></div>
       <div class="panel"><h4>Wasted-effort hit-list</h4><div class="cap">Numbers dialed 3+ times that never once connected — stop-calling or switch-to-SMS candidates.</div><div id="unreachableList"></div></div>
@@ -2908,6 +2927,7 @@ function paintOutboundPerf(){
   window.__obConnected=connectedRecs;
   window.__obHot=connectedRecs.filter(r=>r.leadTemp==='Hot');
   window.__obUnreached=[].concat(...unreachable);
+  window.__obFailed=obRecs.filter(r=>normalizeDisposition(r)!=='connected');
   if(kpiEl)kpiEl.innerHTML=[
     ["good",connectPct+"%","Connect rate ("+buckets.connected+" of "+n+" dials)","window.__obRecs",r=>normalizeDisposition(r)==='connected'],
     ["good",reachPct+"%","Numbers reached ("+numbersReached+" of "+numbersTotal+")","window.__obConnected",()=>true],
@@ -2915,7 +2935,7 @@ function paintOutboundPerf(){
     ["neut",numbersHot,"Hot leads reached","window.__obHot",()=>true]
   ].map(c=>`<div class="kpi ${c[0]}" onclick="openFilteredPanel('${esc(c[2])}',${c[4]},${c[3]})" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
 
-  paintOutboundFunnel(numbersTotal,numbersReached,numbersHot);
+  paintOutboundFunnel(n,buckets.connected,buckets.failed,buckets.initiated,window.__obHot.length);
   paintDispositionBreak(obRecs);
   paintUnreachableList(unreachable,avgDials);
   paintRedialCurve(obRecs);
@@ -2924,24 +2944,30 @@ function paintOutboundPerf(){
 }
 // Outbound conversion funnel: dials placed -> numbers reached -> connected conversations -> hot leads.
 // Shows exactly where outbound effort leaks on the way to a convertible lead.
-function paintOutboundFunnel(numbersTotal,numbersReached,numbersHot){
+function paintOutboundFunnel(totalDials,connectedDials,failedDials,initiatedDials,hotCalls){
   const el=$('outboundFunnel');
   if(!el)return;
-  // Number-based and monotonic: of the people we dialed, how many did we reach, and how many became hot.
+  // Dial/call-level and monotonic: every dial placed -> the ones that connected -> the hot leads among them.
+  // The big drop from dials to connected IS the failed-call leakage, shown explicitly so wasted effort is visible.
   const steps=[
-    ['Numbers dialed',numbersTotal,C.blue,'window.__obRecs',()=>true],
-    ['Numbers reached',numbersReached,C.teal,'window.__obConnected',()=>true],
-    ['Numbers that became Hot',numbersHot,C.gold||'#b08a3c','window.__obHot',()=>true]
+    ['Dials placed',totalDials,C.blue,'window.__obRecs'],
+    ['Connected',connectedDials,C.teal,'window.__obConnected'],
+    ['Hot-lead calls',hotCalls,C.gold||'#b08a3c','window.__obHot']
   ];
-  const max=steps[0][1]||1;
-  el.innerHTML=steps.map((s,i)=>{
+  const max=totalDials||1;
+  const stepHtml=(s,i)=>{
     const pct=Math.round(s[1]/max*100);
     const ofPrev=i>0&&steps[i-1][1]?Math.round(s[1]/steps[i-1][1]*100):100;
-    return `<div class="opf-funnel-step" onclick="openFilteredPanel('${esc(s[0])} (outbound)',${s[4]},${s[3]})" title="Click for details">`+
+    return `<div class="opf-funnel-step" onclick="openFilteredPanel('${esc(s[0])} (outbound)',()=>true,${s[3]})" title="Click for details">`+
       `<div class="opf-funnel-label">${esc(s[0])}</div>`+
       `<div class="opf-funnel-track"><div class="opf-funnel-fill" style="width:${Math.max(pct,3)}%;background:${s[2]}">${s[1].toLocaleString()}</div></div>`+
       `<div class="opf-funnel-pct">${i===0?'100%':ofPrev+'% of prev'}</div></div>`;
-  }).join('');
+  };
+  const notConnected=totalDials-connectedDials;
+  const initNote=initiatedDials?` · ${initiatedDials.toLocaleString()} no outcome`:'';
+  const leak=`<div class="opf-funnel-leak" onclick="openFilteredPanel('Failed / unconnected dials (outbound)',()=>true,window.__obFailed)" title="Click for the failed dials">`+
+    `<div></div><div><span class="opf-leak-x">✕</span> <b>${notConnected.toLocaleString()}</b> dials never connected <span class="opf-leak-sub">(${failedDials.toLocaleString()} failed${initNote})</span></div></div>`;
+  el.innerHTML=stepHtml(steps[0],0)+leak+stepHtml(steps[1],1)+stepHtml(steps[2],2);
 }
 // Wasted-effort hit-list: numbers dialed repeatedly that never connected. Each row opens its own dials.
 function paintUnreachableList(unreachable,avgDials){
