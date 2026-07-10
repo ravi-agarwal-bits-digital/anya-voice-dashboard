@@ -1189,6 +1189,13 @@ body.profile-open .profile-overlay{display:block;}
 #reportView #searchMobile::placeholder{color:#98a2b3!important;font-weight:500!important}
 #searchMobile{width:230px!important;padding:9px 14px 9px 36px!important;font-size:13px!important;font-weight:600!important;box-shadow:0 6px 16px rgba(176,138,60,.16)!important}
 #searchMobile::-webkit-search-cancel-button{cursor:pointer}
+/* Campaign filter dropdown in the header */
+#reportView #campaignFilter{border:1px solid var(--gold)!important;border-radius:999px!important;background:#fff8ea!important;color:#7a570f!important;font-size:12px!important;font-weight:800!important;padding:8px 12px!important;max-width:230px!important;cursor:pointer!important;box-shadow:0 6px 16px rgba(176,138,60,.12)!important}
+#reportView #campaignFilter:focus{border-color:var(--navy)!important;box-shadow:0 0 0 3px rgba(11,31,58,.12)!important;outline:none!important}
+/* Sortable campaign-leaderboard headers */
+.camp-sortable{cursor:pointer;user-select:none;transition:.12s}
+.camp-sortable:hover{color:var(--navy)}
+.camp-sorted{color:var(--navy)!important}
 /* Export-CSV button inside slide-over drawers */
 .drawer-csv-btn{padding:6px 13px!important;border-radius:999px!important;border:1px solid var(--gold)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
 .drawer-csv-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important;transform:translateY(-1px)!important}
@@ -1488,6 +1495,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <button type="button" class="dir-btn" id="dir-inbound" data-dir="inbound" onclick="setDirectionFilter('inbound', event)" aria-pressed="false">Inbound</button>
           <button type="button" class="dir-btn" id="dir-outbound" data-dir="outbound" onclick="setDirectionFilter('outbound', event)" aria-pressed="false">Outbound</button>
         </div>
+          <select id="campaignFilter" onchange="setCampaignFilter(this.value)" title="Filter the whole dashboard to one outbound campaign" style="display:none"></select>
           <span id="directionCurrent" class="direction-current all" aria-live="polite">All calls</span>
           <button type="button" id="openMgmtSummaryBtn" class="summary-jump-btn" onclick="openManagementSummary()" title="Open management summary for the selected view">Mgmt Summary</button>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
@@ -1564,6 +1572,17 @@ window.addEventListener('DOMContentLoaded',()=>{
 
   <section id="sec-outbound-cadence-hidden" style="display:none">
     <div class="opf-hidden-note">Outbound Cadence &amp; Capacity is hidden in Inbound view &mdash; dial cadence, retry policy, and connect economics only apply to calls you place. It reappears under Outbound or All calls.</div>
+  </section>
+
+  <section id="sec-campaigns">
+    <div class="shead"><span class="n">00.85</span><h2>Campaign Performance</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">Every outbound campaign side by side. Fresh, targeted lists usually convert far better than bulk batches &mdash; this makes that visible. Use the campaign selector in the header to scope the whole dashboard to one campaign.</div>
+    <div class="panel"><h4>Campaign leaderboard</h4><div class="cap">Dials, connect rate, unique-number reach, and hot-lead rate per campaign. Click a row for its calls; click a header to sort.</div><div id="campaignLeaderboard"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Why dials fail</h4><div class="cap">Diagnosed failure reasons (SIP / hangup codes) for outbound dials that never connected.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
+  </section>
+
+  <section id="sec-campaigns-hidden" style="display:none">
+    <div class="opf-hidden-note">Campaign Performance is hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. It reappears under Outbound or All calls.</div>
   </section>
 
   <!-- Profile drawer: opens in-place without scrolling the dashboard -->
@@ -1968,6 +1987,7 @@ let ALL_DIALS=[]; // dial-level universe: every unique call incl. failed/initiat
                   // outbound connectivity analysis. RECORDS stays the conversation universe (completed calls)
                   // so lead/quality/intent metrics are never diluted by non-connecting dials.
 let SELECTED_DIRECTION="all";
+let SELECTED_CAMPAIGN="all"; // 'all' or an exact Campaign name; scopes the whole dashboard when set
 
 function quickFilter(type){
   const dataMin=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort()[0]:null;
@@ -2083,6 +2103,7 @@ function applyFilters(){
     if(fromDate && r.d<fromDate) return false;
     if(toDate && r.d>toDate) return false;
     if(SELECTED_DIRECTION!=='all' && normalizeDirection(r.direction)!==SELECTED_DIRECTION) return false;
+    if(SELECTED_CAMPAIGN!=='all' && (r.campaign||'')!==SELECTED_CAMPAIGN) return false;
     return true;
   });
   
@@ -2109,7 +2130,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
   closeUserSearch();
 }
@@ -2598,6 +2619,25 @@ function updateDirectionButtons(){
     current.textContent=currentDirectionLabel();
   }
 }
+function setCampaignFilter(name){
+  SELECTED_CAMPAIGN=name||'all';
+  applyFilters();
+}
+// Populate the campaign dropdown from the campaigns present in the data (outbound only; inbound has none).
+// Hidden entirely when the export carries no campaign column (older files), so nothing regresses.
+function populateCampaignFilter(){
+  const sel=$('campaignFilter');
+  if(!sel)return;
+  const counts={};
+  ALL_DIALS.forEach(r=>{const c=(r.campaign||'').trim();if(c)counts[c]=(counts[c]||0)+1;});
+  const names=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  if(!names.length){sel.style.display='none';SELECTED_CAMPAIGN='all';return;}
+  sel.style.display='';
+  sel.innerHTML=`<option value="all">All campaigns</option>`+
+    names.map(n=>`<option value="${esc(n)}">${esc(n)} (${counts[n].toLocaleString()})</option>`).join('');
+  if(SELECTED_CAMPAIGN!=='all' && !counts[SELECTED_CAMPAIGN])SELECTED_CAMPAIGN='all';
+  sel.value=SELECTED_CAMPAIGN;
+}
 function recordMatchesDate(r){
   const fromDate=$('filterFromDate')?$('filterFromDate').value:'';
   const toDate=$('filterToDate')?$('filterToDate').value:'';
@@ -2609,13 +2649,17 @@ function recordMatchesDate(r){
 function recordMatchesDirection(r){
   return SELECTED_DIRECTION==='all' || normalizeDirection(r.direction)===SELECTED_DIRECTION;
 }
-function recordMatchesCurrentFilters(r){return recordMatchesDate(r)&&recordMatchesDirection(r);}
+function recordMatchesCampaign(r){
+  return SELECTED_CAMPAIGN==='all' || (r.campaign||'')===SELECTED_CAMPAIGN;
+}
+function recordMatchesCurrentFilters(r){return recordMatchesDate(r)&&recordMatchesDirection(r)&&recordMatchesCampaign(r);}
 function currentDirectionLabel(){return SELECTED_DIRECTION==='all'?'All Calls':directionLabel(SELECTED_DIRECTION);}
 function currentViewDescription(){
   const from=$('filterFromDate')&&$('filterFromDate').value;
   const to=$('filterToDate')&&$('filterToDate').value;
   let bits=[];
   bits.push(currentDirectionLabel());
+  if(SELECTED_CAMPAIGN!=='all')bits.push('“'+SELECTED_CAMPAIGN+'”');
   if(from||to){
     const fmt=d=>{try{return new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});}catch(e){return d;}};
     if(from&&to)bits.push(fmt(from)+' to '+fmt(to));
@@ -2680,8 +2724,8 @@ function dispositionCounts(recs){
 // toggle — blending in inbound calls (which are connected by definition) would inflate the connect rate.
 function outboundRecordsInView(){
   // Dial-level: pulls from ALL_DIALS (incl. failed/initiated) so connect rate is real, not the ~100%
-  // you'd get from completed-only conversation records.
-  return ALL_DIALS.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)==='outbound');
+  // you'd get from completed-only conversation records. Respects the campaign filter too.
+  return ALL_DIALS.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)==='outbound');
 }
 function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
 function fmtDayLabel(iso){if(!iso)return '—';const p=String(iso).split('-');if(p.length<3)return String(iso);const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${p[2]} ${mon[Number(p[1])-1]||''}`;}
@@ -2990,7 +3034,7 @@ function paintUnreachableList(unreachable,avgDials){
 // Concurrency: each completed call occupies [ts, ts+dur]; peak overlap = channels in use. System-wide
 // (both directions) since a line is shared, date-filtered but not direction-filtered.
 function concurrencyStats(){
-  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && r.dur>0);
+  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && r.dur>0);
   if(!recs.length)return null;
   const events=[];
   recs.forEach(r=>{events.push([r.ts,1]);events.push([r.ts+r.dur,-1]);});
@@ -3111,6 +3155,87 @@ function paintOutboundCadence(){
   paintConcurrency();
   paintCadenceCompliance();
   paintRetryEconomics();
+}
+
+// ===== CAMPAIGN PERFORMANCE & FAILURE DIAGNOSTICS =====
+let CAMPAIGN_SORT='dials'; // 'dials' | 'connect' | 'reach' | 'hot'
+function setCampaignSort(k){CAMPAIGN_SORT=k;paintCampaignLeaderboard();}
+// Per-campaign outbound stats over the current DATE view (not scoped to the campaign filter -- the
+// leaderboard's whole point is to compare every campaign side by side).
+function campaignStats(){
+  const dials=ALL_DIALS.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  const byC={};
+  dials.forEach(r=>{
+    const c=(r.campaign||'').trim()||'(no campaign)';
+    const b=byC[c]||(byC[c]={dials:0,connected:0,hot:0,numbers:{}});
+    b.dials++;
+    const conn=normalizeDisposition(r)==='connected';
+    if(conn){b.connected++;if(r.leadTemp==='Hot')b.hot++;}
+    const num=r.from||'?';
+    if(!b.numbers[num])b.numbers[num]=false;
+    if(conn)b.numbers[num]=true;
+  });
+  return Object.entries(byC).map(([campaign,b])=>{
+    const numsTotal=Object.keys(b.numbers).length;
+    const reached=Object.values(b.numbers).filter(Boolean).length;
+    return {campaign,dials:b.dials,connectPct:b.dials?Math.round(b.connected/b.dials*100):0,
+      reachPct:numsTotal?Math.round(reached/numsTotal*100):0,hotPct:b.connected?Math.round(b.hot/b.connected*100):0,numbers:numsTotal};
+  });
+}
+function paintCampaignLeaderboard(){
+  const el=$('campaignLeaderboard');if(!el)return;
+  const rows=campaignStats();
+  if(!rows.length){el.innerHTML=emptyViewHtml('No outbound campaigns in this range.');return;}
+  const keyMap={dials:'dials',connect:'connectPct',reach:'reachPct',hot:'hotPct'};
+  const sk=keyMap[CAMPAIGN_SORT]||'dials';
+  rows.sort((a,b)=>b[sk]-a[sk]||b.dials-a.dials);
+  window.__campaignRows={};
+  const base=ALL_DIALS.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
+  const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
+  const th=(k,lbl)=>`<th class="num camp-sortable ${CAMPAIGN_SORT===k?'camp-sorted':''}" onclick="setCampaignSort('${k}')">${lbl}${CAMPAIGN_SORT===k?' ▾':''}</th>`;
+  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr><th>Campaign</th>${th('dials','Dials')}${th('connect','Connect %')}${th('reach','Reach %')}${th('hot','Hot %')}</tr></thead><tbody>`+
+    rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel('${esc(x.campaign)} (outbound)',()=>true,window.__campaignRows['${esc(x.campaign).replace(/'/g,"\\'")}'])">`+
+      `<td><span class="iq-name">${esc(x.campaign)}</span><div class="iq-sub">${x.numbers.toLocaleString()} numbers dialed</div></td>`+
+      `<td class="num">${x.dials.toLocaleString()}</td>`+
+      `<td class="num">${x.connectPct}%</td>`+
+      `<td class="num">${x.reachPct}%</td>`+
+      `<td class="num"><div class="iq-barwrap iq-hot" style="justify-content:flex-end;min-width:0"><div class="iq-bartrack" style="max-width:64px;flex:0 0 64px"><div class="iq-barfill" style="width:${Math.round(x.hotPct/maxHot*100)}%"></div></div><span class="iq-barval">${x.hotPct}%</span></div></td></tr>`).join('')+
+    `</tbody></table></div>`;
+}
+const SIP_LABEL={'603':'Declined by callee (SIP 603)','480':'Temporarily unavailable (480)','486':'Busy (486)','408':'No answer / timeout (408)','404':'Number not found (404)','403':'Forbidden (403)','500':'Server error (500)','503':'Service unavailable (503)','502':'Bad gateway (502)'};
+function failureReasonLabel(r){
+  if(r.failReason && r.failReason!=='None' && r.failReason!=='')return r.failReason.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  if(r.sipCode && r.sipCode!=='None' && r.sipCode!=='')return SIP_LABEL[r.sipCode]||('SIP / Hangup '+r.sipCode);
+  return null;
+}
+function paintFailureBreakdown(){
+  const el=$('failureBreakdown'),cov=$('failureCoverage');if(!el)return;
+  const failed=outboundRecordsInView().filter(r=>normalizeDisposition(r)!=='connected');
+  if(!failed.length){el.innerHTML=emptyViewHtml('No failed outbound dials in this range.');if(cov)cov.style.display='none';return;}
+  const groups={};let coded=0;
+  failed.forEach(r=>{const l=failureReasonLabel(r);if(l){coded++;groups[l]=(groups[l]||0)+1;}});
+  const uncoded=failed.length-coded;
+  window.__failGroups={};
+  Object.keys(groups).forEach(l=>{window.__failGroups[l]=failed.filter(r=>failureReasonLabel(r)===l);});
+  window.__failUncoded=failed.filter(r=>!failureReasonLabel(r));
+  if(cov){
+    cov.style.display='flex';cov.style.background='#f8fafc';cov.style.borderColor='var(--line)';
+    cov.innerHTML=`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>${coded.toLocaleString()}</b> of ${failed.length.toLocaleString()} failed dials carry a diagnosed reason (${Math.round(coded/failed.length*100)}%). Telephony coding is newer, so older campaigns are mostly uncoded — coverage grows as fresh campaigns dial.</span>`;
+  }
+  const entries=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
+  const max=Math.max(...entries.map(e=>e[1]),uncoded,1);
+  const colorFor=l=>/declin/i.test(l)?C.hot:/unavail|busy|no.?answer|timeout/i.test(l)?C.warm:C.cold;
+  el.innerHTML=entries.map(([l,n])=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${esc(l)} (failed dials)',()=>true,window.__failGroups['${esc(l).replace(/'/g,"\\'")}'])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/failed.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`).join('')+
+    (uncoded?`<div style="margin-top:4px;cursor:pointer" onclick="openFilteredPanel('Uncoded failed dials',()=>true,window.__failUncoded)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="color:var(--faint)">Uncoded — no reason logged</span><b style="color:var(--faint)">${uncoded.toLocaleString()} (${Math.round(uncoded/failed.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:#c9d3e2;height:100%;width:${Math.round(uncoded/max*100)}%"></div></div></div>`:'');
+}
+function paintCampaignSection(){
+  const sec=$('sec-campaigns'),hidden=$('sec-campaigns-hidden');
+  if(SELECTED_DIRECTION==='inbound'){if(sec)sec.style.display='none';if(hidden)hidden.style.display='block';return;}
+  if(sec)sec.style.display='';if(hidden)hidden.style.display='none';
+  const scope=$('campaignScopeNote');if(scope)scope.style.display=(SELECTED_DIRECTION==='all')?'inline-flex':'none';
+  paintCampaignLeaderboard();
+  paintFailureBreakdown();
 }
 
 // ===== ANOMALY DETECTION — "WHAT MOVED, AND WHY" =====
@@ -3340,6 +3465,13 @@ function rowToRecord(r){
     status:String(pickField(r,['Status','Call Status'])||'').toLowerCase(),leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
     conf:Number(pickField(r,['Bot Conf.','Bot Conf','Bot Confidence','AI Confidence','Confidence','Model Confidence']))||0,need,
     band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:cbWindow.label,cbPreferredDate:cbWindow.date,frustrated,summary,
+    campaign:String(pickField(r,['Campaign','Campaign Name'])||'').trim(),
+    campaignId:String(pickField(r,['Campaign ID','CampaignId'])||'').trim(),
+    failStage:String(pickField(r,['Failure Stage'])||'').trim(),
+    failReason:String(pickField(r,['Failure Reason'])||'').trim(),
+    failDetail:String(pickField(r,['Failure Detail'])||'').trim(),
+    sipCode:String(pickField(r,['SIP / Hangup Code','SIP/Hangup Code','SIP Code','Hangup Code'])||'').trim(),
+    hangupCause:String(pickField(r,['Hangup Cause'])||'').trim(),
     from:leadPhone,leadPhone,rawFrom,rawTo,trans
   };
 }
@@ -3602,13 +3734,14 @@ function boot(){
   $("filterToDate").value=dmax;
   updateFilterButtons("all");
   updateDirectionButtons();
-  
+  populateCampaignFilter();
+
   const totalMins=sumBilledMinutes(RECORDS);
   const totalCost=totalMins*5;
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
