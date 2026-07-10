@@ -385,6 +385,41 @@ footer b{color:var(--navy)!important}
 .opf-bestwin b{color:var(--sage)}
 .opf-bestwin-dot{width:9px;height:9px;border-radius:50%;background:var(--sage);flex-shrink:0}
 @media screen and (max-width:720px){.opf-funnel-step{grid-template-columns:110px 1fr 64px;gap:8px}.opf-funnel-label{font-size:11px}.opf-funnel-pct{font-size:10px}}
+/* Toggle shared by Conversion-by-intent and Dial-timing panels */
+.iq-toggle{display:inline-flex;background:var(--paper2,#f8fafc);border:1px solid var(--line);border-radius:12px;padding:4px;gap:3px;margin:4px 0 14px}
+.iq-toggle button{font-family:'Inter',system-ui,sans-serif!important;font-size:12px!important;font-weight:800!important;color:var(--muted)!important;background:transparent!important;border:0!important;border-radius:9px!important;padding:7px 13px!important;cursor:pointer!important;box-shadow:none!important;transition:.15s}
+.iq-toggle button:hover{color:var(--navy)!important;transform:none!important}
+.iq-toggle button.on{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;color:#fff!important;box-shadow:0 8px 18px rgba(11,31,58,.14)!important}
+/* Conversion-quality-by-intent / dial-timing matrix */
+.iq-table{width:100%;border-collapse:collapse;font-size:13px}
+.iq-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:800;padding:0 10px 10px;border-bottom:1px solid var(--line)}
+.iq-table th.num,.iq-table td.num{text-align:right}
+.iq-table td{padding:12px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.iq-table tr:last-child td{border-bottom:none}
+.iq-table tr.iq-row{cursor:pointer;transition:.12s}
+.iq-table tr.iq-row:hover td{background:var(--paper2,#f8fafc)}
+.iq-name{font-weight:800;font-size:13.5px}
+.iq-sub{font-size:11px;color:var(--faint)}
+.iq-barwrap{display:flex;align-items:center;gap:9px;min-width:110px}
+.iq-bartrack{flex:1;height:9px;background:var(--line2);border-radius:6px;overflow:hidden;min-width:52px}
+.iq-barfill{height:100%;border-radius:6px}
+.iq-barval{font-family:'Source Serif 4',Georgia,serif;font-weight:700;font-size:14px;min-width:36px;text-align:right}
+.iq-hot .iq-barfill{background:var(--sage)}.iq-hot .iq-barval{color:var(--sage)}
+.iq-red .iq-barfill{background:var(--burgundy)}.iq-red .iq-barval{color:var(--burgundy)}
+.iq-vol .iq-barfill{background:var(--navy)}.iq-vol .iq-barval{color:var(--navy)}
+.iq-produced{font-family:'Source Serif 4',Georgia,serif;font-weight:700;font-size:15px;color:var(--navy)}
+.iq-chip{display:inline-block;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:999px;margin-left:6px;letter-spacing:.03em}
+.iq-chip.gem{background:rgba(36,120,88,.14);color:var(--sage)}
+.iq-chip.dead{background:rgba(163,58,58,.13);color:var(--burgundy)}
+.iq-insight{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.iq-ins{border-radius:14px;padding:13px 15px;border:1px solid var(--line);border-left-width:5px}
+.iq-ins.gem{background:rgba(36,120,88,.06);border-left-color:var(--sage)}
+.iq-ins.dead{background:rgba(163,58,58,.06);border-left-color:var(--burgundy)}
+.iq-ins .t{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.iq-ins .h{font-family:'Source Serif 4',Georgia,serif;font-size:18px;font-weight:700;margin:3px 0 4px;letter-spacing:-.02em}
+.iq-ins.gem .h{color:var(--sage)}.iq-ins.dead .h{color:var(--burgundy)}
+.iq-ins .d{font-size:12px;color:var(--muted);line-height:1.5}.iq-ins .d b{color:var(--navy)}
+@media screen and (max-width:760px){.iq-insight{grid-template-columns:1fr}.iq-sub,.iq-hidecol{display:none}.iq-table th.iq-hidecol{display:none}}
 .opf-dirlabel{display:inline-flex;align-items:center;gap:6px;font-weight:800}
 .opf-dirdot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .opf-dirdot.opf-inbound{background:var(--sage)}
@@ -1426,6 +1461,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     </div>
     <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead. Tells you when redialing stops paying off.</div><div id="redialCurve"></div></div>
     <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block (IST). Darker = higher connect rate. Dial into the dark cells.</div><div id="bestWindowNote" class="opf-bestwin"></div><div class="opf-heatmap" id="dialHeatmap"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Dial timing vs yield</h4><div class="cap">Are dials going into the windows that actually connect and convert? Volume, connect rate, and hot-lead rate side by side — by hour block or weekday.</div><div id="dialTimingControls" class="iq-toggle"></div><div id="dialTimingNote" class="opf-bestwin" style="display:none"></div><div id="dialTiming"></div></div>
   </section>
 
   <section id="sec-outbound-perf-hidden" style="display:none">
@@ -1468,7 +1504,9 @@ window.addEventListener('DOMContentLoaded',()=>{
     </div></section>
 
   <section id="sec-themes"><div class="shead"><span class="n">03</span><h2>Demand themes</h2></div>
-    <div class="panel"><h4>Intent distribution</h4><div class="cap" style="margin-bottom:14px">Transcript-derived themes across the selected calls.</div><div class="intlist" id="intents"></div></div></section>
+    <div class="panel"><h4>Intent distribution</h4><div class="cap" style="margin-bottom:14px">Transcript-derived themes across the selected calls.</div><div class="intlist" id="intents"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Conversion quality by intent</h4><div class="cap">Not every reached call is worth the same. For each thing people call about, how often it turns into a <b>hot lead</b> vs. a frustrated dead-end — so effort and scripting go where demand actually converts. Reflects the current date &amp; direction view.</div><div id="intentQualityControls" class="iq-toggle"></div><div id="intentQuality"></div></div>
+  </section>
 
   <section id="sec-volume"><div class="shead"><span class="n">04</span><h2>Demand trends</h2></div>
     <div class="grid2">
@@ -1970,7 +2008,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintIntentQuality(RECORDS);renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
   closeUserSearch();
 }
@@ -2691,6 +2729,59 @@ function paintDialHeatmap(obRecs){
   });
   el.innerHTML=html;
 }
+// ===== DIAL TIMING VS YIELD =====
+// One row per hour-block (or weekday): dial volume, connect rate, and hot-lead rate among connected calls.
+// Answers "are we dialing hardest into the windows that don't connect / don't convert?"
+let DIAL_TIMING_VIEW='hour'; // 'hour' | 'weekday'
+function setDialTimingView(v){DIAL_TIMING_VIEW=v;paintDialTiming(window.__obRecs||[]);}
+function paintDialTiming(dials){
+  const el=$('dialTiming'),ctrl=$('dialTimingControls'),note=$('dialTimingNote');
+  if(!el)return;
+  if(!dials.length){if(ctrl)ctrl.innerHTML='';if(note)note.style.display='none';el.innerHTML=emptyViewHtml('No outbound dials in this range.');return;}
+  const isHour=DIAL_TIMING_VIEW==='hour';
+  const blockDefs=[[0,4],[4,8],[8,12],[12,16],[16,20],[20,24]];
+  const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}:00–${String(b[1]).padStart(2,'0')}:00`);
+  const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const buckets=(isHour?blockLabels:dayNames).map(lb=>({label:lb,dials:0,conn:0,hot:0,recs:[]}));
+  dials.forEach(r=>{
+    let idx=-1;
+    if(isHour){idx=blockDefs.findIndex(b=>r.h>=b[0]&&r.h<b[1]);}
+    else if(r.d){const p=r.d.split('-').map(Number);idx=(new Date(p[0],p[1]-1,p[2]).getDay()+6)%7;}
+    if(idx<0)return;
+    const bk=buckets[idx];bk.dials++;bk.recs.push(r);
+    if(normalizeDisposition(r)==='connected'){bk.conn++;if(r.leadTemp==='Hot')bk.hot++;}
+  });
+  const active=buckets.filter(b=>b.dials>0);
+  if(!active.length){el.innerHTML=emptyViewHtml('No timed outbound dials in this range.');return;}
+  window.__dtBuckets=buckets.map(b=>b.recs);
+  const totalDials=dials.length,maxDials=Math.max(...buckets.map(b=>b.dials),1);
+  if(ctrl)ctrl.innerHTML=[['hour','By hour block'],['weekday','By weekday']]
+    .map(t=>`<button type="button" class="${DIAL_TIMING_VIEW===t[0]?'on':''}" onclick="setDialTimingView('${t[0]}')">${t[1]}</button>`).join('');
+  // Insight: heaviest-volume window vs the best-connecting reliable window
+  const floor=Math.max(30,Math.round(totalDials*0.02));
+  const heaviest=active.slice().sort((a,b)=>b.dials-a.dials)[0];
+  const bestConn=active.filter(b=>b.dials>=floor).sort((a,b)=>(b.conn/b.dials)-(a.conn/a.dials))[0];
+  if(note){
+    const hConn=Math.round(heaviest.conn/heaviest.dials*100),bConn=bestConn?Math.round(bestConn.conn/bestConn.dials*100):0;
+    if(bestConn && bestConn.label!==heaviest.label && bConn-hConn>=6){
+      note.style.display='flex';
+      note.innerHTML=`<span class="opf-bestwin-dot" style="background:var(--burgundy)"></span>Most dials land in <b>${esc(heaviest.label)}</b> (${Math.round(heaviest.dials/totalDials*100)}% of volume) which connects at just <b>${hConn}%</b> — <b>${esc(bestConn.label)}</b> connects at <b>${bConn}%</b>. Shift volume toward the better window.`;
+    }else{note.style.display='none';}
+  }
+  const rows=buckets.map((b,i)=>{
+    if(!b.dials)return '';
+    const connPct=Math.round(b.conn/b.dials*100),hotPct=b.conn?Math.round(b.hot/b.conn*100):0;
+    return `<tr class="iq-row" onclick="openFilteredPanel('${esc(b.label)} (outbound dials)',()=>true,window.__dtBuckets[${i}])">`+
+      `<td><span class="iq-name">${esc(b.label)}</span></td>`+
+      `<td class="num">${b.dials.toLocaleString()}<div class="iq-sub">${Math.round(b.dials/totalDials*100)}% of dials</div></td>`+
+      `<td><div class="iq-barwrap iq-vol"><div class="iq-bartrack"><div class="iq-barfill" style="width:${Math.round(b.dials/maxDials*100)}%"></div></div></div></td>`+
+      `<td><div class="iq-barwrap iq-hot"><div class="iq-bartrack"><div class="iq-barfill" style="width:${connPct}%"></div></div><span class="iq-barval">${connPct}%</span></div></td>`+
+      `<td class="num iq-hidecol"><b>${hotPct}%</b></td></tr>`;
+  }).join('');
+  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr>`+
+    `<th>${isHour?'Hour block (IST)':'Weekday'}</th><th class="num">Dials</th><th>Volume</th><th>Connect rate</th><th class="num iq-hidecol">Hot rate (of connected)</th>`+
+    `</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 function paintOutboundPerf(){
   const secPerf=$('sec-outbound-perf'), secHidden=$('sec-outbound-perf-hidden');
   if(SELECTED_DIRECTION==='inbound'){
@@ -2709,7 +2800,8 @@ function paintOutboundPerf(){
   if(!n){
     if(kpiEl)kpiEl.innerHTML=emptyViewHtml('No outbound dials in this range.');
     ['outboundFunnel','unreachableList'].forEach(id=>{if($(id))$(id).innerHTML=emptyViewHtml('No outbound dials in this range.');});
-    paintDispositionBreak(obRecs);paintRedialCurve(obRecs);paintDialHeatmap(obRecs);
+    window.__obRecs=obRecs;
+    paintDispositionBreak(obRecs);paintRedialCurve(obRecs);paintDialHeatmap(obRecs);paintDialTiming(obRecs);
     return;
   }
   const buckets=dispositionCounts(obRecs);
@@ -2744,6 +2836,7 @@ function paintOutboundPerf(){
   paintUnreachableList(unreachable,avgDials);
   paintRedialCurve(obRecs);
   paintDialHeatmap(obRecs);
+  paintDialTiming(obRecs);
 }
 // Outbound conversion funnel: dials placed -> numbers reached -> connected conversations -> hot leads.
 // Shows exactly where outbound effort leaks on the way to a convertible lead.
@@ -3215,7 +3308,7 @@ function boot(){
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintIntentQuality(RECORDS);renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
@@ -3387,6 +3480,62 @@ function paintIntents(o){
   const sorted=Object.entries(o.intent).filter(d=>d[1]>0).sort((a,b)=>b[1]-a[1]);
   if(!sorted.length){$("intents").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No intent data in this range.</div>`;return;}
   $("intents").innerHTML=sorted.map(d=>`<div class="intitem" style="cursor:pointer" onclick="openFilteredPanel('${esc(d[0])} theme',r=>r.intent==='${esc(d[0]).replace(/'/g,"\\'")}')"><span class="in">${esc(d[0])}</span><span class="ct">${d[1]}</span></div>`).join("");
+}
+
+// ===== CONVERSION QUALITY BY INTENT =====
+// For each mined intent, how the reached calls convert (hot-lead rate) vs. dead-end (red band / frustrated).
+// "Hot leads produced" = the actual hot-lead count each intent contributes (volume x hot rate), so a rare
+// but high-converting topic and a high-volume workhorse are both visible. Reflects current date+direction view.
+let INTENT_Q_SORT='produced'; // 'produced' | 'hotPct' | 'n'
+function setIntentQSort(k){INTENT_Q_SORT=k;paintIntentQuality(RECORDS);}
+function paintIntentQuality(recs){
+  const el=$('intentQuality'),ctrl=$('intentQualityControls');
+  if(!el)return;
+  const total=recs.length;
+  if(!total){if(ctrl)ctrl.innerHTML='';el.innerHTML=emptyViewHtml('No calls in this view.');return;}
+  const g={};
+  recs.forEach(r=>{
+    const k=r.intent||'General';
+    const b=g[k]||(g[k]={intent:k,n:0,hot:0,red:0,green:0,confSum:0,needSum:0,frust:0});
+    b.n++;
+    if(r.leadTemp==='Hot')b.hot++;
+    if(r.band==='Red')b.red++;else if(r.band==='Green')b.green++;
+    b.confSum+=Number(r.conf||0);b.needSum+=Number(r.need||0);
+    if(r.frustrated)b.frust++;
+  });
+  let arr=Object.values(g).map(b=>({intent:b.intent,n:b.n,share:Math.round(b.n/total*100),
+    hotPct:Math.round(b.hot/b.n*100),redPct:Math.round(b.red/b.n*100),
+    conf:Math.round(b.confSum/b.n),need:Math.round(b.needSum/b.n),frustPct:Math.round(b.frust/b.n*100),
+    produced:b.hot}));
+  const floor=Math.max(15,Math.round(total*0.01));
+  const overallHotPct=Math.round(recs.filter(r=>r.leadTemp==='Hot').length/total*100);
+  const gem=arr.filter(x=>x.n>=floor).slice().sort((a,b)=>b.hotPct-a.hotPct)[0];
+  // Dead-zone: a high-volume intent converting at well under half the overall hot rate.
+  const deadCut=Math.max(5,Math.round(overallHotPct*0.5));
+  const dead=arr.filter(x=>x.hotPct<deadCut && x.share>=15).sort((a,b)=>b.n-a.n)[0];
+  arr.sort((a,b)=>b[INTENT_Q_SORT]-a[INTENT_Q_SORT]||b.n-a.n);
+  window.__iqGroups={};
+  arr.forEach(x=>{window.__iqGroups[x.intent]=recs.filter(r=>(r.intent||'General')===x.intent);});
+  const maxHot=Math.max(...arr.map(x=>x.hotPct),1),maxRed=Math.max(...arr.map(x=>x.redPct),1);
+  if(ctrl)ctrl.innerHTML=[['produced','Hot leads produced'],['hotPct','Hot-lead rate'],['n','Volume']]
+    .map(t=>`<button type="button" class="${INTENT_Q_SORT===t[0]?'on':''}" onclick="setIntentQSort('${t[0]}')">${t[1]}</button>`).join('');
+  const insight=(gem||dead)?`<div class="iq-insight">`+
+    (gem?`<div class="iq-ins gem"><div class="t">Highest-converting topic</div><div class="h">${esc(gem.intent)} — ${gem.hotPct}% hot</div><div class="d"><b>${gem.share}% of connects</b> (${gem.n.toLocaleString()} calls), converting at <b>${gem.hotPct}%</b> with avg confidence ${gem.conf} and need ${gem.need}. Prioritise routing these to a counsellor.</div></div>`:'')+
+    (dead?`<div class="iq-ins dead"><div class="t">Conversion dead-zone</div><div class="h">${esc(dead.intent)} — ${dead.hotPct}% hot</div><div class="d"><b>${dead.share}% of every connect</b> (${dead.n.toLocaleString()} calls) but only <b>${dead.hotPct}% hot</b>, ${dead.redPct}% red-band, ${dead.frustPct}% frustrated. A big share of reach spent where little converts.</div></div>`:'')+
+    `</div>`:'';
+  const rows=arr.map(x=>{
+    const chip=gem&&x.intent===gem.intent?'<span class="iq-chip gem">TOP</span>':dead&&x.intent===dead.intent?'<span class="iq-chip dead">DEAD-ZONE</span>':'';
+    return `<tr class="iq-row" onclick="openFilteredPanel('${esc(x.intent)} — conversion',()=>true,window.__iqGroups['${esc(x.intent).replace(/'/g,"\\'")}'])">`+
+      `<td><span class="iq-name">${esc(x.intent)}</span>${chip}<div class="iq-sub">${x.frustPct}% frustrated · avg need ${x.need}</div></td>`+
+      `<td class="num">${x.n.toLocaleString()}<div class="iq-sub">${x.share}% of connects</div></td>`+
+      `<td><div class="iq-barwrap iq-hot"><div class="iq-bartrack"><div class="iq-barfill" style="width:${Math.round(x.hotPct/maxHot*100)}%"></div></div><span class="iq-barval">${x.hotPct}%</span></div></td>`+
+      `<td class="iq-hidecol"><div class="iq-barwrap iq-red"><div class="iq-bartrack"><div class="iq-barfill" style="width:${Math.round(x.redPct/maxRed*100)}%"></div></div><span class="iq-barval">${x.redPct}%</span></div></td>`+
+      `<td class="num iq-hidecol">${x.conf}</td>`+
+      `<td class="num"><span class="iq-produced">${x.produced.toLocaleString()}</span></td></tr>`;
+  }).join('');
+  el.innerHTML=insight+`<div style="overflow-x:auto"><table class="iq-table"><thead><tr>`+
+    `<th>Intent</th><th class="num">Connects</th><th>Hot-lead rate</th><th class="iq-hidecol">Red-band rate</th><th class="num iq-hidecol">Avg conf.</th><th class="num">Hot leads produced</th>`+
+    `</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function paintDurBands(o){
