@@ -1119,6 +1119,59 @@ body.profile-open .profile-overlay{display:block;}
 }
 </style>
 
+<style id="cadence-capacity-anomaly">
+.subh{font-size:12px;font-weight:800;color:var(--navy);margin-bottom:10px}
+/* concurrency intraday chart */
+.conc-chart{display:flex;align-items:stretch;gap:3px;height:150px;padding:6px 0 0;border-bottom:1px solid var(--line);position:relative}
+.conc-chart .conc-need{position:absolute;left:0;right:0;border-top:2px dashed var(--burgundy);opacity:.5}
+.conc-chart .conc-need span{position:absolute;right:0;top:-15px;font-size:10px;font-weight:800;color:var(--burgundy)}
+.conc-col{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px;min-width:0}
+.conc-col .cbar{width:100%;max-width:26px;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--navy2),var(--navy));min-height:2px;transition:height .5s cubic-bezier(.2,.8,.2,1)}
+.conc-col.biz .cbar{background:linear-gradient(180deg,#5486bd,#2f5486)}
+.conc-col .cn{font-size:9px;color:var(--faint);font-variant-numeric:tabular-nums}
+.conc-axis{display:flex;gap:3px;margin-top:5px}
+.conc-axis .ct{flex:1;text-align:center;font-size:9px;color:var(--faint)}
+/* compliance scorecard */
+.rule{display:grid;grid-template-columns:1.5fr 1fr 1.1fr auto;gap:12px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--line2)}
+.rule:last-child{border-bottom:none}
+.rule-name{font-weight:800;font-size:13.5px}
+.rule-sub{font-size:11px;color:var(--faint);margin-top:2px}
+.rule-col .rk{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:800}
+.rule-col .rv{font-family:'Source Serif 4',Georgia,serif;font-size:16px;font-weight:700;margin-top:2px}
+.rule-col .rv.sm{font-size:13px;font-family:'Inter',sans-serif;font-weight:800}
+.rstatus{font-size:11px;font-weight:800;padding:5px 12px;border-radius:999px;white-space:nowrap}
+.rstatus.pass{background:rgba(36,120,88,.14);color:var(--sage)}
+.rstatus.warn{background:rgba(183,121,31,.16);color:var(--amber)}
+.rstatus.fail{background:rgba(163,58,58,.14);color:var(--burgundy)}
+.rule-col.clickable{cursor:pointer}
+.rule-col.clickable:hover .rv{text-decoration:underline}
+/* reach + gap bars */
+.brow{display:grid;grid-template-columns:118px 1fr;align-items:center;gap:12px;margin-bottom:9px}
+.brow .blbl{font-size:12.5px;font-weight:700}
+.brow .btrack{background:var(--line2);border-radius:6px;height:22px;overflow:hidden}
+.brow .bfill{height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:11px;font-weight:800;min-width:26px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.reco{margin-top:16px;padding:14px 16px;border-radius:14px;background:rgba(36,120,88,.06);border:1px solid rgba(36,120,88,.25);border-left:5px solid var(--sage);font-size:12.5px;color:var(--navy);line-height:1.6}
+.reco b{color:var(--sage)}
+/* anomaly cards */
+.anom-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.anom{border-radius:16px;padding:16px 18px;border:1px solid var(--line);border-left-width:5px;background:var(--paper2,#f8fafc);display:flex;flex-direction:column;gap:2px}
+.anom.pos{border-left-color:var(--sage);background:rgba(36,120,88,.05)}
+.anom.watch{border-left-color:var(--amber);background:rgba(183,121,31,.05)}
+.anom.stable{border-left-color:var(--blue);background:rgba(63,107,168,.05)}
+.anom.opp{border-left-color:var(--gold);background:rgba(176,138,60,.06)}
+.anom-tag{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;padding:3px 8px;border-radius:999px;align-self:flex-start;margin-bottom:5px}
+.anom.pos .anom-tag{background:rgba(36,120,88,.14);color:var(--sage)}
+.anom.watch .anom-tag{background:rgba(183,121,31,.14);color:var(--amber)}
+.anom.stable .anom-tag{background:rgba(63,107,168,.14);color:var(--blue)}
+.anom.opp .anom-tag{background:rgba(176,138,60,.16);color:var(--gold)}
+.anom h3{font-size:14.5px;font-weight:800;letter-spacing:-.01em;line-height:1.3;color:var(--navy)}
+.anom .anom-metric{font-family:'Source Serif 4',Georgia,serif;font-size:22px;font-weight:700;letter-spacing:-.02em;margin:6px 0 4px}
+.anom.pos .anom-metric{color:var(--sage)}.anom.watch .anom-metric{color:var(--amber)}.anom.stable .anom-metric{color:var(--navy)}.anom.opp .anom-metric{color:var(--gold)}
+.anom .anom-why{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:2px}
+.anom .anom-why b{color:var(--navy);font-weight:700}
+@media screen and (max-width:760px){.anom-grid{grid-template-columns:1fr}.rule{grid-template-columns:1fr auto}.rule-col{display:none}.conc-col .cn{display:none}}
+</style>
+
 </head>
 <body>
 
@@ -1440,6 +1493,12 @@ window.addEventListener('DOMContentLoaded',()=>{
     </div>
   </section>
 
+  <section id="sec-anomaly">
+    <div class="shead"><span class="n">00.6</span><h2>What moved, and why</h2></div>
+    <div class="cap" style="margin:-10px 0 16px">Auto-detected shifts versus the prior period, each with a data-derived cause &mdash; including when a change is <b>not</b> what it looks like. Reflects the current date &amp; direction view.</div>
+    <div class="anom-grid" id="anomalyCards"></div>
+  </section>
+
   <section id="sec-direction" class="direction-overview">
     <div class="shead"><span class="n">00</span><h2>Call Flow Overview</h2></div>
     <div class="direction-summary" id="directionSummary"></div>
@@ -1466,6 +1525,18 @@ window.addEventListener('DOMContentLoaded',()=>{
 
   <section id="sec-outbound-perf-hidden" style="display:none">
     <div class="opf-hidden-note">Outbound Performance &amp; Conversion is hidden in Inbound view &mdash; connect rate, reach, and redial economics aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
+  </section>
+
+  <section id="sec-outbound-cadence">
+    <div class="shead"><span class="n">00.8</span><h2>Outbound Cadence &amp; Capacity</h2><span id="cadenceScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">How many lines you need, whether the dialer is honouring your calling policy, and the retry cadence that actually gets a connection without over-calling.</div>
+    <div class="panel"><h4>Concurrency &amp; capacity</h4><div class="cap">Simultaneous live conversations across the selected range &mdash; peak overlap sets your minimum channel/licence count. Talk time only; a ringing line is also occupied, so treat the peak as a floor.</div><div class="strip" id="concKpis"></div><div class="subh" style="margin-top:18px">Peak concurrent calls by hour of day (IST)</div><div class="conc-chart" id="concChart"></div><div class="conc-axis" id="concAxis"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Calling-policy compliance</h4><div class="cap">Your rule: after a no-pickup, up to <b>3 more attempts at ~5-hour intervals</b>, only within <b>9am&ndash;9pm</b>. Whether the dialer is actually doing that.</div><div id="cadenceScorecard"></div><div id="cadenceNote" class="opf-bestwin" style="display:none"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Retry economics &mdash; what cadence actually works</h4><div class="cap">The right policy read off your own data: how many attempts you actually need, and whether the 5-hour gap earns its keep.</div><div class="grid2"><div><div class="subh">Cumulative reach by attempt # <span style="color:var(--faint);font-weight:600">(of everyone ever reached)</span></div><div id="reachBars"></div></div><div><div class="subh">Connect rate of a retry, by gap since last try</div><div id="gapBars"></div></div></div><div id="retryReco" class="reco"></div></div>
+  </section>
+
+  <section id="sec-outbound-cadence-hidden" style="display:none">
+    <div class="opf-hidden-note">Outbound Cadence &amp; Capacity is hidden in Inbound view &mdash; dial cadence, retry policy, and connect economics only apply to calls you place. It reappears under Outbound or All calls.</div>
   </section>
 
   <!-- Profile drawer: opens in-place without scrolling the dashboard -->
@@ -2008,7 +2079,7 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintIntentQuality(RECORDS);renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
   closeUserSearch();
 }
@@ -2876,6 +2947,196 @@ function paintUnreachableList(unreachable,avgDials){
     (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more in the full unreachable set — click the "Unreachable numbers" KPI above for all of them.</div>`:'');
 }
 
+// ===== OUTBOUND CADENCE & CAPACITY =====
+// Concurrency: each completed call occupies [ts, ts+dur]; peak overlap = channels in use. System-wide
+// (both directions) since a line is shared, date-filtered but not direction-filtered.
+function concurrencyStats(){
+  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && r.dur>0);
+  if(!recs.length)return null;
+  const events=[];
+  recs.forEach(r=>{events.push([r.ts,1]);events.push([r.ts+r.dur,-1]);});
+  events.sort((a,b)=>a[0]-b[0]||b[1]-a[1]);
+  let cur=0,peak=0,peakT=0;const hourPeak=new Array(24).fill(0);
+  for(const [t,d] of events){
+    cur+=d;
+    if(d===1){const h=new Date(t*1000).getHours();if(cur>hourPeak[h])hourPeak[h]=cur;}
+    if(cur>peak){peak=cur;peakT=t;}
+  }
+  return {peak,peakT,hourPeak,n:recs.length};
+}
+function paintConcurrency(){
+  const kpiEl=$('concKpis'),chart=$('concChart'),axis=$('concAxis');
+  if(!kpiEl)return;
+  const s=concurrencyStats();
+  if(!s){kpiEl.innerHTML=emptyViewHtml('No completed calls with duration in this range.');if(chart)chart.innerHTML='';if(axis)axis.innerHTML='';return;}
+  const busiestHour=s.hourPeak.indexOf(Math.max(...s.hourPeak));
+  const chLow=Math.ceil(s.peak*1.3),chHigh=Math.ceil(s.peak*1.5);
+  const peakDate=new Date(s.peakT*1000);
+  const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const hh=h=>`${String(h).padStart(2,'0')}:00`;
+  kpiEl.innerHTML=[
+    ['neut',s.peak,`Peak simultaneous calls · ${peakDate.getDate()} ${mon[peakDate.getMonth()]}, ${hh(peakDate.getHours())}`],
+    ['good','~'+chLow+'–'+chHigh,'Recommended channels (peak + ring-time headroom)'],
+    ['hot',hh(busiestHour)+'–'+hh((busiestHour+1)%24),'Busiest hour — size capacity for this']
+  ].map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join('');
+  const maxc=Math.max(...s.hourPeak,s.peak,1);
+  if(chart)chart.innerHTML=`<div class="conc-need" style="bottom:${s.peak/maxc*100}%"><span>peak ${s.peak}</span></div>`+
+    s.hourPeak.map((v,h)=>`<div class="conc-col ${h>=9&&h<21?'biz':''}"><div class="cn">${v||''}</div><div class="cbar" style="height:${v/maxc*100}%"></div></div>`).join('');
+  if(axis)axis.innerHTML=s.hourPeak.map((v,h)=>`<div class="ct">${h%3===0?String(h).padStart(2,'0'):''}</div>`).join('');
+}
+// Cadence: per outbound number, the ordered attempt sequence -> compliance vs the 4-attempt / 5h / 9-9 rule.
+function outboundNumberSequences(){
+  const byPhone=groupByPhone(outboundRecordsInView());
+  return Object.values(byPhone).map(c=>c.slice().sort((a,b)=>a.ts-b.ts));
+}
+function paintCadenceCompliance(){
+  const el=$('cadenceScorecard'),note=$('cadenceNote');
+  if(!el)return;
+  const nums=outboundNumberSequences();
+  const dials=outboundRecordsInView();
+  if(!nums.length){el.innerHTML=emptyViewHtml('No outbound dials in this range.');if(note)note.style.display='none';return;}
+  const over=nums.filter(c=>c.length>4);
+  const maxAtt=Math.max(...nums.map(c=>c.length));
+  let gtot=0,lt1=0,g46=0;
+  nums.forEach(c=>{for(let i=1;i<c.length;i++){const g=(c[i].ts-c[i-1].ts)/3600;gtot++;if(g<1)lt1++;if(g>=4&&g<=6)g46++;}});
+  const inWin=dials.filter(r=>r.h>=9&&r.h<21);
+  const outWin=dials.filter(r=>!(r.h>=9&&r.h<21));
+  const lt1Pct=gtot?Math.round(lt1/gtot*100):0, g46Pct=gtot?Math.round(g46/gtot*100):0, inWinPct=dials.length?Math.round(inWin.length/dials.length*100):0;
+  window.__overCapCalls=[].concat(...over);
+  window.__offWinCalls=outWin;
+  const overPct=Math.round(over.length/nums.length*100);
+  const rules=[
+    {name:'Max 4 attempts per number',sub:'1 initial + 3 retries',target:'&le; 4 dials',
+     actual:`${overPct}% exceed · max ${maxAtt}`,status:overPct>10?'fail':overPct>2?'warn':'pass',
+     drill:over.length?["Numbers dialed more than 4 times","window.__overCapCalls"]:null},
+    {name:'~5-hour interval between retries',sub:'no rapid re-dialing',target:'gap &asymp; 5h',
+     actual:`${lt1Pct}% fire &lt;1h · ${g46Pct}% at 4&ndash;6h`,status:lt1Pct>30?'fail':lt1Pct>15?'warn':'pass',drill:null},
+    {name:'Dial only within 9am&ndash;9pm',sub:'no off-hours calls',target:'100% in-window',
+     actual:`${inWinPct}% in · ${outWin.length.toLocaleString()} outside`,status:inWinPct>=99?'pass':inWinPct>=90?'warn':'fail',
+     drill:outWin.length?["Dials placed outside 9am–9pm","window.__offWinCalls"]:null}
+  ];
+  el.innerHTML=rules.map(r=>{
+    const st=r.status==='pass'?'✓ On policy':r.status==='warn'?'⚠ Leaking':'✗ Not followed';
+    const actCell=r.drill
+      ?`<div class="rule-col clickable" onclick="openFilteredPanel('${esc(r.drill[0])}',()=>true,${r.drill[1]})"><div class="rk">Actual</div><div class="rv sm">${r.actual}</div></div>`
+      :`<div class="rule-col"><div class="rk">Actual</div><div class="rv sm">${r.actual}</div></div>`;
+    return `<div class="rule"><div><div class="rule-name">${r.name}</div><div class="rule-sub">${r.sub}</div></div>`+
+      `<div class="rule-col"><div class="rk">Target</div><div class="rv">${r.target}</div></div>`+
+      actCell+`<div><span class="rstatus ${r.status}">${st}</span></div></div>`;
+  }).join('');
+  const fails=rules.filter(r=>r.status!=='pass').length;
+  if(note){
+    if(fails){note.style.display='flex';note.style.background='rgba(163,58,58,.05)';note.style.borderColor='rgba(163,58,58,.3)';
+      note.innerHTML=`<span class="opf-bestwin-dot" style="background:var(--burgundy)"></span><span><b>The policy is sound; the gap is enforcement.</b> ${overPct}% of numbers exceed the 4-attempt cap (max ${maxAtt}), ${lt1Pct}% of retries fire within an hour instead of ~5, and ${outWin.length.toLocaleString()} dials land outside 9&ndash;9. Tightening the dialer to your own rule would cut waste and lift connect rate.</span>`;
+    }else{note.style.display='none';}
+  }
+}
+function paintRetryEconomics(){
+  const reachEl=$('reachBars'),gapEl=$('gapBars'),recoEl=$('retryReco');
+  if(!reachEl)return;
+  const nums=outboundNumberSequences();
+  const isConn=c=>normalizeDisposition(c)==='connected';
+  const reach=[0,0,0,0,0,0];let ever=0;
+  nums.forEach(c=>{for(let i=0;i<c.length;i++){if(isConn(c[i])){reach[Math.min(i,5)]++;ever++;break;}}});
+  if(!ever){reachEl.innerHTML=emptyViewHtml('No connected outbound calls in this range.');if(gapEl)gapEl.innerHTML='';if(recoEl)recoEl.innerHTML='';return;}
+  const cum=[];let run=0;reach.forEach(v=>{run+=v;cum.push(Math.round(run/ever*100));});
+  const labels=['Attempt 1','By attempt 2','By attempt 3','By attempt 4','By attempt 5','By attempt 6+'];
+  // cap = first attempt index reaching >=80% cumulative
+  const capIdx=cum.findIndex(v=>v>=80);
+  reachEl.innerHTML=labels.map((lb,i)=>{
+    const isCap=i===capIdx;const col=isCap?'var(--gold)':'var(--navy)';
+    return `<div class="brow"><div class="blbl">${lb}${isCap?' <span style="color:var(--gold);font-size:10px;font-weight:800">← cap</span>':''}</div><div class="btrack"><div class="bfill" style="width:${cum[i]}%;background:${col}">${cum[i]}%</div></div></div>`;
+  }).join('');
+  const gapB={lt1:[0,0],b14:[0,0],b46:[0,0],gt6:[0,0]};
+  nums.forEach(c=>{for(let i=1;i<c.length;i++){const g=(c[i].ts-c[i-1].ts)/3600;const k=g<1?'lt1':g<4?'b14':g<=6?'b46':'gt6';gapB[k][1]++;if(isConn(c[i]))gapB[k][0]++;}});
+  const gapRows=[['&lt;1 hour','lt1','var(--burgundy)'],['1&ndash;4 hours','b14','var(--amber)'],['4&ndash;6 hours','b46','var(--sage)'],['&gt;6 hours','gt6','var(--blue)']];
+  const gpct=k=>gapB[k][1]?Math.round(gapB[k][0]/gapB[k][1]*100):0;
+  const gmax=Math.max(...['lt1','b14','b46','gt6'].map(gpct),1);
+  if(gapEl)gapEl.innerHTML=gapRows.map(g=>{const p=gpct(g[1]);
+    return `<div class="brow" style="cursor:default"><div class="blbl">${g[0]}</div><div class="btrack"><div class="bfill" style="width:${Math.round(p/gmax*100)}%;background:${g[2]}">${p}%</div></div></div>`;
+  }).join('');
+  if(recoEl){
+    const capN=capIdx>=0?capIdx+1:6, capPct=capIdx>=0?cum[capIdx]:100;
+    const bestGap=['b46','gt6','b14','lt1'].reduce((a,b)=>gpct(b)>gpct(a)?b:a);
+    const bestLbl={lt1:'under 1h',b14:'1–4h',b46:'4–6h',gt6:'over 6h'}[bestGap];
+    recoEl.innerHTML=`<b>What the data says:</b> cap at <b>${capN} attempt${capN>1?'s':''}</b> — that already reaches <b>${capPct}%</b> of everyone you'll ever connect with; beyond it is mostly waste. The best-connecting gap is <b>${bestLbl}</b> (${gpct(bestGap)}%) versus just ${gpct('lt1')}% for a &lt;1h rapid redial — so spacing retries ~5h earns its keep. Fewer dials, higher connect rate, lower concurrency load.`;
+  }
+}
+function paintOutboundCadence(){
+  const sec=$('sec-outbound-cadence'),hidden=$('sec-outbound-cadence-hidden');
+  if(SELECTED_DIRECTION==='inbound'){
+    if(sec)sec.style.display='none';if(hidden)hidden.style.display='block';return;
+  }
+  if(sec)sec.style.display='';if(hidden)hidden.style.display='none';
+  const scope=$('cadenceScopeNote');if(scope)scope.style.display=(SELECTED_DIRECTION==='all')?'inline-flex':'none';
+  paintConcurrency();
+  paintCadenceCompliance();
+  paintRetryEconomics();
+}
+
+// ===== ANOMALY DETECTION — "WHAT MOVED, AND WHY" =====
+// Splits the current view into an earlier and a recent half, measures each key metric's change, and
+// attributes it. For hot-rate it runs a mix-vs-within-topic decomposition so "different demand" is not
+// mistaken for "genuine conversion change". Only emits a card when a change (or a notable non-change) is real.
+function paintAnomalyCards(){
+  const el=$('anomalyCards');
+  if(!el)return;
+  const recs=ALL_RECORDS_BACKUP.filter(recordMatchesCurrentFilters).filter(r=>r.d).slice().sort((a,b)=>a.d<b.d?-1:1);
+  const days=[...new Set(recs.map(r=>r.d))];
+  if(recs.length<40 || days.length<4){
+    el.innerHTML=`<div class="anom stable" style="grid-column:1/-1"><span class="anom-tag">Not enough history</span><h3>Widen the date range to surface trends</h3><div class="anom-why">Auto-attribution needs at least a few days of calls on each side to compare. Select a broader range (or All) and this fills in.</div></div>`;
+    return;
+  }
+  const mid=days[Math.floor(days.length/2)];
+  const early=recs.filter(r=>r.d<mid), late=recs.filter(r=>r.d>=mid);
+  const rate=(sub,pred)=>sub.length?sub.filter(pred).length/sub.length*100:0;
+  const hotE=rate(early,r=>r.leadTemp==='Hot'), hotL=rate(late,r=>r.leadTemp==='Hot');
+  const redE=rate(early,r=>r.band==='Red'), redL=rate(late,r=>r.band==='Red');
+  const confE=early.reduce((a,r)=>a+Number(r.conf||0),0)/(early.length||1), confL=late.reduce((a,r)=>a+Number(r.conf||0),0)/(late.length||1);
+  const cards=[];
+  // 1) Hot-rate change with mix vs within-topic decomposition
+  const hotDelta=Math.round(hotL-hotE);
+  if(Math.abs(hotDelta)>=3){
+    const intents=[...new Set(recs.map(r=>r.intent||'General'))];
+    const shr=(sub,k)=>sub.length?sub.filter(r=>(r.intent||'General')===k).length/sub.length:0;
+    const irate=(sub,k)=>{const s=sub.filter(r=>(r.intent||'General')===k);return s.length?s.filter(r=>r.leadTemp==='Hot').length/s.length:0;};
+    let mix=0,within=0;
+    intents.forEach(k=>{const eS=shr(early,k),lS=shr(late,k),eR=irate(early,k),lR=irate(late,k);mix+=(lS-eS)*eR;within+=lS*(lR-eR);});
+    const mixPts=Math.round(mix*1000)/10, withinPts=Math.round(within*1000)/10;
+    const drivers=intents.map(k=>({k,d:Math.round((irate(late,k)-irate(early,k))*100),lS:shr(late,k)}))
+      .filter(x=>x.lS>=0.05).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,2)
+      .map(x=>`${esc(x.k)} ${x.d>=0?'+':''}${x.d}pts`).join(', ');
+    const genuine=Math.abs(withinPts)>=Math.abs(mixPts);
+    cards.push({cls:hotDelta>=0?'pos':'watch',tag:genuine?(hotDelta>=0?'Genuine improvement':'Genuine decline'):'Demand-mix shift',
+      title:hotDelta>=0?`Hot-lead rate is ${genuine?'genuinely rising':'up — but it\'s a demand-mix shift'}`:`Hot-lead rate is ${genuine?'genuinely falling':'down — driven by demand mix'}`,
+      metric:`${Math.round(hotE)}% → ${Math.round(hotL)}% <span style="font-size:13px">${hotDelta>=0?'▲':'▼'} ${Math.abs(hotDelta)} pts</span>`,
+      why:`Decomposed: <b>${withinPts>=0?'+':''}${withinPts} pts</b> from the same topics converting differently${drivers?` (${drivers})`:''}, <b>${mixPts>=0?'+':''}${mixPts} pts</b> from a shift in what people call about. ${genuine?'The change is real conversion movement within topics, not just a different call mix.':'This is mostly a change in demand mix, not conversation quality.'} Bot confidence ${Math.round(confE)} → ${Math.round(confL)}.`});
+  }
+  // 2) Stability card — QA held flat while hot-rate moved (prevents false alarms)
+  if(Math.abs(hotDelta)>=3 && Math.abs(redL-redE)<3 && Math.abs(confL-confE)<3){
+    cards.push({cls:'stable',tag:'What did NOT change',
+      title:'Conversation quality is stable — not a QA problem',
+      metric:`Red-band ${Math.round(redE)}%→${Math.round(redL)}% <span style="font-size:13px">■ flat</span>`,
+      why:`Despite the hot-rate move, Red-band QA (${Math.round(redE)}% → ${Math.round(redL)}%) and bot confidence (${Math.round(confE)} → ${Math.round(confL)}) barely shifted. The movement is in <b>lead temperature</b> (who was reached), not bot performance — so a "quality drop" alert here would be a false alarm.`});
+  }
+  // 3) Volume card
+  const eDays=[...new Set(early.map(r=>r.d))].length||1, lDays=[...new Set(late.map(r=>r.d))].length||1;
+  const evpd=early.length/eDays, lvpd=late.length/lDays;
+  if(evpd>0 && Math.abs(lvpd-evpd)/evpd>=0.5){
+    const up=lvpd>evpd, pct=Math.round(Math.abs(lvpd-evpd)/evpd*100);
+    cards.push({cls:up?'opp':'watch',tag:'Volume shift',
+      title:`Daily call volume ${up?'scaled up':'dropped'} ${pct}%`,
+      metric:`${Math.round(evpd)} → ${Math.round(lvpd)}/day <span style="font-size:13px">${up?'▲':'▼'} ${pct}%</span>`,
+      why:`Average calls/day moved from <b>${Math.round(evpd)}</b> to <b>${Math.round(lvpd)}</b>. ${up?'Scaling reaches more leads but can pull in lower-intent contacts and spike concurrency — watch connect rate and channel load.':'Lower volume — check whether it is intentional pacing or a dialer/supply issue.'}`});
+  }
+  if(!cards.length){
+    cards.push({cls:'stable',tag:'Steady',title:'No material shifts this period',
+      metric:`Hot ${Math.round(hotL)}% · Red ${Math.round(redL)}% · Conf ${Math.round(confL)}`,
+      why:`Hot-lead rate, QA band and confidence all held within a few points of the prior period. Nothing needs attention from a trend standpoint right now.`});
+  }
+  el.innerHTML=cards.slice(0,4).map(c=>`<div class="anom ${c.cls}"><span class="anom-tag">${c.tag}</span><h3>${c.title}</h3><div class="anom-metric">${c.metric}</div><div class="anom-why">${c.why}</div></div>`).join('');
+}
+
 // ===== CALLBACK SLA =====
 // Ages each callback request's detected preferred window against the most recent call timestamp in the
 // export (this is a static offline report, not a live clock) — not outbound-specific, since callback
@@ -3308,7 +3569,7 @@ function boot(){
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintIntentQuality(RECORDS);renderExplorer(true);
+  paintIntents(o);paintDurBands(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
   try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
   $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
 }
