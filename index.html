@@ -529,6 +529,12 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
   .side-nav{display:grid!important;overflow:visible!important;gap:8px!important;}
   .side-link{width:100%!important;white-space:normal!important;flex:initial!important;}
   .wrap{min-width:0!important;width:100%!important;}
+  /* Pin the header so date/direction/campaign/search filters stay reachable while scrolling. */
+  #reportView header{position:sticky!important;top:12px!important;z-index:90!important;transition:padding .18s ease,box-shadow .18s ease!important;}
+  /* On scroll, collapse the branded row (logo + meta pills) to leave a slim pinned filter bar. */
+  body.header-condensed #reportView header>div:first-child{display:none!important;}
+  body.header-condensed #reportView header{padding-top:14px!important;padding-bottom:14px!important;background:#fff!important;box-shadow:0 10px 26px rgba(11,31,58,.12)!important;}
+  body.header-condensed #reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{border-top:0!important;margin-top:0!important;padding-top:0!important;}
 }
 
 @media screen and (min-width:901px) and (max-width:1180px){
@@ -1804,6 +1810,12 @@ function getStickyTopOffset(){
   if(window.innerWidth<=900 && nav && nav.offsetParent!==null){
     return Math.min(Math.max(nav.offsetHeight+12,96),150);
   }
+  // Desktop: the header is pinned, so land sections just below it (measured, so it
+  // stays correct whether the header is full-height or collapsed).
+  const hdr=document.querySelector('#reportView header');
+  if(hdr && window.innerWidth>900 && getComputedStyle(hdr).position==='sticky' && hdr.offsetParent!==null){
+    return hdr.offsetHeight+22;
+  }
   return 24;
 }
 function scrollToWithStickyOffset(el, behavior='smooth'){
@@ -1813,6 +1825,10 @@ function scrollToWithStickyOffset(el, behavior='smooth'){
 }
 function updateMobileNavShadow(){
   document.body.classList.toggle('mobile-nav-scrolled',window.innerWidth<=900 && window.scrollY>8);
+}
+function updateHeaderCondense(){
+  // Collapse the branded header row to a slim filter bar once the user scrolls (desktop only).
+  document.body.classList.toggle('header-condensed',window.innerWidth>900 && window.scrollY>130);
 }
 
 function syncSidebarActive(forceId){
@@ -1852,8 +1868,8 @@ window.addEventListener('DOMContentLoaded',()=>{
       syncSidebarActive(el.id);
     }
   }));
-  window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
-  window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();},{passive:true});
+  window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();},{passive:true});
+  window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();},{passive:true});
   const directionSwitch=document.getElementById('directionSwitch');
   if(directionSwitch){
     directionSwitch.addEventListener('click',e=>{
@@ -1866,6 +1882,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   syncSidebarActive('sec-overview');
   updateMobileNavShadow();
+  updateHeaderCondense();
 });
 
 const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",indigo:"#5b47d6",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
