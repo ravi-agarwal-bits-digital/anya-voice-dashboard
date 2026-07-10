@@ -372,6 +372,19 @@ footer b{color:var(--navy)!important}
 .opf-rate-cell{display:flex;flex-direction:column;gap:5px;min-width:64px}
 .opf-rate-bar{height:5px;background:#edf2f7;border-radius:4px;overflow:hidden}
 .opf-rate-bar div{height:100%;background:var(--navy);border-radius:4px}
+/* Outbound conversion funnel */
+.opf-funnel-step{display:grid;grid-template-columns:180px 1fr 96px;align-items:center;gap:12px;padding:7px 8px;border-radius:12px;cursor:pointer;transition:.14s}
+.opf-funnel-step:hover{background:#f6f8fc}
+.opf-funnel-label{font-size:12.5px;font-weight:700;color:var(--navy)}
+.opf-funnel-track{background:#eef2f7;border-radius:8px;height:34px;overflow:hidden}
+.opf-funnel-fill{height:100%;border-radius:8px;display:flex;align-items:center;padding-left:12px;color:#fff;font-family:'Source Serif 4',Georgia,serif;font-weight:700;font-size:15px;letter-spacing:-.02em;min-width:fit-content;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.opf-funnel-pct{font-size:11.5px;color:var(--muted);text-align:right;font-weight:700}
+.opf-hit-summary{font-size:12.5px;color:var(--navy);line-height:1.6;background:rgba(163,58,58,.06);border:1px solid rgba(163,58,58,.2);border-radius:12px;padding:11px 13px;margin-bottom:12px}
+.opf-hit-summary b{color:var(--burgundy)}
+.opf-bestwin{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--navy);background:#f6f9f7;border:1px solid rgba(36,120,88,.25);border-radius:12px;padding:10px 13px;margin-bottom:12px}
+.opf-bestwin b{color:var(--sage)}
+.opf-bestwin-dot{width:9px;height:9px;border-radius:50%;background:var(--sage);flex-shrink:0}
+@media screen and (max-width:720px){.opf-funnel-step{grid-template-columns:110px 1fr 64px;gap:8px}.opf-funnel-label{font-size:11px}.opf-funnel-pct{font-size:10px}}
 .opf-dirlabel{display:inline-flex;align-items:center;gap:6px;font-weight:800}
 .opf-dirdot{width:8px;height:8px;border-radius:50%;display:inline-block}
 .opf-dirdot.opf-inbound{background:var(--sage)}
@@ -1403,16 +1416,20 @@ window.addEventListener('DOMContentLoaded',()=>{
   </section>
 
   <section id="sec-outbound-perf">
-    <div class="shead"><span class="n">00.7</span><h2>Outbound Connect Performance</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
-    <div class="cap" style="margin:-10px 0 18px">Built from the Call Status column already present in the voice export.</div>
+    <div class="shead"><span class="n">00.7</span><h2>Outbound Performance &amp; Conversion</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">Every outbound dial — connected, failed and initiated — deduplicated by Call ID. Reach and connectivity come from all dials; lead quality comes from the calls that connected.</div>
     <div class="strip" id="outboundPerfKpis"></div>
-    <div class="panel" style="margin-top:24px"><h4>Disposition breakdown</h4><div class="cap">Every outbound dial in the selected period, by outcome.</div><div id="dispositionBreak"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead.</div><div id="redialCurve"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block. Darker = higher connect rate.</div><div class="opf-heatmap" id="dialHeatmap"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Numbers dialed &rarr; reached &rarr; connected &rarr; hot leads. Each stage shows what fraction of the previous survived. Click any bar for the calls behind it.</div><div id="outboundFunnel"></div></div>
+    <div class="grid2" style="margin-top:24px">
+      <div class="panel"><h4>Reach &amp; disposition</h4><div class="cap">Every outbound dial by outcome. <b>Initiated</b> = a dial logged with no terminal status (didn't connect).</div><div id="dispositionBreak"></div></div>
+      <div class="panel"><h4>Wasted-effort hit-list</h4><div class="cap">Numbers dialed 3+ times that never once connected — stop-calling or switch-to-SMS candidates.</div><div id="unreachableList"></div></div>
+    </div>
+    <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead. Tells you when redialing stops paying off.</div><div id="redialCurve"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block (IST). Darker = higher connect rate. Dial into the dark cells.</div><div id="bestWindowNote" class="opf-bestwin"></div><div class="opf-heatmap" id="dialHeatmap"></div></div>
   </section>
 
   <section id="sec-outbound-perf-hidden" style="display:none">
-    <div class="opf-hidden-note">Outbound Connect Performance is hidden in Inbound view &mdash; connect, no-answer, and voicemail rates aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
+    <div class="opf-hidden-note">Outbound Performance &amp; Conversion is hidden in Inbound view &mdash; connect rate, reach, and redial economics aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
   </section>
 
   <!-- Profile drawer: opens in-place without scrolling the dashboard -->
@@ -1790,8 +1807,10 @@ function handle(file){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
       const chosen=chooseWorkbookRows(wb);
       if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
-      const rows=chosen.rows;
-      RECORDS=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
+      const rows=dedupeRowsByCallId(chosen.rows);
+      const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
+      ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)
+      RECORDS=allCalls.filter(isConversationRecord);   // conversation universe -- every existing analytic
       SRC=file.name;
       if(!RECORDS.length){
         const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
@@ -1806,6 +1825,9 @@ function handle(file){
 
 let FILTERED_RECORDS=[];
 let ALL_RECORDS_BACKUP=[];
+let ALL_DIALS=[]; // dial-level universe: every unique call incl. failed/initiated dials. Used only by the
+                  // outbound connectivity analysis. RECORDS stays the conversation universe (completed calls)
+                  // so lead/quality/intent metrics are never diluted by non-connecting dials.
 let SELECTED_DIRECTION="all";
 
 function quickFilter(type){
@@ -2492,10 +2514,14 @@ function paintDirectionSplit(){
 // the status text is blank or doesn't match a known dialer vocabulary, so a missing/unfamiliar Status
 // column degrades to "unknown" instead of a wrong bucket.
 function normalizeDisposition(r){
-  const s=String(r.status||'');
+  const s=String(r.status||'').toLowerCase();
   if(/voicemail|voice\s*mail|answering\s*machine|\bvm\b/.test(s))return 'voicemail';
   if(/no.?answer|unanswered|not\s*answered|no\s*response|missed|ring.?out/.test(s))return 'no_answer';
   if(/\bbusy\b/.test(s))return 'busy';
+  // "initiated" = dial logged as started but no terminal outcome recorded (0 duration, no transcript).
+  // It did not connect, so it sits on the not-connected side, but it is kept distinct from a true "failed"
+  // because it flags a data-pipeline gap rather than a confirmed failed dial.
+  if(/^initiated$|initiat|dialing|in.?progress|ringing/.test(s))return 'initiated';
   if(/fail|error|drop|reject|declin|invalid|do.?not.?call|\bdnc\b|blocked|congestion|cancel|disconnect/.test(s))return 'failed';
   if(/answer|connect|complete|success|\btalk/.test(s))return 'connected';
   if(!s){
@@ -2505,16 +2531,19 @@ function normalizeDisposition(r){
   return 'unknown';
 }
 function dispositionCounts(recs){
-  const buckets={connected:0,no_answer:0,voicemail:0,busy:0,failed:0,unknown:0};
+  const buckets={connected:0,no_answer:0,voicemail:0,busy:0,failed:0,initiated:0,unknown:0};
   recs.forEach(r=>{buckets[normalizeDisposition(r)]++;});
   return buckets;
 }
 // Outbound Connect Performance is scoped to outbound calls only, regardless of the All/Inbound/Outbound
 // toggle — blending in inbound calls (which are connected by definition) would inflate the connect rate.
 function outboundRecordsInView(){
-  return ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)==='outbound');
+  // Dial-level: pulls from ALL_DIALS (incl. failed/initiated) so connect rate is real, not the ~100%
+  // you'd get from completed-only conversation records.
+  return ALL_DIALS.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)==='outbound');
 }
 function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
+function fmtDayLabel(iso){if(!iso)return '—';const p=String(iso).split('-');if(p.length<3)return String(iso);const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${p[2]} ${mon[Number(p[1])-1]||''}`;}
 function directionStats(dir){
   const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)===dir);
   const n=recs.length;
@@ -2533,8 +2562,9 @@ function paintDirectionCompare(){
   if(!ib || !ob){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
   window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='inbound');
   window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  // Connect/answer rate intentionally lives in the dedicated outbound section (dial-level), not here --
+  // these rows compare connected conversations, where a "connect rate" would trivially be ~100% both sides.
   const rows=[
-    ['Connect / answer rate',ib.connectPct+'%',ob.connectPct+'%',"r=>normalizeDisposition(r)==='connected'"],
     ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%',"r=>r.leadTemp==='Hot'"],
     ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec),'()=>true'],
     ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
@@ -2553,9 +2583,9 @@ function paintDispositionBreak(obRecs){
   const n=obRecs.length;
   if(!n){el.innerHTML=emptyViewHtml('No outbound calls in this range.');return;}
   const buckets=dispositionCounts(obRecs);
-  const order=['connected','no_answer','voicemail','busy','failed','unknown'];
-  const labels={connected:'Connected',no_answer:'No answer',voicemail:'Voicemail',busy:'Busy',failed:'Failed / dropped',unknown:'Unknown'};
-  const colors={connected:C.teal,no_answer:C.hot,voicemail:C.indigo,busy:C.warm,failed:C.cold,unknown:C.muted};
+  const order=['connected','failed','initiated','no_answer','voicemail','busy','unknown'];
+  const labels={connected:'Connected',failed:'Failed',initiated:'Initiated · no outcome logged',no_answer:'No answer',voicemail:'Voicemail',busy:'Busy',unknown:'Unknown'};
+  const colors={connected:C.teal,failed:C.hot,initiated:C.warm,no_answer:C.coral,voicemail:C.indigo,busy:C.blue,unknown:C.muted};
   el.innerHTML=order.filter(k=>buckets[k]>0).map(k=>{
     const pct=Math.round(buckets[k]/n*100);
     return `<div style="margin-bottom:14px;cursor:pointer" onclick="openFilteredPanel('${esc(labels[k])} (outbound)',r=>normalizeDisposition(r)==='${k}',window.__obRecs)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${labels[k]}</span><b>${buckets[k]} (${pct}%)</b></div><div style="background:#0c121b;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colors[k]};height:100%;width:${pct}%"></div></div></div>`;
@@ -2626,6 +2656,23 @@ function paintDialHeatmap(obRecs){
     if(normalizeDisposition(r)==='connected')grid[wd][bi].connected++;
   });
   window.__heatmapCells=grid;
+  // Name the single best window (highest connect rate among cells with enough volume to trust).
+  const bwEl=$('bestWindowNote');
+  if(bwEl){
+    const totalDials=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.n,0),0);
+    // Ignore thin cells: a one-off high % on a handful of dials is noise, not a schedule to commit to.
+    const minVol=Math.max(30,Math.round(totalDials*0.003));
+    let best=null;
+    grid.forEach((row,ri)=>row.forEach((c,bi)=>{
+      if(c.n<minVol)return;
+      const pct=c.connected/c.n;
+      if(!best||pct>best.pct)best={pct,ri,bi,n:c.n};
+    }));
+    bwEl.innerHTML=best
+      ?`<span class="opf-bestwin-dot"></span>Best reliable window: <b>${dayNames[best.ri]} ${blockLabels[best.bi]}</b> — <b>${Math.round(best.pct*100)}%</b> connect rate across ${best.n.toLocaleString()} dials. Front-load dialing here. (Thin cells with few dials are excluded.)`
+      :'';
+    bwEl.style.display=best?'flex':'none';
+  }
   const stops=[[231,236,243],[201,214,232],[147,174,208],[77,106,153],[36,58,94],[11,31,58]];
   function heatColor(pct){
     const t=Math.max(0,Math.min(1,pct/75));
@@ -2660,33 +2707,80 @@ function paintOutboundPerf(){
   const n=obRecs.length;
   const kpiEl=$('outboundPerfKpis');
   if(!n){
-    if(kpiEl)kpiEl.innerHTML=emptyViewHtml('No outbound calls in this range.');
+    if(kpiEl)kpiEl.innerHTML=emptyViewHtml('No outbound dials in this range.');
+    ['outboundFunnel','unreachableList'].forEach(id=>{if($(id))$(id).innerHTML=emptyViewHtml('No outbound dials in this range.');});
     paintDispositionBreak(obRecs);paintRedialCurve(obRecs);paintDialHeatmap(obRecs);
     return;
   }
   const buckets=dispositionCounts(obRecs);
   const connectPct=Math.round(buckets.connected/n*100);
-  const noAnswerPct=Math.round(buckets.no_answer/n*100);
-  const voicemailPct=Math.round(buckets.voicemail/n*100);
+  // Per-number reach: a number counts as reached if it EVER connected, across all its dials.
   const byPhone=groupByPhone(obRecs);
-  let connectedLeads=0,attemptsSum=0;
-  Object.values(byPhone).forEach(calls=>{
-    const sorted=calls.slice().sort((a,b)=>a.ts-b.ts);
-    const idx=sorted.findIndex(c=>normalizeDisposition(c)==='connected');
-    if(idx>-1){connectedLeads++;attemptsSum+=idx+1;}
-  });
-  const avgAttempts=connectedLeads?(attemptsSum/connectedLeads).toFixed(1):'0.0';
+  const numbers=Object.values(byPhone);
+  const numbersTotal=numbers.length;
+  const isConn=c=>normalizeDisposition(c)==='connected';
+  const reachedNumbers=numbers.filter(calls=>calls.some(isConn));
+  const numbersReached=reachedNumbers.length;
+  const reachPct=numbersTotal?Math.round(numbersReached/numbersTotal*100):0;
+  // Unreachable: dialed 3+ times, never once connected -- wasted-effort hit-list.
+  const unreachable=numbers.filter(calls=>calls.length>=3 && !calls.some(isConn))
+    .map(calls=>calls.slice().sort((a,b)=>a.ts-b.ts)).sort((a,b)=>b.length-a.length);
+  const connectedRecs=obRecs.filter(isConn);
+  const numbersHot=numbers.filter(calls=>calls.some(c=>isConn(c)&&c.leadTemp==='Hot')).length;
+  const avgDials=numbersTotal?(n/numbersTotal).toFixed(1):'0.0';
   window.__obRecs=obRecs;
+  window.__obConnected=connectedRecs;
+  window.__obHot=connectedRecs.filter(r=>r.leadTemp==='Hot');
+  window.__obUnreached=[].concat(...unreachable);
   if(kpiEl)kpiEl.innerHTML=[
-    ["good",connectPct+"%","Connect rate ("+buckets.connected+" of "+n+" dials)",r=>normalizeDisposition(r)==='connected'],
-    ["hot",noAnswerPct+"%","No-answer rate",r=>normalizeDisposition(r)==='no_answer'],
-    ["neut",voicemailPct+"%","Voicemail rate",r=>normalizeDisposition(r)==='voicemail'],
-    ["neut",avgAttempts,"Avg attempts per connected lead",()=>true]
-  ].map(c=>`<div class="kpi ${c[0]}" onclick="openFilteredPanel('${esc(c[2])}',${c[3]},window.__obRecs)" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
+    ["good",connectPct+"%","Connect rate ("+buckets.connected+" of "+n+" dials)","window.__obRecs",r=>normalizeDisposition(r)==='connected'],
+    ["good",reachPct+"%","Numbers reached ("+numbersReached+" of "+numbersTotal+")","window.__obConnected",()=>true],
+    ["hot",unreachable.length,"Unreachable numbers (3+ dials, 0 connects)","window.__obUnreached",()=>true],
+    ["neut",numbersHot,"Hot leads reached","window.__obHot",()=>true]
+  ].map(c=>`<div class="kpi ${c[0]}" onclick="openFilteredPanel('${esc(c[2])}',${c[4]},${c[3]})" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
 
+  paintOutboundFunnel(numbersTotal,numbersReached,numbersHot);
   paintDispositionBreak(obRecs);
+  paintUnreachableList(unreachable,avgDials);
   paintRedialCurve(obRecs);
   paintDialHeatmap(obRecs);
+}
+// Outbound conversion funnel: dials placed -> numbers reached -> connected conversations -> hot leads.
+// Shows exactly where outbound effort leaks on the way to a convertible lead.
+function paintOutboundFunnel(numbersTotal,numbersReached,numbersHot){
+  const el=$('outboundFunnel');
+  if(!el)return;
+  // Number-based and monotonic: of the people we dialed, how many did we reach, and how many became hot.
+  const steps=[
+    ['Numbers dialed',numbersTotal,C.blue,'window.__obRecs',()=>true],
+    ['Numbers reached',numbersReached,C.teal,'window.__obConnected',()=>true],
+    ['Numbers that became Hot',numbersHot,C.gold||'#b08a3c','window.__obHot',()=>true]
+  ];
+  const max=steps[0][1]||1;
+  el.innerHTML=steps.map((s,i)=>{
+    const pct=Math.round(s[1]/max*100);
+    const ofPrev=i>0&&steps[i-1][1]?Math.round(s[1]/steps[i-1][1]*100):100;
+    return `<div class="opf-funnel-step" onclick="openFilteredPanel('${esc(s[0])} (outbound)',${s[4]},${s[3]})" title="Click for details">`+
+      `<div class="opf-funnel-label">${esc(s[0])}</div>`+
+      `<div class="opf-funnel-track"><div class="opf-funnel-fill" style="width:${Math.max(pct,3)}%;background:${s[2]}">${s[1].toLocaleString()}</div></div>`+
+      `<div class="opf-funnel-pct">${i===0?'100%':ofPrev+'% of prev'}</div></div>`;
+  }).join('');
+}
+// Wasted-effort hit-list: numbers dialed repeatedly that never connected. Each row opens its own dials.
+function paintUnreachableList(unreachable,avgDials){
+  const el=$('unreachableList');
+  if(!el)return;
+  if(!unreachable.length){el.innerHTML=emptyViewHtml('No number was dialed 3+ times without connecting — reach discipline looks healthy.');return;}
+  const wastedDials=unreachable.reduce((a,calls)=>a+calls.length,0);
+  window.__unreachGroups=unreachable;
+  const top=unreachable.slice(0,8);
+  const rows=top.map((calls,i)=>{
+    const ph=maskPhone(calls[0].from);
+    return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
+  }).join('');
+  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers dialed 3+ times, never once connected — <b>${wastedDials.toLocaleString()}</b> wasted dials (avg ${avgDials} dials per number overall). Stop-calling / switch-to-SMS candidates.</div>`+
+    `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Number</th><th>Dials</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
+    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more in the full unreachable set — click the "Unreachable numbers" KPI above for all of them.</div>`:'');
 }
 
 // ===== CALLBACK SLA =====
@@ -2789,6 +2883,33 @@ function resolveLeadPhone(row,direction){
     return firstUsablePhone(row,INBOUND_LEAD_PHONE_FIELDS) || firstUsablePhone(row,OUTBOUND_LEAD_PHONE_FIELDS) || 'unknown';
   }
   return firstUsablePhone(row,GENERIC_LEAD_PHONE_FIELDS) || 'unknown';
+}
+
+function rowCallId(row){return String(pickField(row,['Call ID','CallId','ID','Conversation ID','Session ID'])||'').trim();}
+// Lifecycle precedence: one dial can be logged multiple times under the same Call ID as it advances
+// (e.g. "initiated" then "failed", or "initiated" then "completed"). Higher rank = more advanced/terminal.
+function rowStatusRank(row){
+  const s=String(pickField(row,['Status','Call Status'])||'').toLowerCase();
+  return s==='completed'?3:s==='failed'?2:s==='initiated'?1:0;
+}
+function dedupeRowsByCallId(rows){
+  // Collapse each Call ID to its most-advanced lifecycle row so one call = one row. Rows with no Call ID
+  // (older/other exports) are passed through untouched, preserving prior single-row-per-call behaviour.
+  const byId=new Map(); const noId=[];
+  for(const row of rows){
+    const cid=rowCallId(row);
+    if(!cid){noId.push(row);continue;}
+    const prev=byId.get(cid);
+    if(!prev || rowStatusRank(row)>rowStatusRank(prev))byId.set(cid,row);
+  }
+  return [...byId.values(),...noId];
+}
+function isConversationRecord(r){
+  // A conversation is a call that actually connected. Failed/initiated dials carry no lead/quality
+  // fields, so they are kept out of RECORDS (they live in ALL_DIALS for connectivity analysis only).
+  // Blank/unknown status keeps prior behaviour: older exports had no Status column and every row counted.
+  const s=String(r.status||'').toLowerCase();
+  return s!=='failed' && s!=='initiated';
 }
 
 function rowToRecord(r){
@@ -3075,8 +3196,10 @@ function boot(){
   window.DATA_LOADED=true;
   setDashboardReady();
   $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>syncSidebarActive("sec-overview"),80);
-  const datesAll=RECORDS.map(r=>r.d).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
-  
+  // Span the date range across ALL dials (incl. failed/initiated), so outbound connectivity for a day
+  // with dials but no completed conversation is still inside the default range.
+  const datesAll=(ALL_DIALS.length?ALL_DIALS:RECORDS).map(r=>r.d).filter(Boolean).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
+
   // Backup all records for filtering
   ALL_RECORDS_BACKUP=[...RECORDS];
   FILTERED_RECORDS=[...RECORDS];
