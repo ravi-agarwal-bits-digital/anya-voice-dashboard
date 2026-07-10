@@ -1170,6 +1170,10 @@ body.profile-open .profile-overlay{display:block;}
 .anom .anom-why{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:2px}
 .anom .anom-why b{color:var(--navy);font-weight:700}
 @media screen and (max-width:760px){.anom-grid{grid-template-columns:1fr}.rule{grid-template-columns:1fr auto}.rule-col{display:none}.conc-col .cn{display:none}}
+/* Export-CSV button inside slide-over drawers */
+.drawer-csv-btn{padding:6px 13px!important;border-radius:999px!important;border:1px solid var(--gold)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
+.drawer-csv-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important;transform:translateY(-1px)!important}
+.drawer-csv-btn::before{content:'⤓ ';font-weight:900}
 </style>
 
 </head>
@@ -1195,8 +1199,9 @@ const SECURITY = {
   PASSWORD_HASH: "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a",
   // Session timeout in minutes
   SESSION_TIMEOUT_MINS: 720,
-  // Mask phone numbers in display (full numbers in CSV export)
-  MASK_PHONES: true
+  // Mask phone numbers in display. Off: the dashboard is password-gated, so counsellors need the
+  // full number on screen to act on a lead. (CSV export was always full-number regardless.)
+  MASK_PHONES: false
 };
 
 // Generate SHA-256 hash
@@ -1361,7 +1366,10 @@ window.addEventListener('DOMContentLoaded',()=>{
 <div id="kpiPanel" style="position:fixed;top:0;right:0;height:100vh;width:min(460px,92vw);background:#f8fafc;border-left:1px solid var(--teal);z-index:201;transform:translateX(100%);transition:transform .28s ease;overflow-y:auto;box-shadow:-12px 0 40px rgba(0,0,0,.5)">
   <div style="position:sticky;top:0;background:#f8fafc;border-bottom:1px solid var(--line);padding:18px 20px;display:flex;justify-content:space-between;align-items:center;z-index:1">
     <h3 id="kpiPanelTitle" style="font-family:'Source Serif 4',serif;font-size:18px;margin:0"></h3>
-    <button onclick="closeKpiPanel()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;width:auto;padding:0;margin:0">✕</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <button id="kpiPanelExport" onclick="exportPanelCSV()" class="drawer-csv-btn" style="display:none">Export CSV</button>
+      <button onclick="closeKpiPanel()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;width:auto;padding:0;margin:0">✕</button>
+    </div>
   </div>
   <div id="kpiPanelBody" style="padding:18px 20px"></div>
 </div>
@@ -1547,7 +1555,10 @@ window.addEventListener('DOMContentLoaded',()=>{
         <div class="profile-drawer-eyebrow">Lead Profile</div>
         <h3 class="profile-drawer-title">Profile details</h3>
       </div>
-      <button type="button" class="profile-drawer-close" onclick="closeUserSearch()" aria-label="Close profile">✕</button>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <button type="button" id="profileExport" onclick="exportProfileCSV()" class="drawer-csv-btn" style="display:none">Export CSV</button>
+        <button type="button" class="profile-drawer-close" onclick="closeUserSearch()" aria-label="Close profile">✕</button>
+      </div>
     </div>
     <div class="profile-drawer-body">
       <div id="profileSourceNote" class="profile-source-note">Search or select any lead to open the profile here.</div>
@@ -2096,6 +2107,8 @@ function searchUserByMobile(mobile, source="search"){
   if(!mobile||mobile.length<4){$("userSearchResult").style.display="none";return;}
   
   const userCalls=ALL_RECORDS_BACKUP.filter(r=>recordMatchesCurrentFilters(r)&&String(r.from||"").includes(mobile)).sort((a,b)=>b.ts-a.ts);
+  window.__profileCalls=userCalls;
+  const pexp=$("profileExport"); if(pexp)pexp.style.display=userCalls.length?'inline-flex':'none';
   if(!userCalls.length){
     $("userSearchResult").style.display="block";
     $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">No calls found for "${esc(mobile)}"</span>`;
@@ -3629,9 +3642,38 @@ function closeKpiPanel(){
   $("kpiPanel").style.transform='translateX(100%)';
   $("kpiOverlay").style.display='none';
 }
-function showKpiPanel(title,bodyHtml){
+// Standard record -> CSV used by every drawer/section export, so a downloaded file always has the
+// same columns wherever it came from. Phone is full (unmasked) for actioning the lead.
+function recordsToCSV(rows){
+  let csv='Phone,Country,Direction,Call Time,Duration (mins),Lead Temp,Review Band,Intent,Confidence %,Need Score,Frustrated,Callback,Status,Summary\n';
+  rows.forEach(r=>{
+    const c=classifyPhone(r.from);
+    csv+=[fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
+      Math.round(r.dur/60*10)/10,escCSV(r.leadTemp),escCSV(r.band),escCSV(r.intent),Math.round(r.conf),Math.round(r.need),
+      r.frustrated?'Yes':'No',r.callback?'Yes':'No',escCSV(r.status),escCSV(r.summary)].join(',')+'\n';
+  });
+  return csv;
+}
+function slugForFile(s){return String(s||'export').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50)||'export';}
+// Exports whatever record set the drill-down drawer is currently showing.
+function exportPanelCSV(){
+  const rows=window.__panelRows||[];
+  if(!rows.length){alert("Nothing to export in this view.");return;}
+  downloadCSV(slugForFile(window.__panelTitle)+'_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows));
+}
+// Exports the calls shown in the lead-profile drawer.
+function exportProfileCSV(){
+  const rows=window.__profileCalls||[];
+  if(!rows.length){alert("No calls to export for this lead.");return;}
+  downloadCSV('lead_'+slugForFile(fullPhone(rows[0].from))+'_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows));
+}
+function showKpiPanel(title,bodyHtml,rows){
   $("kpiPanelTitle").textContent=title;
   $("kpiPanelBody").innerHTML=bodyHtml;
+  window.__panelTitle=title;
+  window.__panelRows=Array.isArray(rows)?rows:[];
+  const btn=$("kpiPanelExport");
+  if(btn)btn.style.display=window.__panelRows.length?'inline-flex':'none';
   $("kpiOverlay").style.display='block';
   $("kpiPanel").style.transform='translateX(0)';
 }
@@ -3663,7 +3705,7 @@ function defaultDrillStats(rows){
 // pass a different base (e.g. outboundRecordsInView()) when the chart itself is scoped differently.
 function openFilteredPanel(title,predicate,baseRows){
   const rows=(baseRows||RECORDS).filter(predicate);
-  showKpiPanel(title, statsGridHtml(defaultDrillStats(rows)) + recordListHtml(rows));
+  showKpiPanel(title, statsGridHtml(defaultDrillStats(rows)) + recordListHtml(rows), rows);
 }
 function openKpiPanel(key){
   // Build the record set + title for each drill-down key
@@ -3698,7 +3740,7 @@ function openKpiPanel(key){
   const listHtml=key!=="conf"
     ?recordListHtml(rows)
     :`<p style="font-size:12px;color:var(--muted);line-height:1.6">Anya's confidence is the model's certainty in its answers. Higher confidence strongly correlates with hot leads — see the "Call outcomes by confidence" panel in Section 02 for the conversion breakdown.</p>`;
-  showKpiPanel(title, statsGridHtml(stats)+listHtml);
+  showKpiPanel(title, statsGridHtml(stats)+listHtml, key!=="conf"?rows:[]);
 }
 
 function paintFunnel(o){
