@@ -1196,6 +1196,17 @@ body.profile-open .profile-overlay{display:block;}
 .camp-sortable{cursor:pointer;user-select:none;transition:.12s}
 .camp-sortable:hover{color:var(--navy)}
 .camp-sorted{color:var(--navy)!important}
+/* Failure split: lost leads vs recovered */
+.fail-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.fail-split-card{display:flex;align-items:center;gap:12px;border-radius:14px;padding:14px 16px;border:1px solid var(--line);border-left-width:5px;cursor:pointer;transition:.14s}
+.fail-split-card.lost{background:rgba(163,58,58,.06);border-left-color:var(--burgundy)}
+.fail-split-card.recovered{background:rgba(36,120,88,.05);border-left-color:var(--sage)}
+.fail-split-card:hover{transform:translateY(-1px)}
+.fail-split-card .fs-v{font-family:'Source Serif 4',Georgia,serif;font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.fail-split-card.lost .fs-v{color:var(--burgundy)}.fail-split-card.recovered .fs-v{color:var(--sage)}
+.fail-split-card .fs-l{font-size:12px;color:var(--navy);line-height:1.35}
+.fail-split-card .fs-l span{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+@media screen and (max-width:720px){.fail-split{grid-template-columns:1fr}}
 /* Export-CSV button inside slide-over drawers */
 .drawer-csv-btn{padding:6px 13px!important;border-radius:999px!important;border:1px solid var(--gold)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
 .drawer-csv-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important;transform:translateY(-1px)!important}
@@ -1544,46 +1555,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     </div>
   </section>
 
-  <section id="sec-outbound-perf">
-    <div class="shead"><span class="n">00.7</span><h2>Outbound Performance &amp; Conversion</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
-    <div class="cap" style="margin:-10px 0 18px">Every outbound dial — connected, failed and initiated — deduplicated by Call ID. Reach and connectivity come from all dials; lead quality comes from the calls that connected.</div>
-    <div class="strip" id="outboundPerfKpis"></div>
-    <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Dials placed &rarr; connected &rarr; hot leads. The red row is the failed-call leakage &mdash; dials that never connected. Click any bar (or the leakage) for the calls behind it.</div><div id="outboundFunnel"></div></div>
-    <div class="grid2" style="margin-top:24px">
-      <div class="panel"><h4>Reach &amp; disposition</h4><div class="cap">Every outbound dial by outcome. <b>Initiated</b> = a dial logged with no terminal status (didn't connect).</div><div id="dispositionBreak"></div></div>
-      <div class="panel"><h4>Wasted-effort hit-list</h4><div class="cap">Numbers dialed 3+ times that never once connected — stop-calling or switch-to-SMS candidates.</div><div id="unreachableList"></div></div>
-    </div>
-    <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead. Tells you when redialing stops paying off.</div><div id="redialCurve"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block (IST). Darker = higher connect rate. Dial into the dark cells.</div><div id="bestWindowNote" class="opf-bestwin"></div><div class="opf-heatmap" id="dialHeatmap"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Dial timing vs yield</h4><div class="cap">Are dials going into the windows that actually connect and convert? Volume, connect rate, and hot-lead rate side by side — by hour block or weekday.</div><div id="dialTimingControls" class="iq-toggle"></div><div id="dialTimingNote" class="opf-bestwin" style="display:none"></div><div id="dialTiming"></div></div>
-  </section>
 
-  <section id="sec-outbound-perf-hidden" style="display:none">
-    <div class="opf-hidden-note">Outbound Performance &amp; Conversion is hidden in Inbound view &mdash; connect rate, reach, and redial economics aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
-  </section>
-
-  <section id="sec-outbound-cadence">
-    <div class="shead"><span class="n">00.8</span><h2>Outbound Cadence &amp; Capacity</h2><span id="cadenceScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
-    <div class="cap" style="margin:-10px 0 18px">How many lines you need, whether the dialer is honouring your calling policy, and the retry cadence that actually gets a connection without over-calling.</div>
-    <div class="panel"><h4>Concurrency &amp; capacity</h4><div class="cap">Simultaneous live conversations across the selected range &mdash; peak overlap sets your minimum channel/licence count. Talk time only; a ringing line is also occupied, so treat the peak as a floor.</div><div class="strip" id="concKpis"></div><div class="subh" style="margin-top:18px">Peak concurrent calls by hour of day (IST)</div><div class="conc-chart" id="concChart"></div><div class="conc-axis" id="concAxis"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Calling-policy compliance</h4><div class="cap">Your rule: after a no-pickup, up to <b>3 more attempts at ~5-hour intervals</b>, only within <b>9am&ndash;9pm</b>. Whether the dialer is actually doing that.</div><div id="cadenceScorecard"></div><div id="cadenceNote" class="opf-bestwin" style="display:none"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Retry economics &mdash; what cadence actually works</h4><div class="cap">The right policy read off your own data: how many attempts you actually need, and whether the 5-hour gap earns its keep.</div><div class="grid2"><div><div class="subh">Cumulative reach by attempt # <span style="color:var(--faint);font-weight:600">(of everyone ever reached)</span></div><div id="reachBars"></div></div><div><div class="subh">Connect rate of a retry, by gap since last try</div><div id="gapBars"></div></div></div><div id="retryReco" class="reco"></div></div>
-  </section>
-
-  <section id="sec-outbound-cadence-hidden" style="display:none">
-    <div class="opf-hidden-note">Outbound Cadence &amp; Capacity is hidden in Inbound view &mdash; dial cadence, retry policy, and connect economics only apply to calls you place. It reappears under Outbound or All calls.</div>
-  </section>
-
-  <section id="sec-campaigns">
-    <div class="shead"><span class="n">00.85</span><h2>Campaign Performance</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
-    <div class="cap" style="margin:-10px 0 18px">Every outbound campaign side by side. Fresh, targeted lists usually convert far better than bulk batches &mdash; this makes that visible. Use the campaign selector in the header to scope the whole dashboard to one campaign.</div>
-    <div class="panel"><h4>Campaign leaderboard</h4><div class="cap">Dials, connect rate, unique-number reach, and hot-lead rate per campaign. Click a row for its calls; click a header to sort.</div><div id="campaignLeaderboard"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Why dials fail</h4><div class="cap">Diagnosed failure reasons (SIP / hangup codes) for outbound dials that never connected.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
-  </section>
-
-  <section id="sec-campaigns-hidden" style="display:none">
-    <div class="opf-hidden-note">Campaign Performance is hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. It reappears under Outbound or All calls.</div>
-  </section>
 
   <!-- Profile drawer: opens in-place without scrolling the dashboard -->
   <div id="profileOverlay" class="profile-overlay" onclick="closeUserSearch()" aria-hidden="true"></div>
@@ -1648,6 +1620,47 @@ window.addEventListener('DOMContentLoaded',()=>{
       <div class="panel"><h4>India vs International</h4><div class="cap">Domestic and international lead split for the selected period.</div><div id="geoSplit"></div></div>
       <div class="panel"><h4>International breakdown by country</h4><div class="cap">International leads grouped by country.</div><div id="geoCountries"></div></div>
     </div></section>
+
+  <section id="sec-outbound-perf">
+    <div class="shead"><span class="n">06.6</span><h2>Outbound Performance &amp; Conversion</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">Every outbound dial — connected, failed and initiated — deduplicated by Call ID. Reach and connectivity come from all dials; lead quality comes from the calls that connected.</div>
+    <div class="strip" id="outboundPerfKpis"></div>
+    <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Dials placed &rarr; connected &rarr; hot leads. The red row is the failed-call leakage &mdash; dials that never connected. Click any bar (or the leakage) for the calls behind it.</div><div id="outboundFunnel"></div></div>
+    <div class="grid2" style="margin-top:24px">
+      <div class="panel"><h4>Reach &amp; disposition</h4><div class="cap">Every outbound dial by outcome. <b>Initiated</b> = a dial logged with no terminal status (didn't connect).</div><div id="dispositionBreak"></div></div>
+      <div class="panel"><h4>Wasted-effort hit-list</h4><div class="cap">Numbers dialed 3+ times that never once connected — stop-calling or switch-to-SMS candidates.</div><div id="unreachableList"></div></div>
+    </div>
+    <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead. Tells you when redialing stops paying off.</div><div id="redialCurve"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block (IST). Darker = higher connect rate. Dial into the dark cells.</div><div id="bestWindowNote" class="opf-bestwin"></div><div class="opf-heatmap" id="dialHeatmap"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Dial timing vs yield</h4><div class="cap">Are dials going into the windows that actually connect and convert? Volume, connect rate, and hot-lead rate side by side — by hour block or weekday.</div><div id="dialTimingControls" class="iq-toggle"></div><div id="dialTimingNote" class="opf-bestwin" style="display:none"></div><div id="dialTiming"></div></div>
+  </section>
+
+  <section id="sec-outbound-perf-hidden" style="display:none">
+    <div class="opf-hidden-note">Outbound Performance &amp; Conversion is hidden in Inbound view &mdash; connect rate, reach, and redial economics aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
+  </section>
+
+  <section id="sec-outbound-cadence">
+    <div class="shead"><span class="n">06.7</span><h2>Outbound Cadence &amp; Capacity</h2><span id="cadenceScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">How many lines you need, whether the dialer is honouring your calling policy, and the retry cadence that actually gets a connection without over-calling.</div>
+    <div class="panel"><h4>Concurrency &amp; capacity</h4><div class="cap">Simultaneous live conversations across the selected range &mdash; peak overlap sets your minimum channel/licence count. Talk time only; a ringing line is also occupied, so treat the peak as a floor.</div><div class="strip" id="concKpis"></div><div class="subh" style="margin-top:18px">Peak concurrent calls by hour of day (IST)</div><div class="conc-chart" id="concChart"></div><div class="conc-axis" id="concAxis"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Calling-policy compliance</h4><div class="cap">Your rule: after a no-pickup, up to <b>3 more attempts at ~5-hour intervals</b>, only within <b>9am&ndash;9pm</b>. Whether the dialer is actually doing that.</div><div id="cadenceScorecard"></div><div id="cadenceNote" class="opf-bestwin" style="display:none"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Retry economics &mdash; what cadence actually works</h4><div class="cap">The right policy read off your own data: how many attempts you actually need, and whether the 5-hour gap earns its keep.</div><div class="grid2"><div><div class="subh">Cumulative reach by attempt # <span style="color:var(--faint);font-weight:600">(of everyone ever reached)</span></div><div id="reachBars"></div></div><div><div class="subh">Connect rate of a retry, by gap since last try</div><div id="gapBars"></div></div></div><div id="retryReco" class="reco"></div></div>
+  </section>
+
+  <section id="sec-outbound-cadence-hidden" style="display:none">
+    <div class="opf-hidden-note">Outbound Cadence &amp; Capacity is hidden in Inbound view &mdash; dial cadence, retry policy, and connect economics only apply to calls you place. It reappears under Outbound or All calls.</div>
+  </section>
+
+  <section id="sec-campaigns">
+    <div class="shead"><span class="n">06.8</span><h2>Campaign Performance</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">Every outbound campaign side by side. Fresh, targeted lists usually convert far better than bulk batches &mdash; this makes that visible. Use the campaign selector in the header to scope the whole dashboard to one campaign.</div>
+    <div class="panel"><h4>Campaign leaderboard</h4><div class="cap">Dials, connect rate, unique-number reach, and hot-lead rate per campaign. Click a row for its calls; click a header to sort.</div><div id="campaignLeaderboard"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Why dials fail</h4><div class="cap">Diagnosed failure reasons (SIP / hangup codes) for outbound dials that never connected.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
+  </section>
+
+  <section id="sec-campaigns-hidden" style="display:none">
+    <div class="opf-hidden-note">Campaign Performance is hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. It reappears under Outbound or All calls.</div>
+  </section>
 
   <section id="sec-hottest"><div class="shead"><span class="n">07</span><h2>Priority prospects (Top 50)</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
     <div class="panel"><h4>Ranked by lead score and engagement</h4><div class="cap">Highest-priority leads ranked by tier, frequency, need score, and confidence. Select a lead to open the profile drawer.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div></section>
@@ -2597,6 +2610,8 @@ function setDirectionFilter(dir, ev){
     return;
   }
   SELECTED_DIRECTION=normalized;
+  // Campaigns are outbound-only, so a campaign filter is meaningless (and misleading) under Inbound.
+  if(normalized==='inbound' && SELECTED_CAMPAIGN!=='all'){SELECTED_CAMPAIGN='all';const s=$('campaignFilter');if(s)s.value='all';}
   updateDirectionButtons();
   applyFilters();
 }
@@ -2618,6 +2633,13 @@ function updateDirectionButtons(){
     current.className='direction-current '+selected;
     current.textContent=currentDirectionLabel();
   }
+  updateCampaignFilterVisibility();
+}
+// The campaign dropdown only makes sense for outbound; hide it under the Inbound view.
+function updateCampaignFilterVisibility(){
+  const sel=$('campaignFilter');if(!sel)return;
+  const has=sel.options.length>1; // more than just the "All campaigns" default
+  sel.style.display=(has && SELECTED_DIRECTION!=='inbound')?'':'none';
 }
 function setCampaignFilter(name){
   SELECTED_CAMPAIGN=name||'all';
@@ -2631,12 +2653,12 @@ function populateCampaignFilter(){
   const counts={};
   ALL_DIALS.forEach(r=>{const c=(r.campaign||'').trim();if(c)counts[c]=(counts[c]||0)+1;});
   const names=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
-  if(!names.length){sel.style.display='none';SELECTED_CAMPAIGN='all';return;}
-  sel.style.display='';
+  if(!names.length){sel.innerHTML='<option value="all">All campaigns</option>';SELECTED_CAMPAIGN='all';updateCampaignFilterVisibility();return;}
   sel.innerHTML=`<option value="all">All campaigns</option>`+
     names.map(n=>`<option value="${esc(n)}">${esc(n)} (${counts[n].toLocaleString()})</option>`).join('');
   if(SELECTED_CAMPAIGN!=='all' && !counts[SELECTED_CAMPAIGN])SELECTED_CAMPAIGN='all';
   sel.value=SELECTED_CAMPAIGN;
+  updateCampaignFilterVisibility();
 }
 function recordMatchesDate(r){
   const fromDate=$('filterFromDate')?$('filterFromDate').value:'';
@@ -3211,23 +3233,36 @@ function failureReasonLabel(r){
 }
 function paintFailureBreakdown(){
   const el=$('failureBreakdown'),cov=$('failureCoverage');if(!el)return;
-  const failed=outboundRecordsInView().filter(r=>normalizeDisposition(r)!=='connected');
-  if(!failed.length){el.innerHTML=emptyViewHtml('No failed outbound dials in this range.');if(cov)cov.style.display='none';return;}
+  if(cov)cov.style.display='none'; // everything is rendered inside #failureBreakdown, in order
+  const dials=outboundRecordsInView();
+  const failed=dials.filter(r=>normalizeDisposition(r)!=='connected');
+  if(!failed.length){el.innerHTML=emptyViewHtml('No failed outbound dials in this range.');return;}
+  // A failed dial to a number you EVENTUALLY reached cost you nothing; a failed dial to a number you
+  // NEVER reached is a real lost lead. Split them so the two are never conflated -- and diagnose only
+  // the ones that actually mattered.
+  const reached=new Set();
+  dials.forEach(r=>{if(normalizeDisposition(r)==='connected')reached.add(r.from||'?');});
+  const lost=failed.filter(r=>!reached.has(r.from||'?'));
+  const recovered=failed.filter(r=>reached.has(r.from||'?'));
+  window.__failLost=lost;window.__failRecovered=recovered;
+  const split=`<div class="fail-split">`+
+    `<div class="fail-split-card lost" onclick="openFilteredPanel('Failed dials — numbers never reached',()=>true,window.__failLost)"><div class="fs-v">${lost.length.toLocaleString()}</div><div class="fs-l">on numbers you <b>never reached</b><span>real lost leads — act here</span></div></div>`+
+    `<div class="fail-split-card recovered" onclick="openFilteredPanel('Failed dials — numbers reached on another attempt',()=>true,window.__failRecovered)"><div class="fs-v">${recovered.length.toLocaleString()}</div><div class="fs-l">on numbers you <b>reached anyway</b><span>cost nothing — a later try connected</span></div></div>`+
+  `</div>`;
+  if(!lost.length){el.innerHTML=split+`<div class="cap" style="margin-top:6px">Every number with a failed dial was reached on another attempt — no leads lost to failed dials in this view.</div>`;return;}
   const groups={};let coded=0;
-  failed.forEach(r=>{const l=failureReasonLabel(r);if(l){coded++;groups[l]=(groups[l]||0)+1;}});
-  const uncoded=failed.length-coded;
+  lost.forEach(r=>{const l=failureReasonLabel(r);if(l){coded++;groups[l]=(groups[l]||0)+1;}});
+  const uncoded=lost.length-coded;
   window.__failGroups={};
-  Object.keys(groups).forEach(l=>{window.__failGroups[l]=failed.filter(r=>failureReasonLabel(r)===l);});
-  window.__failUncoded=failed.filter(r=>!failureReasonLabel(r));
-  if(cov){
-    cov.style.display='flex';cov.style.background='#f8fafc';cov.style.borderColor='var(--line)';
-    cov.innerHTML=`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>${coded.toLocaleString()}</b> of ${failed.length.toLocaleString()} failed dials carry a diagnosed reason (${Math.round(coded/failed.length*100)}%). Telephony coding is newer, so older campaigns are mostly uncoded — coverage grows as fresh campaigns dial.</span>`;
-  }
+  Object.keys(groups).forEach(l=>{window.__failGroups[l]=lost.filter(r=>failureReasonLabel(r)===l);});
+  window.__failUncoded=lost.filter(r=>!failureReasonLabel(r));
+  const note=`<div class="opf-bestwin" style="background:#f8fafc;border-color:var(--line)"><span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>${coded.toLocaleString()}</b> of these ${lost.length.toLocaleString()} lost dials carry a diagnosed code (${Math.round(coded/lost.length*100)}%). Telephony coding is newer, so older campaigns are mostly uncoded — coverage grows as fresh campaigns dial.</span></div>`;
   const entries=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
   const max=Math.max(...entries.map(e=>e[1]),uncoded,1);
   const colorFor=l=>/declin/i.test(l)?C.hot:/unavail|busy|no.?answer|timeout/i.test(l)?C.warm:C.cold;
-  el.innerHTML=entries.map(([l,n])=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${esc(l)} (failed dials)',()=>true,window.__failGroups['${esc(l).replace(/'/g,"\\'")}'])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/failed.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`).join('')+
-    (uncoded?`<div style="margin-top:4px;cursor:pointer" onclick="openFilteredPanel('Uncoded failed dials',()=>true,window.__failUncoded)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="color:var(--faint)">Uncoded — no reason logged</span><b style="color:var(--faint)">${uncoded.toLocaleString()} (${Math.round(uncoded/failed.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:#c9d3e2;height:100%;width:${Math.round(uncoded/max*100)}%"></div></div></div>`:'');
+  const bars=entries.map(([l,n])=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${esc(l)} (lost dials)',()=>true,window.__failGroups['${esc(l).replace(/'/g,"\\'")}'])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`).join('')+
+    (uncoded?`<div style="margin-top:4px;cursor:pointer" onclick="openFilteredPanel('Uncoded lost dials',()=>true,window.__failUncoded)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="color:var(--faint)">Uncoded — no reason logged</span><b style="color:var(--faint)">${uncoded.toLocaleString()} (${Math.round(uncoded/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:#c9d3e2;height:100%;width:${Math.round(uncoded/max*100)}%"></div></div></div>`:'');
+  el.innerHTML=split+note+`<div class="subh" style="margin:14px 0 10px">Why we never reached them</div>`+bars;
 }
 function paintCampaignSection(){
   const sec=$('sec-campaigns'),hidden=$('sec-campaigns-hidden');
@@ -3766,13 +3801,14 @@ function paintKPIs(o){
   const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
   // 4th field = drill-down key -- every KPI here is now a count/set over the same "all" record set,
   // even the averages (minutes, cost, duration), so clicking any of them shows what it was computed from.
+  // Operational headline row. Priority prospects & AI confidence intentionally live in the Management
+  // Summary just below (with period-over-period trend + inbound/outbound split), so they're not repeated
+  // here -- this row stays volume/cost/quality to avoid the top of the dashboard saying the same thing twice.
   const cards=[
     ["neut",o.n,"Total enquiries","all"],
     ["hot",totalMins+" mins","Advisory minutes","all"],
     ["hot","₹"+totalCost,"Estimated operating cost","all"],
-    ["hot",pct(o.hot)+"%","Priority prospects ("+o.hot+")","hot"],
     ["good",o.india+" India · "+o.intl+" International","India / International","geo"],
-    ["good",Math.round(o.avgConf)+"%","AI confidence","conf"],
     ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration","all"],
     ["good",pct(o.green)+"%","Quality pass rate","green"]
   ];
