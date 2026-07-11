@@ -85,7 +85,8 @@ scripts.forEach(script => vm.runInContext(script, context));
 for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
-  'recordDateBounds', 'preferLifecycleRow'
+  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
+  'groupByPhone', 'runPaintChunks'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -94,6 +95,24 @@ assert.equal(context.normalizeDirection('OUTBOUND'), 'outbound');
 assert.equal(context.normalizeDirection('incoming call'), 'inbound');
 assert.equal(context.resolveLeadPhone({ From: '918071436001', To: '919999999999' }, 'outbound'), '919999999999');
 assert.equal(context.resolveLeadPhone({ From: '918888888888', To: '918062912051' }, 'inbound'), '918888888888');
+
+const hostileValue = `91'\"><img src=x onerror=alert(1)>\\line`;
+const encodedArgument = context.jsArg(hostileValue);
+assert(!encodedArgument.includes('<img'), 'JavaScript argument must be HTML escaped');
+const decodedArgument = encodedArgument
+  .replaceAll('&quot;', '"').replaceAll('&#39;', "'")
+  .replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+let capturedArgument = null;
+new Function('capture', `capture(${decodedArgument})`)(value => { capturedArgument = value; });
+assert.equal(capturedArgument, hostileValue, 'Workbook value must remain a single inert JavaScript argument');
+assert(!context.esc(hostileValue).includes('<img'), 'Workbook text must be escaped before HTML rendering');
+
+assert.equal(context.sumBilledMinutes([
+  { status: 'completed', dur: 61, msg: 1, trans: 'connected' },
+  { status: 'failed', dur: 120, msg: 0, trans: '' },
+  { status: 'initiated', dur: 60, msg: 0, trans: '' }
+]), 2, 'Only connected calls should contribute billed minutes');
+assert(scripts[1].includes('id="cbShowMore" role="button" tabindex="0" onkeydown='), 'Callback pagination must be keyboard accessible');
 
 const overview = XLSX.utils.aoa_to_sheet([['Overview'], ['Not call data']]);
 const voiceRows = [
@@ -118,7 +137,7 @@ const voiceRows = [
 const workbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(workbook, overview, 'Overview');
 XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(voiceRows), 'Voice Export');
-const reopened = XLSX.read(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
+const reopened = XLSX.read(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer', dense: true });
 const chosen = context.chooseWorkbookRows(reopened);
 assert.equal(chosen.name, 'Voice Export', 'Dashboard should choose the call-data worksheet');
 
@@ -153,5 +172,6 @@ assert.deepEqual(
 const records = deduped.map(context.rowToRecord).filter(record => record && record.d);
 assert.equal(records.find(record => record.callId === 'call-1').from, '919999999999', 'Outbound learner mapping changed');
 assert.equal(records.find(record => record.callId === 'call-2').from, '918888888888', 'Inbound learner mapping changed');
+assert.strictEqual(context.groupByPhone(records), context.groupByPhone(records), 'Phone grouping cache should reuse the same grouping');
 
 console.log('Dashboard smoke tests passed');
