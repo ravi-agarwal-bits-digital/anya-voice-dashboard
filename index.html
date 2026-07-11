@@ -154,9 +154,16 @@ body::before{display:none!important}
 .side-icon{width:30px;height:30px;border-radius:11px;background:#eef3fa;color:var(--navy);display:grid;place-items:center;flex-shrink:0}
 .side-link.active .side-icon{background:rgba(176,138,60,.14);color:var(--gold)}
 .side-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.side-group-label{font-size:9.5px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:15px 12px 5px}
-.side-nav > .side-group-label:first-child{padding-top:2px}
-.side-group-label.side-group-outbound{color:var(--gold)}
+.side-group-label{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9.5px!important;font-weight:900!important;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)!important;padding:14px 12px 5px!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;cursor:pointer;text-align:left;font-family:inherit}
+.side-nav>.side-group:first-child .side-group-label{padding-top:2px!important}
+.side-group-label.side-group-outbound{color:var(--gold)!important}
+.side-group-label:hover{color:var(--navy)!important}
+.side-group-label.side-group-outbound:hover{color:var(--gold)!important;filter:brightness(.92)}
+.side-group-label.active-group{color:var(--navy)!important}
+.side-group-label.side-group-outbound.active-group{color:var(--gold)!important}
+.side-caret{width:13px;height:13px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .18s ease;opacity:.65}
+.side-group:not(.open) .side-caret{transform:rotate(-90deg)}
+.side-group-links{display:grid;gap:6px}
 .side-link-outbound:not(.active) .side-icon{background:rgba(176,138,60,.13);color:var(--gold)}
 .side-punch{margin:22px 8px 0;padding:18px 8px 2px;border-top:1px solid var(--line2);font-family:'Source Serif 4',Georgia,serif;color:var(--gold);font-size:18px;line-height:1.25;font-weight:650;letter-spacing:-.02em}
 .wrap{max-width:none!important;margin:0!important;padding:0 0 76px!important}
@@ -526,15 +533,41 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
   }
   .exec-sidebar .side-logo{display:block!important;max-width:190px!important;margin:2px auto 18px!important;}
   .exec-sidebar .side-punch{display:block!important;}
-  .side-nav{display:grid!important;overflow:visible!important;gap:8px!important;}
-  .side-link{width:100%!important;white-space:normal!important;flex:initial!important;}
+  .side-nav{display:grid!important;overflow:visible!important;gap:2px!important;}
+  .side-group-links{display:grid!important;gap:5px!important;}
+  .side-group:not(.open) .side-group-links{display:none!important;}
+  .side-link{width:100%!important;white-space:normal!important;flex:initial!important;padding:9px 12px!important;}
+  .side-group-label{padding:12px 12px 5px!important;}
   .wrap{min-width:0!important;width:100%!important;}
   /* Pin the header so date/direction/campaign/search filters stay reachable while scrolling. */
   #reportView header{position:sticky!important;top:12px!important;z-index:90!important;transition:padding .18s ease,box-shadow .18s ease!important;}
-  /* On scroll, collapse the branded row (logo + meta pills) to leave a slim pinned filter bar. */
-  body.header-condensed #reportView header>div:first-child{display:none!important;}
-  body.header-condensed #reportView header{padding-top:14px!important;padding-bottom:14px!important;background:#fff!important;box-shadow:0 10px 26px rgba(11,31,58,.12)!important;}
-  body.header-condensed #reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{border-top:0!important;margin-top:0!important;padding-top:0!important;}
+  /* On scroll, collapse the logo/title but KEEP the meta pills (Period/Calls/Cost/…) as at-a-glance
+     context, so the pinned bar stays slim yet still shows what the current view covers. */
+  body.header-condensed #reportView header .top-brand{display:none!important;}
+  body.header-condensed #reportView header>div:first-child{padding-bottom:10px!important;gap:8px!important;justify-content:flex-start!important;}
+  body.header-condensed #meta{justify-content:flex-start!important;gap:6px!important;}
+  body.header-condensed #meta>div{padding:4px 10px!important;font-size:10.5px!important;}
+  body.header-condensed #reportView header{padding-top:12px!important;padding-bottom:12px!important;background:#fff!important;box-shadow:0 10px 26px rgba(11,31,58,.12)!important;}
+  body.header-condensed #reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{border-top:0!important;margin-top:6px!important;padding-top:10px!important;}
+}
+
+/* Short desktop screens (laptops): compact the sidebar so the full 19-link map fits with
+   little/no internal scroll — drop the footer tagline, shrink the logo, tighten link rhythm. */
+@media screen and (min-width:901px) and (max-height:900px){
+  .exec-sidebar{padding:14px 12px 14px!important;}
+  .exec-sidebar .side-logo{max-width:150px!important;margin:0 auto 12px!important;}
+  .exec-sidebar .side-punch{display:none!important;}
+  .side-nav{gap:3px!important;}
+  .side-link{padding:7px 11px!important;font-size:12.4px!important;border-radius:13px!important;}
+  .side-icon{width:26px!important;height:26px!important;border-radius:9px!important;}
+  .side-icon svg{width:14px!important;height:14px!important;}
+  .side-group-label{padding:8px 11px 3px!important;font-size:9px!important;letter-spacing:.12em!important;}
+  .side-nav>.side-group-label:first-child{padding-top:0!important;}
+}
+@media screen and (min-width:901px) and (max-height:760px){
+  .side-link{padding:6px 11px!important;font-size:12px!important;}
+  .side-icon{width:24px!important;height:24px!important;}
+  .side-group-label{padding:6px 11px 2px!important;}
 }
 
 @media screen and (min-width:901px) and (max-width:1180px){
@@ -580,6 +613,9 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
   }
   .exec-sidebar .side-logo,.exec-sidebar .side-punch{display:none!important;}
   .side-group-label{display:none!important;}
+  /* Flatten the collapsible group wrappers so links become direct flex children of the
+     horizontal scroller again (and always visible regardless of collapse state). */
+  .side-group,.side-group-links{display:contents!important;}
   .side-nav{
     display:flex!important;
     flex-wrap:nowrap!important;
@@ -1456,34 +1492,54 @@ window.addEventListener('DOMContentLoaded',()=>{
 <aside class="exec-sidebar" aria-label="Dashboard navigation">
   <div class="side-compact-brand"><div class="side-compact-title">Anya</div><div class="side-compact-sub">Voice dashboard</div></div>
   <nav class="side-nav">
-    <div class="side-group-label">Overview</div>
-    <a class="side-link active" href="#sec-overview"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg></span><span>Overview</span></a>
-    <a class="side-link" href="#sec-anomaly"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg></span><span>What moved</span></a>
-    <a class="side-link" href="#sec-direction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M21 7H8"></path><path d="M7 21l-4-4 4-4"></path><path d="M3 17h13"></path></svg></span><span>Call flow</span></a>
+    <div class="side-group open" data-group="overview">
+      <button type="button" class="side-group-label"><span>Overview</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="side-group-links">
+        <a class="side-link active" href="#sec-overview"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg></span><span>Overview</span></a>
+        <a class="side-link" href="#sec-anomaly"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg></span><span>What moved</span></a>
+        <a class="side-link" href="#sec-direction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M21 7H8"></path><path d="M7 21l-4-4 4-4"></path><path d="M3 17h13"></path></svg></span><span>Call flow</span></a>
+      </div>
+    </div>
 
-    <div class="side-group-label">Demand &amp; quality</div>
-    <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Conversion</span></a>
-    <a class="side-link" href="#sec-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI advisor</span></a>
-    <a class="side-link" href="#sec-themes"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
-    <a class="side-link" href="#sec-volume"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m7 14 3-3 4 4 5-8"></path></svg></span><span>Trends</span></a>
-    <a class="side-link" href="#sec-engagement"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span><span>Engagement</span></a>
-    <a class="side-link" href="#sec-bands"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5z"></path><path d="M3 12l9 5 9-5"></path><path d="M3 17l9 5 9-5"></path></svg></span><span>Quality</span></a>
-    <a class="side-link" href="#sec-geo"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"></path></svg></span><span>Geography</span></a>
+    <div class="side-group open" data-group="demand">
+      <button type="button" class="side-group-label"><span>Demand &amp; quality</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="side-group-links">
+        <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Conversion</span></a>
+        <a class="side-link" href="#sec-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI advisor</span></a>
+        <a class="side-link" href="#sec-themes"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
+        <a class="side-link" href="#sec-volume"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m7 14 3-3 4 4 5-8"></path></svg></span><span>Trends</span></a>
+        <a class="side-link" href="#sec-engagement"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span><span>Engagement</span></a>
+        <a class="side-link" href="#sec-bands"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5z"></path><path d="M3 12l9 5 9-5"></path><path d="M3 17l9 5 9-5"></path></svg></span><span>Quality</span></a>
+        <a class="side-link" href="#sec-geo"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"></path></svg></span><span>Geography</span></a>
+      </div>
+    </div>
 
-    <div class="side-group-label side-group-outbound">Outbound</div>
-    <a class="side-link side-link-outbound" href="#sec-outbound-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle></svg></span><span>Performance</span></a>
-    <a class="side-link side-link-outbound" href="#sec-outbound-cadence"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 12l4.5-3"></path><path d="M12 3v2"></path><path d="M21 12h-2"></path></svg></span><span>Cadence</span></a>
-    <a class="side-link side-link-outbound" href="#sec-campaigns"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"></path><path d="M15.5 8.5a4 4 0 0 1 0 7"></path></svg></span><span>Campaigns</span></a>
+    <div class="side-group open" data-group="outbound">
+      <button type="button" class="side-group-label side-group-outbound"><span>Outbound</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="side-group-links">
+        <a class="side-link side-link-outbound" href="#sec-outbound-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle></svg></span><span>Performance</span></a>
+        <a class="side-link side-link-outbound" href="#sec-outbound-cadence"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 12l4.5-3"></path><path d="M12 3v2"></path><path d="M21 12h-2"></path></svg></span><span>Cadence</span></a>
+        <a class="side-link side-link-outbound" href="#sec-campaigns"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"></path><path d="M15.5 8.5a4 4 0 0 1 0 7"></path></svg></span><span>Campaigns</span></a>
+      </div>
+    </div>
 
-    <div class="side-group-label">Leads &amp; follow-up</div>
-    <a class="side-link" href="#sec-hottest"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><span>Prospects</span></a>
-    <a class="side-link" href="#sec-repeat"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg></span><span>Repeat</span></a>
-    <a class="side-link" href="#sec-callbacks"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path></svg></span><span>Follow-up</span></a>
-    <a class="side-link" href="#sec-friction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M10.3 4.3 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span><span>Friction</span></a>
-    <a class="side-link" href="#sec-explorer"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path></svg></span><span>Ledger</span></a>
+    <div class="side-group open" data-group="leads">
+      <button type="button" class="side-group-label"><span>Leads &amp; follow-up</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="side-group-links">
+        <a class="side-link" href="#sec-hottest"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><span>Prospects</span></a>
+        <a class="side-link" href="#sec-repeat"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg></span><span>Repeat</span></a>
+        <a class="side-link" href="#sec-callbacks"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path></svg></span><span>Follow-up</span></a>
+        <a class="side-link" href="#sec-friction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M10.3 4.3 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span><span>Friction</span></a>
+        <a class="side-link" href="#sec-explorer"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path></svg></span><span>Ledger</span></a>
+      </div>
+    </div>
 
-    <div class="side-group-label">Leadership</div>
-    <a class="side-link" href="#sec-brief" title="Management Summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Mgmt Summary</span></a>
+    <div class="side-group open" data-group="leadership">
+      <button type="button" class="side-group-label"><span>Leadership</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <div class="side-group-links">
+        <a class="side-link" href="#sec-brief" title="Management Summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Mgmt Summary</span></a>
+      </div>
+    </div>
   </nav>
   <div class="side-punch"><span>BITS PILANI'S LEGACY</span><strong>DIGITAL INTELLIGENCE</strong></div>
 </aside>
@@ -1830,6 +1886,27 @@ function updateHeaderCondense(){
   // Collapse the branded header row to a slim filter bar once the user scrolls (desktop only).
   document.body.classList.toggle('header-condensed',window.innerWidth>900 && window.scrollY>130);
 }
+let sidebarUserToggled=false;
+function toggleSideGroup(group){
+  sidebarUserToggled=true;
+  group.classList.toggle('open');
+}
+function fitSidebar(){
+  // On the desktop vertical sidebar, collapse lower-priority groups until the full map fits the
+  // viewport without an internal scrollbar. Skips once the user has manually toggled a group
+  // (their choice wins) and on mobile (the nav is a flat horizontal scroller there).
+  if(window.innerWidth<=900 || sidebarUserToggled)return;
+  const side=document.querySelector('.exec-sidebar');
+  const groups=[...document.querySelectorAll('.side-group')];
+  if(!side || !groups.length)return;
+  groups.forEach(g=>g.classList.add('open'));
+  // Collapse in this order; Overview stays open, Outbound (the focus area) collapses last.
+  ['leadership','demand','leads','outbound'].forEach(key=>{
+    if(side.scrollHeight<=side.clientHeight+2)return;
+    const g=document.querySelector('.side-group[data-group="'+key+'"]');
+    if(g)g.classList.remove('open');
+  });
+}
 
 function syncSidebarActive(forceId){
   const links=[...document.querySelectorAll('.side-link')];
@@ -1838,6 +1915,12 @@ function syncSidebarActive(forceId){
     links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
     const summaryBtn=$('openMgmtSummaryBtn');
     if(summaryBtn)summaryBtn.classList.toggle('active',id==='sec-brief');
+    // Highlight the group that owns the active section, so location is clear even when the
+    // group is collapsed (its links are hidden).
+    document.querySelectorAll('.side-group').forEach(g=>{
+      const lbl=g.querySelector('.side-group-label');
+      if(lbl)lbl.classList.toggle('active-group',!!g.querySelector('.side-link[href="#'+id+'"]'));
+    });
   };
   if(forceId){setActive(forceId);return;}
   const report=document.getElementById('reportView');
@@ -1868,8 +1951,11 @@ window.addEventListener('DOMContentLoaded',()=>{
       syncSidebarActive(el.id);
     }
   }));
+  document.querySelectorAll('.side-group-label').forEach(lbl=>{
+    lbl.addEventListener('click',()=>{const g=lbl.closest('.side-group');if(g)toggleSideGroup(g);});
+  });
   window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();},{passive:true});
-  window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();},{passive:true});
+  window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();fitSidebar();},{passive:true});
   const directionSwitch=document.getElementById('directionSwitch');
   if(directionSwitch){
     directionSwitch.addEventListener('click',e=>{
@@ -3804,7 +3890,7 @@ function boot(){
   if(!RECORDS.length){$("err").textContent="No valid call records found. Check your file format.";return;}
   window.DATA_LOADED=true;
   setDashboardReady();
-  $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>syncSidebarActive("sec-overview"),80);
+  $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>{syncSidebarActive("sec-overview");fitSidebar();},80);
   // Span the date range across ALL dials (incl. failed/initiated), so outbound connectivity for a day
   // with dials but no completed conversation is still inside the default range.
   const datesAll=(ALL_DIALS.length?ALL_DIALS:RECORDS).map(r=>r.d).filter(Boolean).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
