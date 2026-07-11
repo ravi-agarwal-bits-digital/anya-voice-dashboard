@@ -87,10 +87,10 @@ function formatSize(n) {
       : `${(n / 1048576).toFixed(2)} MB`;
 }
 async function sha256(text) {
-  const h = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text),
-  );
+  return sha256Bytes(new TextEncoder().encode(text));
+}
+async function sha256Bytes(bytes) {
+  const h = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(h)]
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -622,8 +622,29 @@ function equalBytes(a, b) {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 }
-function apiUrl(s) {
-  return `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${s.path.split("/").map(encodeURIComponent).join("/")}`;
+function apiUrl(s, path = s.path) {
+  return `https://api.github.com/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+function publicationMetadataPath(s) {
+  return `${s.path}.meta.json`;
+}
+async function readPublicationMetadata(s, headers) {
+  const response = await fetch(
+    `${apiUrl(s, publicationMetadataPath(s))}?ref=${encodeURIComponent(s.branch)}&t=${Date.now()}`,
+    { cache: "no-store", headers },
+  );
+  if (response.status === 404) return { sha: null, value: null };
+  if (!response.ok)
+    throw Error(`Could not check duplicate-publication metadata (${response.status}).`);
+  const file = await response.json();
+  try {
+    return {
+      sha: file.sha || null,
+      value: JSON.parse(new TextDecoder().decode(base64ToBytes(file.content || ""))),
+    };
+  } catch {
+    throw Error("Duplicate-publication metadata is invalid. Repair it before publishing.");
+  }
 }
 async function publish() {
   if (
@@ -647,8 +668,19 @@ async function publish() {
   try {
     publishing = true;
     $("publishBtn").disabled = true;
-    show("publishStatus", "Encrypting workbook locally…", "info");
     saveSettings();
+    const headers = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+      plaintextSha256 = await sha256Bytes(validation.bytes);
+    show("publishStatus", "Checking whether this workbook is already published…", "info");
+    const publicationMetadata = await readPublicationMetadata(s, headers);
+    if (publicationMetadata.value?.plaintextSha256 === plaintextSha256)
+      throw Error(
+        "This exact workbook is already published. No new encrypted copy was created.",
+      );
+    show("publishStatus", "Encrypting workbook locally…", "info");
     const encrypted = await encryptBytes(
       validation.bytes,
       ADMIN_PASSPHRASE,
@@ -662,11 +694,7 @@ async function publish() {
     );
     if (!equalBytes(roundTrip, validation.bytes))
       throw Error("Encryption self-test failed; nothing was published.");
-    const base = apiUrl(s),
-      headers = {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-      };
+    const base = apiUrl(s);
     show("publishStatus", "Checking the current production file…", "info");
     const current = await fetch(
       `${base}?ref=${encodeURIComponent(s.branch)}&t=${Date.now()}`,
@@ -718,6 +746,35 @@ async function publish() {
       throw Error(
         "Published file verification mismatch. Review the latest GitHub commit before using the dashboard.",
       );
+    show("publishStatus", "Saving duplicate-publication protection…", "info");
+    const metadataBody = {
+      message: "Record Anya data publication fingerprint",
+      content: bytesToBase64(
+        new TextEncoder().encode(
+          `${JSON.stringify(
+            {
+              schemaVersion: 1,
+              plaintextSha256,
+              dataCommitSha: commitSha,
+              publishedAt: new Date().toISOString(),
+            },
+            null,
+            2,
+          )}\n`,
+        ),
+      ),
+      branch: s.branch,
+    };
+    if (publicationMetadata.sha) metadataBody.sha = publicationMetadata.sha;
+    const metadataPut = await fetch(apiUrl(s, publicationMetadataPath(s)), {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(metadataBody),
+    });
+    let metadataWarning = "";
+    if (!metadataPut.ok)
+      metadataWarning =
+        " The data is live, but duplicate protection metadata could not be saved; do not republish this same workbook.";
     const url = result.commit?.html_url || result.content?.html_url || "",
       historyUrl = `https://github.com/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/commits/${encodeURIComponent(s.branch)}/${s.path.split("/").map(encodeURIComponent).join("/")}`;
     selectedFile = null;
@@ -731,8 +788,8 @@ async function publish() {
     $("publishBtn").disabled = true;
     showHtml(
       "publishStatus",
-      `Published and verified successfully.${url ? ` <a class="commitLink" href="${esc(url)}" target="_blank" rel="noopener">View commit</a>` : ""} <a class="commitLink" href="${esc(historyUrl)}" target="_blank" rel="noopener">View previous versions</a>`,
-      "ok",
+      `Published and verified successfully.${esc(metadataWarning)}${url ? ` <a class="commitLink" href="${esc(url)}" target="_blank" rel="noopener">View commit</a>` : ""} <a class="commitLink" href="${esc(historyUrl)}" target="_blank" rel="noopener">View previous versions</a>`,
+      metadataWarning ? "warn" : "ok",
     );
   } catch (e) {
     show("publishStatus", e.message || String(e), "err");
