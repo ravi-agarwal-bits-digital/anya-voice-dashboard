@@ -695,7 +695,11 @@ function billedMinutes(seconds){
   return Math.ceil(Number(seconds||0)/60);
 }
 function sumBilledMinutes(records){
-  return (records||[]).reduce((a,r)=>a+billedMinutes(r.dur),0);
+  // Bill only calls that actually completed/connected (status = completed). Failed, initiated,
+  // no-answer, voicemail etc. are never billed, even if the export logs a duration for them
+  // (some "failed" rows do). billedMinutes(0)=0 keeps the ">0s" rule: a connected call with zero
+  // talk time bills nothing. This is the single point every minutes/cost figure routes through.
+  return (records||[]).reduce((a,r)=>a+(normalizeDisposition(r)==='connected'?billedMinutes(r.dur):0),0);
 }
 
 // XSS protection — escape any Excel-sourced string before injecting via innerHTML
@@ -1037,10 +1041,30 @@ function dispositionCounts(recs){
 }
 // Outbound Connect Performance is scoped to outbound calls only, regardless of the All/Inbound/Outbound
 // toggle — blending in inbound calls (which are connected by definition) would inflate the connect rate.
+// Memoise the two expensive outbound slices of ALL_DIALS (50k+ rows) so the ~4 outbound paint
+// functions in one render don't each re-filter from scratch. Keyed by the filter state that affects
+// them (date range, campaign, and row count as a data-changed proxy), so the cache self-invalidates
+// the instant any filter or the dataset changes. resetOutboundCaches() clears them on a fresh load.
+let _obViewCache=null,_obViewSig=null,_obDateCache=null,_obDateSig=null;
+function resetOutboundCaches(){_obViewCache=_obViewSig=_obDateCache=_obDateSig=null;}
+function _dateSig(){const f=$('filterFromDate')?$('filterFromDate').value:'';const t=$('filterToDate')?$('filterToDate').value:'';return f+'|'+t+'|'+ALL_DIALS.length;}
 function outboundRecordsInView(){
   // Dial-level: pulls from ALL_DIALS (incl. failed/initiated) so connect rate is real, not the ~100%
   // you'd get from completed-only conversation records. Respects the campaign filter too.
-  return ALL_DIALS.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)==='outbound');
+  const sig=_dateSig()+'|'+SELECTED_CAMPAIGN;
+  if(_obViewSig===sig && _obViewCache)return _obViewCache;
+  _obViewSig=sig;
+  _obViewCache=ALL_DIALS.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)==='outbound');
+  return _obViewCache;
+}
+// Date-scoped outbound dials, ignoring the campaign filter — the campaign leaderboard shows every
+// campaign side by side regardless of the active campaign selection.
+function outboundDialsInDateView(){
+  const sig=_dateSig();
+  if(_obDateSig===sig && _obDateCache)return _obDateCache;
+  _obDateSig=sig;
+  _obDateCache=ALL_DIALS.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)==='outbound');
+  return _obDateCache;
 }
 function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
 function fmtDayLabel(iso){if(!iso)return '—';const p=String(iso).split('-');if(p.length<3)return String(iso);const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${p[2]} ${mon[Number(p[1])-1]||''}`;}
@@ -1481,7 +1505,7 @@ function setCampaignSort(k){CAMPAIGN_SORT=k;paintCampaignLeaderboard();}
 // Per-campaign outbound stats over the current DATE view (not scoped to the campaign filter -- the
 // leaderboard's whole point is to compare every campaign side by side).
 function campaignStats(){
-  const dials=ALL_DIALS.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  const dials=outboundDialsInDateView();
   const byC={};
   dials.forEach(r=>{
     const c=(r.campaign||'').trim()||'(no campaign)';
@@ -1514,7 +1538,7 @@ function paintCampaignLeaderboard(){
   const sk=keyMap[CAMPAIGN_SORT]||'dials';
   rows.sort((a,b)=>b[sk]-a[sk]||b.dials-a.dials);
   window.__campaignRows={};
-  const base=ALL_DIALS.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  const base=outboundDialsInDateView();
   rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
   const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
   const th=(k,lbl)=>`<th class="num camp-sortable ${CAMPAIGN_SORT===k?'camp-sorted':''}" onclick="setCampaignSort('${k}')">${lbl}${CAMPAIGN_SORT===k?' ▾':''}</th>`;
@@ -2072,6 +2096,7 @@ function printManagementBrief(){
 function boot(){
   if(!RECORDS.length){$("err").textContent="No valid call records found. Check your file format.";return;}
   window.DATA_LOADED=true;
+  resetOutboundCaches();
   setDashboardReady();
   $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>syncSidebarActive("sec-overview"),80);
   // Span the date range across ALL dials (incl. failed/initiated), so outbound connectivity for a day
@@ -2315,22 +2340,33 @@ function paintIntentQuality(recs){
   if(!el)return;
   const total=recs.length;
   if(!total){if(ctrl)ctrl.innerHTML='';el.innerHTML=emptyViewHtml('No calls in this view.');return;}
+  // Count per UNIQUE LEAD, not per call: a number that discussed a topic counts once for that topic
+  // (deduping redials/repeat calls), and is "hot" for the topic if any of its calls on that topic
+  // went hot. A lead that discussed several topics counts under each — so this answers "of the leads
+  // who asked about X, how many converted" without a repeatedly-dialled number inflating the rate.
+  const byPhone=groupByPhone(recs);
+  const totalLeads=Object.keys(byPhone).length;
   const g={};
-  recs.forEach(r=>{
-    const k=r.intent||'General';
-    const b=g[k]||(g[k]={intent:k,n:0,hot:0,red:0,green:0,confSum:0,needSum:0,frust:0});
-    b.n++;
-    if(r.leadTemp==='Hot')b.hot++;
-    if(r.band==='Red')b.red++;else if(r.band==='Green')b.green++;
-    b.confSum+=Number(r.conf||0);b.needSum+=Number(r.need||0);
-    if(r.frustrated)b.frust++;
+  Object.values(byPhone).forEach(calls=>{
+    const seen={};
+    calls.forEach(c=>{(seen[c.intent||'General']||(seen[c.intent||'General']=[])).push(c);});
+    Object.entries(seen).forEach(([k,kc])=>{
+      const b=g[k]||(g[k]={intent:k,n:0,hot:0,red:0,frust:0,confSum:0,needSum:0});
+      b.n++;
+      if(kc.some(c=>c.leadTemp==='Hot'))b.hot++;
+      if(kc.some(c=>c.band==='Red'))b.red++;
+      if(kc.some(c=>c.frustrated))b.frust++;
+      b.confSum+=kc.reduce((a,c)=>a+Number(c.conf||0),0)/kc.length;
+      b.needSum+=kc.reduce((a,c)=>a+Number(c.need||0),0)/kc.length;
+    });
   });
-  let arr=Object.values(g).map(b=>({intent:b.intent,n:b.n,share:Math.round(b.n/total*100),
+  let arr=Object.values(g).map(b=>({intent:b.intent,n:b.n,share:Math.round(b.n/totalLeads*100),
     hotPct:Math.round(b.hot/b.n*100),redPct:Math.round(b.red/b.n*100),
     conf:Math.round(b.confSum/b.n),need:Math.round(b.needSum/b.n),frustPct:Math.round(b.frust/b.n*100),
     produced:b.hot}));
-  const floor=Math.max(15,Math.round(total*0.01));
-  const overallHotPct=Math.round(recs.filter(r=>r.leadTemp==='Hot').length/total*100);
+  const floor=Math.max(10,Math.round(totalLeads*0.01));
+  const hotLeadsTotal=Object.values(byPhone).filter(calls=>calls.some(c=>c.leadTemp==='Hot')).length;
+  const overallHotPct=totalLeads?Math.round(hotLeadsTotal/totalLeads*100):0;
   const gem=arr.filter(x=>x.n>=floor).slice().sort((a,b)=>b.hotPct-a.hotPct)[0];
   // Dead-zone: a high-volume intent converting at well under half the overall hot rate.
   const deadCut=Math.max(5,Math.round(overallHotPct*0.5));
@@ -2342,21 +2378,21 @@ function paintIntentQuality(recs){
   if(ctrl)ctrl.innerHTML=[['produced','Hot leads produced'],['hotPct','Hot-lead rate'],['n','Volume']]
     .map(t=>`<button type="button" class="${INTENT_Q_SORT===t[0]?'on':''}" onclick="setIntentQSort('${t[0]}')">${t[1]}</button>`).join('');
   const insight=(gem||dead)?`<div class="iq-insight">`+
-    (gem?`<div class="iq-ins gem"><div class="t">Highest-converting topic</div><div class="h">${esc(gem.intent)} — ${gem.hotPct}% hot</div><div class="d"><b>${gem.share}% of connects</b> (${gem.n.toLocaleString()} calls), converting at <b>${gem.hotPct}%</b> with avg confidence ${gem.conf} and need ${gem.need}. Prioritise routing these to a counsellor.</div></div>`:'')+
-    (dead?`<div class="iq-ins dead"><div class="t">Conversion dead-zone</div><div class="h">${esc(dead.intent)} — ${dead.hotPct}% hot</div><div class="d"><b>${dead.share}% of every connect</b> (${dead.n.toLocaleString()} calls) but only <b>${dead.hotPct}% hot</b>, ${dead.redPct}% red-band, ${dead.frustPct}% frustrated. A big share of reach spent where little converts.</div></div>`:'')+
+    (gem?`<div class="iq-ins gem"><div class="t">Highest-converting topic</div><div class="h">${esc(gem.intent)} — ${gem.hotPct}% hot</div><div class="d"><b>${gem.n.toLocaleString()} leads</b> (${gem.share}% of all leads), converting at <b>${gem.hotPct}%</b> with avg confidence ${gem.conf} and need ${gem.need}. Prioritise routing these to a counsellor.</div></div>`:'')+
+    (dead?`<div class="iq-ins dead"><div class="t">Conversion dead-zone</div><div class="h">${esc(dead.intent)} — ${dead.hotPct}% hot</div><div class="d"><b>${dead.n.toLocaleString()} leads</b> (${dead.share}% of all leads) but only <b>${dead.hotPct}% hot</b>, ${dead.redPct}% red-band, ${dead.frustPct}% frustrated. A big share of reach spent where little converts.</div></div>`:'')+
     `</div>`:'';
   const rows=arr.map(x=>{
     const chip=gem&&x.intent===gem.intent?'<span class="iq-chip gem">TOP</span>':dead&&x.intent===dead.intent?'<span class="iq-chip dead">DEAD-ZONE</span>':'';
     return `<tr class="iq-row" onclick="openFilteredPanel('${esc(x.intent)} — conversion',()=>true,window.__iqGroups['${esc(x.intent).replace(/'/g,"\\'")}'])">`+
       `<td><span class="iq-name">${esc(x.intent)}</span>${chip}<div class="iq-sub">${x.frustPct}% frustrated · avg need ${x.need}</div></td>`+
-      `<td class="num">${x.n.toLocaleString()}<div class="iq-sub">${x.share}% of connects</div></td>`+
+      `<td class="num">${x.n.toLocaleString()}<div class="iq-sub">${x.share}% of all leads</div></td>`+
       `<td><div class="iq-barwrap iq-hot"><div class="iq-bartrack"><div class="iq-barfill" style="width:${Math.round(x.hotPct/maxHot*100)}%"></div></div><span class="iq-barval">${x.hotPct}%</span></div></td>`+
       `<td class="iq-hidecol"><div class="iq-barwrap iq-red"><div class="iq-bartrack"><div class="iq-barfill" style="width:${Math.round(x.redPct/maxRed*100)}%"></div></div><span class="iq-barval">${x.redPct}%</span></div></td>`+
       `<td class="num iq-hidecol">${x.conf}</td>`+
       `<td class="num"><span class="iq-produced">${x.produced.toLocaleString()}</span></td></tr>`;
   }).join('');
   el.innerHTML=insight+`<div style="overflow-x:auto"><table class="iq-table"><thead><tr>`+
-    `<th>Intent</th><th class="num">Connects</th><th>Hot-lead rate</th><th class="iq-hidecol">Red-band rate</th><th class="num iq-hidecol">Avg conf.</th><th class="num">Hot leads produced</th>`+
+    `<th>Intent</th><th class="num">Leads</th><th>Hot-lead rate</th><th class="iq-hidecol">Red-band rate</th><th class="num iq-hidecol">Avg conf.</th><th class="num">Hot leads produced</th>`+
     `</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -2435,6 +2471,14 @@ function paintBandBars(o){
 function paintGeo(o){
   const tot=o.india+o.intl;
   if(!tot){$("geoSplit").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No data in this range.</div>`;$("geoCountries").innerHTML="";return;}
+  // Adaptive: with no international leads, collapse to a single domestic line and drop the (empty)
+  // country breakdown, so an all-India view isn't a half-empty section. The full split + country
+  // breakdown returns automatically the moment any international lead appears.
+  if(o.intl===0){
+    $("geoSplit").innerHTML=`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;cursor:pointer" onclick="openFilteredPanel('India leads',r=>!classifyPhone(r.from).intl)"><span>All domestic (India)</span><b>100% · ${o.india.toLocaleString()} · 0 international</b></div>`;
+    $("geoCountries").innerHTML=`<div style="color:var(--faint);font-size:12.5px;padding:6px 0">No international leads in this range — the country breakdown appears here when international leads are present.</div>`;
+    return;
+  }
   const split=[{l:"India",v:o.india,c:C.teal,intl:false},{l:"International",v:o.intl,c:C.warm,intl:true}];
   $("geoSplit").innerHTML=split.map(d=>`<div style="margin-bottom:15px;cursor:pointer" onclick="openFilteredPanel('${d.l} leads',r=>classifyPhone(r.from).intl===${d.intl})"><div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:6px"><span>${d.l}</span><b>${Math.round(d.v/tot*100)}% · ${d.v}</b></div><div style="background:#0c121b;border-radius:5px;height:9px"><div style="background:${d.c};height:100%;width:${d.v/tot*100}%"></div></div></div>`).join("");
 
@@ -2736,13 +2780,19 @@ function paintFrustCost(o){
 }
 
 // Shared helper: group records by phone number (built once, reused by all sections)
+const _byPhoneCache=new WeakMap();
 function groupByPhone(records){
+  // Cached by array reference — the memoised outbound slices return stable references within a
+  // render, so grouping the same set (done by several paint functions) only runs once. Records
+  // arrays are read-only, so a cached grouping never goes stale.
+  if(_byPhoneCache.has(records))return _byPhoneCache.get(records);
   const byPhone={};
   records.forEach(r=>{
     const ph=r.from||"unknown";
     if(!byPhone[ph])byPhone[ph]=[];
     byPhone[ph].push(r);
   });
+  _byPhoneCache.set(records,byPhone);
   return byPhone;
 }
 
