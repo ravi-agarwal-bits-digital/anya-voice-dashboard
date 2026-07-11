@@ -19,7 +19,8 @@ This project is maintained as a static web application. The production dashboard
 │   └── workflows/
 ├── tests/
 │   ├── admin-smoke.test.js
-│   └── dashboard-smoke.test.js
+│   ├── dashboard-smoke.test.js
+│   └── workbook-worker.test.js
 ├── licenses/
 │   └── SheetJS-Apache-2.0.txt
 ├── css/
@@ -28,7 +29,8 @@ This project is maintained as a static web application. The production dashboard
 ├── js/
 │   ├── auth.js
 │   ├── dashboard.js
-│   └── admin.js
+│   ├── admin.js
+│   └── workbook-worker.js
 ├── admin/
 │   └── index.html
 ├── assets/
@@ -91,6 +93,7 @@ Before merging a dashboard change:
 - Confirm the administration page still targets the expected production file when relevant.
 - Run `node tests/admin-smoke.test.js` when admin code changes.
 - Run `node tests/dashboard-smoke.test.js` when dashboard code changes.
+- Run `node tests/workbook-worker.test.js` when workbook loading changes.
 
 ## Repository hygiene
 
