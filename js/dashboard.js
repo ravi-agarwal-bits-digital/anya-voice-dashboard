@@ -237,7 +237,10 @@ function handle(file){
   rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
   rd.onload=e=>{
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      // dense:true builds dense-array sheets, ~25% faster to parse on large exports (61k+ rows) with
+      // byte-identical sheet_to_json output. XLSX.read still runs on the main thread, so a very large
+      // file is briefly blocking — the bigger win (moving parse to a Web Worker) is a follow-up.
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,dense:true});
       const chosen=chooseWorkbookRows(wb);
       if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
       const rows=dedupeRowsByCallId(chosen.rows);
@@ -360,8 +363,22 @@ function openManagementSummary(){
   focusManagementSummary();
 }
 
+// Run a batch of paint steps a few per animation frame instead of all in one frame, so no single
+// frame is a long freeze and sections pop in progressively. Guarded by renderGeneration: if a newer
+// render (e.g. another filter toggle) starts, the stale batch stops immediately.
+function runPaintChunks(generation, thunks, done){
+  let i=0;
+  const step=()=>{
+    if(generation!==renderGeneration)return;
+    const end=Math.min(i+3, thunks.length);
+    for(;i<end;i++){ try{thunks[i]();}catch(e){console.warn('paint chunk error:',e);} }
+    if(i<thunks.length){requestAnimationFrame(step);} else if(done){done();}
+  };
+  requestAnimationFrame(step);
+}
 function applyFilters(){
   const generation=++renderGeneration;
+  CB_RENDER_LIMIT=50; // each filter change starts the callback list capped again (keeps toggles fast)
   const keepManagementSummaryVisible=isManagementSummaryVisible();
   updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
@@ -421,11 +438,15 @@ function applyFilters(){
   // ...then defer the heavier, mostly below-the-fold sections (outbound sweeps, campaign leaderboard,
   // anomaly decomposition, ledger) to the next frame, so applying a filter doesn't freeze the tab
   // while everything repaints at once.
-  requestAnimationFrame(()=>{
-    if(generation!==renderGeneration)return;
-    paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
-    try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
-  });
+  runPaintChunks(generation,[
+    ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
+    ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
+    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),
+    ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
+    ()=>paintAnomalyCards(),()=>renderExplorer(true),
+    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
+    ()=>{try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);}}
+  ],()=>setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120));
   closeUserSearch();
 }
 
@@ -1900,6 +1921,7 @@ function gradeOf(s){
 }
 
 let CB_FILTERS=new Set(); // empty = show all; otherwise show only selected intents
+let CB_RENDER_LIMIT=50;   // cap callback CARDS rendered at once; "Show more" raises it. The count above stays exact.
 function paintCallbacks(recs){
   const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
@@ -1940,8 +1962,14 @@ function paintCallbacks(recs){
   });
   
   cbCount.textContent=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
-  
-  cbList.innerHTML=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length).map(([ph,calls])=>{
+
+  // Cap the number of callback CARDS rendered (each card renders all of its calls, incl. hidden
+  // "more" requests, so rendering every group at once was the single biggest filter-lag cost on
+  // large datasets). The count above is still exact; "Show more" raises the cap for this view.
+  const cbEntries=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length);
+  const cbShown=cbEntries.slice(0,CB_RENDER_LIMIT);
+  const cbHidden=cbEntries.length-cbShown.length;
+  cbList.innerHTML=cbShown.map(([ph,calls])=>{
     const phoneKey=ph.replace(/\W/g,'_');
     const totalDur=sumBilledMinutes(calls);
     
@@ -1982,7 +2010,8 @@ function paintCallbacks(recs){
       ${renderCall(latest)}
       ${moreSection}
     </div>`;
-  }).join("");
+  }).join("")+(cbHidden>0?`<div id="cbShowMore" role="button" tabindex="0" style="padding:12px;text-align:center;cursor:pointer;color:var(--teal);font-weight:800;font-size:12px;border:1px dashed var(--line);border-radius:10px;background:#fff">Show more — ${cbHidden.toLocaleString()} more callback number${cbHidden>1?'s':''}</div>`:"");
+  if(cbHidden>0){const mb=$("cbShowMore");if(mb)mb.onclick=()=>{CB_RENDER_LIMIT+=100;paintCallbacks(recs);};}
 }
 
 
@@ -2122,12 +2151,17 @@ function boot(){
   // fill in on the next frame instead of blocking the initial render all at once.
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
   const generation=++renderGeneration;
-  requestAnimationFrame(()=>{
-    if(generation!==renderGeneration)return;
-    paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
-    try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
-    $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
-  });
+  CB_RENDER_LIMIT=50;
+  runPaintChunks(generation,[
+    ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
+    ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
+    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),
+    ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
+    ()=>paintAnomalyCards(),()=>renderExplorer(true),
+    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
+    ()=>{try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);}},
+    ()=>{$("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;}
+  ],()=>setTimeout(()=>syncSidebarActive(),120));
 }
 
 function paintHealth(o){
