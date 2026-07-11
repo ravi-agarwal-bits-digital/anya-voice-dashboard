@@ -86,7 +86,8 @@ for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
-  'groupByPhone', 'runPaintChunks'
+  'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
+  'intentOf', 'paintIntentQuality', 'paintCallbacks'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -95,6 +96,34 @@ assert.equal(context.normalizeDirection('OUTBOUND'), 'outbound');
 assert.equal(context.normalizeDirection('incoming call'), 'inbound');
 assert.equal(context.resolveLeadPhone({ From: '918071436001', To: '919999999999' }, 'outbound'), '919999999999');
 assert.equal(context.resolveLeadPhone({ From: '918888888888', To: '918062912051' }, 'inbound'), '918888888888');
+
+assert.deepEqual(
+  JSON.parse(JSON.stringify(context.parseDateFull('10 Jul 2026, 10:30:00 AM IST'))),
+  { iso: '2026-07-10', h: 10, m: 30 },
+  'Named-month IST timestamp parsing changed'
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(context.parseDateFull('07/10/2026 4:05 PM'))),
+  { iso: '2026-10-07', h: 16, m: 5 },
+  'Ambiguous numeric dates must remain day-first'
+);
+
+const tomorrowCallback = context.resolveCallbackWindow({}, 'Please call me tomorrow at 4 pm', '', '2026-07-10');
+assert.equal(tomorrowCallback.label, '11 Jul 2026 · 4:00 PM', 'Relative callback date parsing changed');
+const weekdayCallback = context.resolveCallbackWindow({}, 'Call me Monday morning', '', '2026-07-10');
+assert.equal(weekdayCallback.label, '13 Jul 2026 · 09:00 AM - 12:00 PM', 'Weekday callback parsing changed');
+const explicitCallback = context.resolveCallbackWindow({}, '', 'Preferred callback 15 July 2026 after 3 pm', '2026-07-10');
+assert.equal(explicitCallback.label, '15 Jul 2026 · After 3:00 PM', 'Explicit callback window parsing changed');
+assert.equal(context.resolveCallbackWindow({}, 'No follow-up requested', '', '2026-07-10').label, 'Not specified', 'Callback parser must not invent a window');
+
+assert.equal(context.normalizeDisposition({ status: 'completed', dur: 30, msg: 2 }), 'connected');
+assert.equal(context.normalizeDisposition({ status: 'failed', dur: 30, msg: 0 }), 'failed');
+assert.equal(context.normalizeDisposition({ status: '', dur: 20, msg: 2, trans: 'hello' }), 'connected');
+assert.equal(context.normalizeDisposition({ status: '', dur: 0, msg: 0, trans: '' }), 'no_answer');
+
+assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
+assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
+assert.equal(context.intentOf('I have a portal login issue'), 'Support');
 
 const hostileValue = `91'\"><img src=x onerror=alert(1)>\\line`;
 const encodedArgument = context.jsArg(hostileValue);
@@ -173,5 +202,28 @@ const records = deduped.map(context.rowToRecord).filter(record => record && reco
 assert.equal(records.find(record => record.callId === 'call-1').from, '919999999999', 'Outbound learner mapping changed');
 assert.equal(records.find(record => record.callId === 'call-2').from, '918888888888', 'Inbound learner mapping changed');
 assert.strictEqual(context.groupByPhone(records), context.groupByPhone(records), 'Phone grouping cache should reuse the same grouping');
+
+const intentRecords = [
+  { from: '911111111111', intent: 'Payment', leadTemp: 'Warm', band: 'Amber', frustrated: false, conf: 70, need: 60 },
+  { from: '911111111111', intent: 'Payment', leadTemp: 'Hot', band: 'Green', frustrated: false, conf: 90, need: 85 },
+  { from: '922222222222', intent: 'Payment', leadTemp: 'Cold', band: 'Red', frustrated: true, conf: 40, need: 30 }
+];
+context.paintIntentQuality(intentRecords);
+assert(getElement('intentQuality').innerHTML.includes('<td class="num">2<div class="iq-sub">100% of all leads'), 'Intent conversion must count unique leads, not repeated calls');
+assert(getElement('intentQuality').innerHTML.includes('50%'), 'Per-lead hot conversion rate changed');
+
+const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
+  from: `91${String(7000000000 + index)}`,
+  callback: true,
+  intent: 'Payment',
+  d: '2026-07-10', ts: 1000 + index, dur: 30,
+  status: 'completed', direction: 'outbound',
+  conf: 80, need: 70, cbReason: 'Payment clarification',
+  cbPreferred: 'Not specified', cbPreferredDate: null,
+  summary: 'Synthetic callback'
+}));
+context.__callbackRecords = callbackRecords;
+vm.runInContext('ALL_RECORDS_BACKUP=__callbackRecords; CB_RENDER_LIMIT=50; paintCallbacks(__callbackRecords);', context);
+assert(getElement('cbList').innerHTML.includes('Show more — 1 more callback number'), 'Callback rendering cap changed');
 
 console.log('Dashboard smoke tests passed');
