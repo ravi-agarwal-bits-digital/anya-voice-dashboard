@@ -22,6 +22,9 @@ This project is maintained as a static web application. The production dashboard
 │   └── dashboard-smoke.test.js
 ├── licenses/
 │   └── SheetJS-Apache-2.0.txt
+├── css/
+│   ├── dashboard.css
+│   └── admin.css
 ├── admin/
 │   └── index.html
 ├── assets/
@@ -47,6 +50,7 @@ This project is maintained as a static web application. The production dashboard
 | `index.html` | Current dashboard |
 | `admin/index.html` | Current administration page |
 | `assets/` | Shared visual and runtime assets |
+| `css/` | Extracted dashboard and administration styles |
 | `data/voice_analytics.xlsx` | Current application data file |
 | `_archive/` | Superseded files retained for reference |
 

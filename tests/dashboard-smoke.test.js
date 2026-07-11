@@ -4,6 +4,8 @@ const assert = require('assert');
 const XLSX = require('../assets/xlsx.full.min.js');
 
 const html = fs.readFileSync('index.html', 'utf8');
+assert(html.includes('href="css/dashboard.css"'), 'Dashboard stylesheet link is missing');
+assert(!/<style(?:\s|>)/i.test(html), 'Dashboard must not contain embedded style blocks');
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .filter(script => script.trim());
@@ -20,7 +22,8 @@ assert.deepEqual(hashLinks.filter(id => !idSet.has(id)), [], 'Dashboard contains
 
 for (const path of [
   'assets/logo.jpg', 'assets/favicon.ico', 'assets/favicon-16.png',
-  'assets/favicon-32.png', 'assets/apple-touch-icon.png', 'assets/xlsx.full.min.js'
+  'assets/favicon-32.png', 'assets/apple-touch-icon.png', 'assets/xlsx.full.min.js',
+  'css/dashboard.css'
 ]) {
   assert(fs.existsSync(path), `Missing dashboard asset: ${path}`);
 }
