@@ -84,7 +84,8 @@ scripts.forEach(script => vm.runInContext(script, context));
 
 for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
-  'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters'
+  'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
+  'recordDateBounds', 'preferLifecycleRow'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -124,6 +125,30 @@ assert.equal(chosen.name, 'Voice Export', 'Dashboard should choose the call-data
 const deduped = context.dedupeRowsByCallId(chosen.rows);
 assert.equal(deduped.length, 2, 'Lifecycle rows should deduplicate by Call ID');
 assert.equal(deduped.find(row => row['Call ID'] === 'call-1').Status, 'completed', 'Completed lifecycle row should win');
+
+const sameRankRows = [
+  {
+    'Created At (IST)': '10 Jul 2026, 12:00:00 PM IST', 'Call ID': 'call-3',
+    Direction: 'outbound', Status: 'completed', From: '918071436001', To: '917777777777',
+    'Duration (s)': 40, Messages: 4, 'Full Transcript': ''
+  },
+  {
+    'Created At (IST)': '10 Jul 2026, 12:01:00 PM IST', 'Call ID': 'call-3',
+    Direction: 'outbound', Status: 'completed', From: '918071436001', To: '917777777777',
+    'Duration (s)': 45, Messages: 6, 'Full Transcript': 'More complete final conversation',
+    'Lead Temp.': 'Hot', 'Review Band': 'Green', 'Bot Conf.': 92, 'Need Score': 85
+  }
+];
+const preferred = context.dedupeRowsByCallId(sameRankRows)[0];
+assert.equal(preferred['Created At (IST)'], '10 Jul 2026, 12:01:00 PM IST', 'Latest same-status lifecycle row should win');
+assert.equal(preferred['Lead Temp.'], 'Hot', 'More complete same-status lifecycle row should be retained');
+
+assert.equal(context.pickField({ call_direction: 'outbound' }, ['Call Direction']), 'outbound', 'Normalized column lookup changed');
+assert.deepEqual(
+  JSON.parse(JSON.stringify(context.recordDateBounds([{ d: '2026-07-10' }, { d: '2026-07-08' }, { d: '2026-07-12' }]))),
+  { min: '2026-07-08', max: '2026-07-12' },
+  'Date bounds should not require sorting the dataset'
+);
 
 const records = deduped.map(context.rowToRecord).filter(record => record && record.d);
 assert.equal(records.find(record => record.callId === 'call-1').from, '919999999999', 'Outbound learner mapping changed');
