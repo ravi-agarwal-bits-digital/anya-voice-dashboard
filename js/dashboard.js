@@ -41,6 +41,9 @@ function syncSidebarActive(forceId){
       const lbl=g.querySelector('.side-group-label');
       if(lbl)lbl.classList.toggle('active-group',!!g.querySelector('.side-link[href="#'+id+'"]'));
     });
+    const activeLink=document.querySelector('.side-link[href="#'+id+'"]');
+    const activeGroup=activeLink&&activeLink.closest('.side-group');
+    if(activeGroup)activeGroup.classList.add('open');
   };
   if(forceId){setActive(forceId);return;}
   const report=document.getElementById('reportView');
@@ -470,7 +473,7 @@ function applyFilters(){
   }
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
-  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
 
   // Trigger KPI and verdict animations
   document.querySelectorAll('.kpi').forEach(kpi=>{
@@ -1934,7 +1937,7 @@ function rowToRecord(r){
 }
 
 function aggregate(recs){
-  const o={n:recs.length,hot:0,warm:0,cold:0,
+  const o={n:recs.length,hot:0,warm:0,cold:0,callbacks:0,
     totalDur:0,totalMsg:0,avgConf:0,avgNeed:0,green:0,amber:0,red:0,india:0,intl:0,
     hourly:{},daily:{},intent:{},durBands:{},confBands:{}};
   const confQual={Hot:{conf:0,need:0,n:0},Warm:{conf:0,need:0,n:0},Cold:{conf:0,need:0,n:0}};
@@ -1943,13 +1946,14 @@ function aggregate(recs){
   const confConv={low:{hot:0,n:0},mid:{hot:0,n:0},high:{hot:0,n:0}};
   recs.forEach(r=>{
     if(r.leadTemp==="Hot")o.hot++;else if(r.leadTemp==="Warm")o.warm++;else o.cold++;
+    if(r.callback)o.callbacks++;
     if(classifyPhone(r.from).intl)o.intl++;else o.india++;
     o.totalDur+=r.dur;o.totalMsg+=r.msg;o.avgConf+=r.conf;o.avgNeed+=r.need;
     if(r.band==="Green")o.green++;else if(r.band==="Amber")o.amber++;else if(r.band==="Red")o.red++;
     o.hourly[r.h]=(o.hourly[r.h]||0)+1;
     o.daily[r.d]=(o.daily[r.d]||0)+1;
     o.intent[r.intent]=(o.intent[r.intent]||0)+1;
-    const db=r.dur<=30?"<30s":r.dur<=90?"30-90s":r.dur<=180?"90-180s":"180s+";
+    const db=r.dur<30?"<30s":r.dur<60?"30-60s":r.dur<120?"1-2m":r.dur<180?"2-3m":"3m+";
     o.durBands[db]=(o.durBands[db]||0)+1;
     const cb=Math.round(r.conf/20)*20;o.confBands[cb]=(o.confBands[cb]||0)+1;
     if(r.leadTemp in confQual){confQual[r.leadTemp].conf+=r.conf;confQual[r.leadTemp].need+=r.need;confQual[r.leadTemp].n++;}
@@ -2208,7 +2212,7 @@ function boot(){
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
-  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50;
   runPaintChunks(generation,[
@@ -2385,6 +2389,7 @@ function paintFunnel(o){
   const pct=a=>Math.round(a/o.n*100);
   const F=[
     [o.n,"Calls started","#5a9bd8",100,()=>true],
+    [o.callbacks,"Callback requested — intent signal",C.teal,Math.round(o.callbacks/o.n*60)+24,r=>r.callback],
     [o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*60)+30,r=>r.leadTemp==='Hot'],
     [o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+20,r=>r.leadTemp==='Warm'],
     [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",Math.round(o.cold/o.n*40)+12,r=>r.leadTemp!=='Hot'&&r.leadTemp!=='Warm']
@@ -2490,13 +2495,12 @@ function paintIntentQuality(recs){
 }
 
 function paintDurBands(o){
-  // Sort by duration band, longest first (180s+ → 90-180s → 30-90s → <30s)
-  const order={"180s+":0,"90-180s":1,"30-90s":2,"<30s":3};
+  const order={"3m+":0,"2-3m":1,"1-2m":2,"30-60s":3,"<30s":4};
   const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>(order[a[0]]??9)-(order[b[0]]??9));
   if(!sorted.length){$("durBands").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px">No duration data.</div>`;return;}
   const max=Math.max(...sorted.map(d=>d[1]),1);
-  const col={"<30s":C.teal,"30-90s":C.green,"90-180s":C.amber,"180s+":C.hot};
-  const durPred={"<30s":"r=>r.dur<=30","30-90s":"r=>r.dur>30&&r.dur<=90","90-180s":"r=>r.dur>90&&r.dur<=180","180s+":"r=>r.dur>180"};
+  const col={"<30s":C.muted,"30-60s":C.blue,"1-2m":C.teal,"2-3m":C.amber,"3m+":C.hot};
+  const durPred={"<30s":"r=>r.dur<30","30-60s":"r=>r.dur>=30&&r.dur<60","1-2m":"r=>r.dur>=60&&r.dur<120","2-3m":"r=>r.dur>=120&&r.dur<180","3m+":"r=>r.dur>=180"};
   $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${d[0]} duration',${durPred[d[0]]})"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
 }
 
