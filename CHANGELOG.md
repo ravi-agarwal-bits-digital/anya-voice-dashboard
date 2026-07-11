@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Removed exact duplicate dashboard CSS rules and extended workflow coverage to stylesheet changes.
+
 - Extracted dashboard and administration styles into dedicated CSS files without changing application behaviour.
 - Extracted dashboard authentication and application JavaScript into dedicated files without changing execution order.
 - Extracted administration JavaScript into a dedicated file without changing execution order.
