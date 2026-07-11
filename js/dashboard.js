@@ -110,6 +110,11 @@ fi.onchange=e=>{if(e.target.files[0])handle(e.target.files[0]);};
 dz.addEventListener("drop",e=>{if(e.dataTransfer.files[0])handle(e.dataTransfer.files[0]);});
 if($("reloadBtn"))$("reloadBtn").onclick=()=>{$("reportView").style.display="none";$("uploadView").style.display="flex";$("err").textContent="";fi.value="";};
 
+function setDashboardLoadingMessage(message){
+  const text=document.querySelector('#dataLoading p');
+  if(text)text.textContent=message;
+}
+
 // NOTE: Data loads only AFTER successful auth — see unlockDashboard() → autoLoadLatestExcel()
 window.DATA_LOADED=false;
 
@@ -121,6 +126,7 @@ function setDashboardLoading(){
   if(wrap)wrap.style.setProperty("display","none","important");
   if(placeholder)placeholder.style.display="none";
   if(loading)loading.style.display="flex";
+  setDashboardLoadingMessage('Downloading latest data…');
 }
 function setDashboardReady(){
   const loading=$("dataLoading"), placeholder=$("dataPlaceholder"), shell=$("mainShell"), wrap=$("mainWrap");
@@ -147,11 +153,14 @@ function fetchWithTimeout(url,options={},timeoutMs=15000){
   const timer=setTimeout(()=>controller.abort(),timeoutMs);
   return fetch(url,{...options,signal:controller.signal}).finally(()=>clearTimeout(timer));
 }
+const DATA_FETCH_TIMEOUT_MS=180000;
 
 function autoLoadLatestExcel(){
   setDashboardLoading();
 
-  fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-store'},15000)
+  // Revalidate on every visit, but allow the browser to reuse the encrypted body when unchanged.
+  // `no-store` forced the full and continually-growing workbook to download on every page load.
+  fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'},DATA_FETCH_TIMEOUT_MS)
     .then(r=>{
       if(r.ok)return r.arrayBuffer();
       throw new Error('File not found');
@@ -162,6 +171,7 @@ function autoLoadLatestExcel(){
       // Detect encryption magic header "ANYAENC1"
       if(isEncrypted(bytes)){
         try{
+          setDashboardLoadingMessage('Decrypting secure data…');
           fileBytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');
         }catch(e){
           setDashboardPlaceholder('Data locked','Could not decrypt the published data file. Please re-enter the dashboard password and try again.');
@@ -172,6 +182,7 @@ function autoLoadLatestExcel(){
           return;
         }
       }
+      setDashboardLoadingMessage('Reading workbook…');
       const file=new File([fileBytes],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
       handle(file);
     })
@@ -275,8 +286,10 @@ function handle(file){
   rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
   rd.onload=async e=>{
     try{
+      setDashboardLoadingMessage('Parsing workbook…');
       const chosen=await parseWorkbookBytes(new Uint8Array(e.target.result));
       if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
+      setDashboardLoadingMessage(`Preparing dashboard from ${chosen.rows.length.toLocaleString()} rows…`);
       const rows=dedupeRowsByCallId(chosen.rows);
       const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
       ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)

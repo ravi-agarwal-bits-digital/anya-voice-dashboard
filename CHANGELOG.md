@@ -4,6 +4,10 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Allowed conditional browser reuse of the unchanged encrypted workbook while still revalidating for updates.
+- Added staged loading messages for download, decryption, parsing and dashboard preparation.
+- Increased the download timeout to support the continually growing workbook on slower connections.
+
 - Moved workbook parsing to a size-aware Web Worker with a safe main-thread fallback.
 - Added dedicated workbook-worker regression coverage.
 
