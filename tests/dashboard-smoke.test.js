@@ -90,7 +90,7 @@ for (const fn of [
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
-  'chooseWorkbookCandidates', 'setDashboardLoadingMessage'
+  'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -131,6 +131,8 @@ context.setDashboardLoadingMessage('Parsing workbook…');
 assert.equal(loadingText.textContent, 'Parsing workbook…', 'Loading stage message changed');
 assert(scripts[1].includes("fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'}"), 'Workbook fetch must revalidate while allowing cached bytes');
 assert(scripts[1].includes('DATA_FETCH_TIMEOUT_MS=180000'), 'Growing workbook download timeout changed');
+assert(!scripts[1].includes("new File([fileBytes]"), 'Automatic loading must not copy decrypted bytes through File and FileReader');
+assert(scripts[1].includes("await processWorkbookBytes(fileBytes,'voice_analytics.xlsx')"), 'Automatic loading must process decrypted bytes directly');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 14 * 1048576 }), 60000, 'Current-size workbook timeout changed');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 90 * 1048576 }), 270000, 'Growing workbook timeout must scale with size');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 200 * 1048576 }), 300000, 'Workbook timeout must remain bounded');
