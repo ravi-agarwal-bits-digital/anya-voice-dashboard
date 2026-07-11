@@ -419,7 +419,7 @@ function applyFilters(){
   }else{
     const dts=RECORDS.map(r=>r.d).sort();const dmn=dts[0],dmx=dts[dts.length-1];
     const tMins=sumBilledMinutes(RECORDS);
-    $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+    $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
   }
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
@@ -502,7 +502,7 @@ function searchUserByMobile(mobile, source="search"){
   const engagementScore=userCalls.length*2+frustrated*3+avgNeed*0.5;
   const engagement=engagementScore>20?"Very high":engagementScore>12?"High":"Normal";
   
-  $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${maskPhone(userCalls[0].from)}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${leadType}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
+  $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
       <div><b>Calls:</b> ${userCalls.length} (${frustrated} attention • ${general} general)</div><div><b>View:</b> ${currentDirectionLabel()}</div>
@@ -726,6 +726,11 @@ function sumBilledMinutes(records){
 // XSS protection — escape any Excel-sourced string before injecting via innerHTML
 function esc(s){
   return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// Encode a value first as a JavaScript string literal, then for a double-quoted HTML attribute.
+// HTML escaping alone is not sufficient when workbook data is embedded in an inline handler.
+function jsArg(value){
+  return esc(JSON.stringify(String(value??'')));
 }
 
 function intentOf(t){
@@ -1564,7 +1569,7 @@ function paintCampaignLeaderboard(){
   const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
   const th=(k,lbl)=>`<th class="num camp-sortable ${CAMPAIGN_SORT===k?'camp-sorted':''}" onclick="setCampaignSort('${k}')">${lbl}${CAMPAIGN_SORT===k?' ▾':''}</th>`;
   el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr><th>Campaign</th>${th('dials','Dials')}${th('connect','Connect %')}${th('reach','Reach %')}${th('hot','Hot %')}</tr></thead><tbody>`+
-    rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel('${esc(x.campaign)} (outbound)',()=>true,window.__campaignRows['${esc(x.campaign).replace(/'/g,"\\'")}'])">`+
+    rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel(${jsArg(`${x.campaign} (outbound)`)},()=>true,window.__campaignRows[${jsArg(x.campaign)}])">`+
       `<td><span class="iq-name">${esc(x.campaign)}</span><div class="iq-sub">${x.numbers.toLocaleString()} numbers dialed</div></td>`+
       `<td class="num">${x.dials.toLocaleString()}</td>`+
       `<td class="num">${x.connectPct}%</td>`+
@@ -1608,7 +1613,7 @@ function paintFailureBreakdown(){
   const entries=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
   const max=Math.max(...entries.map(e=>e[1]),uncoded,1);
   const colorFor=l=>/declin/i.test(l)?C.hot:/unavail|busy|no.?answer|timeout/i.test(l)?C.warm:C.cold;
-  const bars=entries.map(([l,n])=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${esc(l)} (lost dials)',()=>true,window.__failGroups['${esc(l).replace(/'/g,"\\'")}'])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`).join('')+
+  const bars=entries.map(([l,n])=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel(${jsArg(`${l} (lost dials)`)},()=>true,window.__failGroups[${jsArg(l)}])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`).join('')+
     (uncoded?`<div style="margin-top:4px;cursor:pointer" onclick="openFilteredPanel('Uncoded lost dials',()=>true,window.__failUncoded)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="color:var(--faint)">Uncoded — no reason logged</span><b style="color:var(--faint)">${uncoded.toLocaleString()} (${Math.round(uncoded/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:#c9d3e2;height:100%;width:${Math.round(uncoded/max*100)}%"></div></div></div>`:'');
   el.innerHTML=split+note+`<div class="subh" style="margin:14px 0 10px">Why we never reached them</div>`+bars;
 }
@@ -1997,20 +2002,20 @@ function paintCallbacks(recs){
         ▼ +${moreCount} more request${moreCount>1?"s":""}
       </div>`:"";
 
-    return`<div data-profile-source="callback" class="drawer-click-card callback-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone('${esc(ph)}','callback',this)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
+    return`<div data-profile-source="callback" class="drawer-click-card callback-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(ph)},'callback',this)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:16px">
-          <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${maskPhone(ph)}</b>
+          <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${esc(maskPhone(ph))}</b>
           <span style="font-size:10px;color:var(--teal);font-weight:600">${totalDur} mins</span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone('${esc(ph)}','callback',this.closest('[data-profile-source]')||this)">Open drawer</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} callback${calls.length>1?"s":""}</span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone(${jsArg(ph)},'callback',this.closest('[data-profile-source]')||this)">Open drawer</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} callback${calls.length>1?"s":""}</span></div>
       </div>
       ${directionMix(calls)}
       <div class="drawer-action-hint">Click anywhere on this callback card to open the profile drawer</div>
       ${renderCall(latest)}
       ${moreSection}
     </div>`;
-  }).join("")+(cbHidden>0?`<div id="cbShowMore" role="button" tabindex="0" style="padding:12px;text-align:center;cursor:pointer;color:var(--teal);font-weight:800;font-size:12px;border:1px dashed var(--line);border-radius:10px;background:#fff">Show more — ${cbHidden.toLocaleString()} more callback number${cbHidden>1?'s':''}</div>`:"");
+  }).join("")+(cbHidden>0?`<div id="cbShowMore" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:12px;text-align:center;cursor:pointer;color:var(--teal);font-weight:800;font-size:12px;border:1px dashed var(--line);border-radius:10px;background:#fff">Show more — ${cbHidden.toLocaleString()} more callback number${cbHidden>1?'s':''}</div>`:"");
   if(cbHidden>0){const mb=$("cbShowMore");if(mb)mb.onclick=()=>{CB_RENDER_LIMIT+=100;paintCallbacks(recs);};}
 }
 
@@ -2145,7 +2150,7 @@ function boot(){
 
   const totalMins=sumBilledMinutes(RECORDS);
   const totalCost=totalMins*5;
-  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
+  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
@@ -2264,8 +2269,8 @@ function recordListHtml(rows){
   return `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${rows.length} record${rows.length!==1?'s':''}${rows.length>100?' (showing latest 100)':''}</div>`+
     sorted.map(r=>{
       const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
-      return `<div onclick="closeKpiPanel();explorerOpen('${esc(r.from)}')" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'Inter',monospace;color:var(--cream)">${maskPhone(r.from)}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
+      return `<div onclick="closeKpiPanel();explorerOpen(${jsArg(r.from)})" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'Inter',monospace;color:var(--cream)">${esc(maskPhone(r.from))}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
         <div style="color:var(--muted);font-size:10px">${esc(r.intent)} · ${formatDuration(r.dur)} · Conf ${Math.round(r.conf)}% · ${formatCallTime(r)}</div>
         ${r.summary?`<div style="color:var(--faint);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.summary)}</div>`:""}
       </div>`;
@@ -2749,9 +2754,9 @@ function renderExplorer(resetLimit){
       tags.push(`<span style="background:#eef2ff;color:var(--navy);padding:1px 6px;border-radius:3px;font-size:9px">${esc(repeatLabel)}</span>`);
     }
     tags.unshift(directionPill(r.direction));
-    return `<div onclick="markProfileSource(this);explorerOpen('${esc(r.from)}')" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
+    return `<div onclick="markProfileSource(this);explorerOpen(${jsArg(r.from)})" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
       <div style="min-width:0">
-        <div style="font-size:12px;font-family:'Inter',monospace;color:var(--cream);margin-bottom:3px">${maskPhone(r.from)}</div>
+        <div style="font-size:12px;font-family:'Inter',monospace;color:var(--cream);margin-bottom:3px">${esc(maskPhone(r.from))}</div>
         <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.intent)} · ${esc(r.summary||"—")}</div>
         <div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap">${tags.join("")}</div>
       </div>
@@ -2873,7 +2878,7 @@ function paintHottestLeads(records){
     
     return`<div style="padding:14px;background:#f8fafc;border-radius:8px;border:1px solid var(--line);cursor:pointer;transition:.2s" onclick="markProfileSource(this);openLeadProfile(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-        <b style="font-family:'Inter',monospace;font-size:12px">${maskPhone(l.phone)}</b>
+        <b style="font-family:'Inter',monospace;font-size:12px">${esc(maskPhone(l.phone))}</b>
         <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
@@ -2905,7 +2910,7 @@ function paintSerialCallers(records){
   $("serialCallers").innerHTML=serial.map((s,i)=>`
     <div class="drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="markProfileSource(this);showSerialTimeline(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-        <b style="font-family:'Inter',monospace;font-size:13px">${maskPhone(s.phone)}</b>
+        <b style="font-family:'Inter',monospace;font-size:13px">${esc(maskPhone(s.phone))}</b>
         <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${s.total} calls</span>
       </div>
       <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
