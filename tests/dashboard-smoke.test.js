@@ -29,7 +29,7 @@ assert.deepEqual(hashLinks.filter(id => !idSet.has(id)), [], 'Dashboard contains
 for (const path of [
   'assets/logo.jpg', 'assets/favicon.ico', 'assets/favicon-16.png',
   'assets/favicon-32.png', 'assets/apple-touch-icon.png', 'assets/xlsx.full.min.js',
-  'css/dashboard.css'
+  'css/dashboard.css', 'js/workbook-worker.js'
 ]) {
   assert(fs.existsSync(path), `Missing dashboard asset: ${path}`);
 }
@@ -87,7 +87,9 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
-  'intentOf', 'paintIntentQuality', 'paintCallbacks'
+  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
+  'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
+  'chooseWorkbookCandidates'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -124,6 +126,9 @@ assert.equal(context.normalizeDisposition({ status: '', dur: 0, msg: 0, trans: '
 assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
 assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
 assert.equal(context.intentOf('I have a portal login issue'), 'Support');
+assert.equal(context.workbookWorkerTimeout({ byteLength: 14 * 1048576 }), 60000, 'Current-size workbook timeout changed');
+assert.equal(context.workbookWorkerTimeout({ byteLength: 90 * 1048576 }), 270000, 'Growing workbook timeout must scale with size');
+assert.equal(context.workbookWorkerTimeout({ byteLength: 200 * 1048576 }), 300000, 'Workbook timeout must remain bounded');
 
 const hostileValue = `91'\"><img src=x onerror=alert(1)>\\line`;
 const encodedArgument = context.jsArg(hostileValue);
@@ -166,9 +171,11 @@ const voiceRows = [
 const workbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(workbook, overview, 'Overview');
 XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(voiceRows), 'Voice Export');
-const reopened = XLSX.read(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer', dense: true });
+const workbookBytes = Uint8Array.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+const reopened = XLSX.read(workbookBytes, { type: 'array', dense: true });
 const chosen = context.chooseWorkbookRows(reopened);
 assert.equal(chosen.name, 'Voice Export', 'Dashboard should choose the call-data worksheet');
+assert.equal(context.parseWorkbookOnMainThread(workbookBytes).name, 'Voice Export', 'Main-thread workbook fallback changed');
 
 const deduped = context.dedupeRowsByCallId(chosen.rows);
 assert.equal(deduped.length, 2, 'Lifecycle rows should deduplicate by Call ID');
