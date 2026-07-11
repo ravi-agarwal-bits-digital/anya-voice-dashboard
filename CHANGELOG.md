@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Prevented identical workbooks from creating redundant encrypted repository versions by recording a minimal public-safe publication fingerprint.
+
 - Allowed conditional browser reuse of the unchanged encrypted workbook while still revalidating for updates.
 - Added staged loading messages for download, decryption, parsing and dashboard preparation.
 - Increased the download timeout to support the continually growing workbook on slower connections.
