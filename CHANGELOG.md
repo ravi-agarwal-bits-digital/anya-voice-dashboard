@@ -4,6 +4,9 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Aligned dashboard lifecycle deduplication with admin validation, bounded schema lookup work, cancelled stale renders and hardened large-workbook date validation.
+- Expanded regression coverage for same-status duplicates, schema aliases and 130,000-row validation.
+
 - Removed exact duplicate dashboard CSS rules and extended workflow coverage to stylesheet changes.
 
 - Extracted dashboard and administration styles into dedicated CSS files without changing application behaviour.
