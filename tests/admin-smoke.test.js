@@ -4,6 +4,9 @@ const assert = require('assert');
 const XLSX = require('../assets/xlsx.full.min.js');
 
 const html = fs.readFileSync('admin/index.html', 'utf8');
+assert(html.includes('href="../css/admin.css"'), 'Admin stylesheet link is missing');
+assert(!/<style(?:\s|>)/i.test(html), 'Admin must not contain embedded style blocks');
+assert(fs.existsSync('css/admin.css'), 'Admin stylesheet file is missing');
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .filter(script => script.trim());
