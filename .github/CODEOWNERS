@@ -1,0 +1,8 @@
+# Production-sensitive paths require review from the repository owner.
+# Keep ownership rules public-safe: do not list private teams or internal contacts.
+* @ravi-agarwal-bits-digital
+/index.html @ravi-agarwal-bits-digital
+/admin/ @ravi-agarwal-bits-digital
+/data/ @ravi-agarwal-bits-digital
+/assets/xlsx.full.min.js @ravi-agarwal-bits-digital
+/.github/workflows/ @ravi-agarwal-bits-digital
