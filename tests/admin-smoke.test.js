@@ -102,6 +102,17 @@ assert(valid.warnings.some(item => item.includes('Future Vendor Column')), 'Extr
 assert(context.__adminTest.validateRows(rows, required.filter(column => column !== 'Call ID')).errors.some(item => item.includes('Call ID')), 'Missing required columns should fail');
 assert(context.__adminTest.validateRows([{ ...baseRow, Status: 'future-status' }], required).errors.some(item => item.includes('unsupported Status')), 'Unknown status should fail');
 
+const largeRows = Array.from({ length: 130000 }, (_, index) => ({
+  ...baseRow,
+  'Call ID': `scale-${index}`,
+  To: `91${String(6000000000 + index)}`,
+  'Created At (IST)': index % 2 ? '10 Jul 2026, 10:30:00 AM IST' : '11 Jul 2026, 10:30:00 AM IST'
+}));
+const largeValidation = context.__adminTest.validateRows(largeRows, required);
+assert.equal(largeValidation.errors.length, 0, 'Large workbook validation should not overflow argument limits');
+assert.equal(largeValidation.metrics.dateMin.getDate(), 10, 'Large workbook minimum date changed');
+assert.equal(largeValidation.metrics.dateMax.getDate(), 11, 'Large workbook maximum date changed');
+
 (async () => {
   const source = new TextEncoder().encode('synthetic workbook bytes');
   const encrypted = await context.__adminTest.encryptBytes(source, 'test-passphrase', 'AANYAENC1');

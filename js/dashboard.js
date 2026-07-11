@@ -263,10 +263,21 @@ let ALL_DIALS=[]; // dial-level universe: every unique call incl. failed/initiat
                   // so lead/quality/intent metrics are never diluted by non-connecting dials.
 let SELECTED_DIRECTION="all";
 let SELECTED_CAMPAIGN="all"; // 'all' or an exact Campaign name; scopes the whole dashboard when set
+let renderGeneration=0;
+
+function recordDateBounds(records){
+  let min=null,max=null;
+  for(const record of records||[]){
+    const d=record&&record.d;
+    if(!d)continue;
+    if(min===null||d<min)min=d;
+    if(max===null||d>max)max=d;
+  }
+  return{min,max};
+}
 
 function quickFilter(type){
-  const dataMin=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort()[0]:null;
-  const dataMax=ALL_RECORDS_BACKUP.length?ALL_RECORDS_BACKUP.map(r=>r.d).filter(Boolean).sort().slice(-1)[0]:null;
+  const{min:dataMin,max:dataMax}=recordDateBounds(ALL_RECORDS_BACKUP);
   if(!dataMax){return;}
 
   const parseISO=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);};
@@ -350,6 +361,7 @@ function openManagementSummary(){
 }
 
 function applyFilters(){
+  const generation=++renderGeneration;
   const keepManagementSummaryVisible=isManagementSummaryVisible();
   updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
@@ -410,6 +422,7 @@ function applyFilters(){
   // anomaly decomposition, ledger) to the next frame, so applying a filter doesn't freeze the tab
   // while everything repaints at once.
   requestAnimationFrame(()=>{
+    if(generation!==renderGeneration)return;
     paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
     try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
   });
@@ -830,10 +843,22 @@ function resolveCallbackWindow(row, transcript, summary, callIso){
 }
 
 function normFieldName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
-function pickField(row,aliases){
+const FIELD_SCHEMA_CACHE=new Map();
+function fieldSchema(row){
   const keys=Object.keys(row||{});
+  const signature=keys.join('\u0000');
+  let schema=FIELD_SCHEMA_CACHE.get(signature);
+  if(!schema){
+    schema=keys.map(k=>[k,normFieldName(k)]);
+    // Workbooks normally have one schema. Keep a small bound for malformed/mixed inputs.
+    if(FIELD_SCHEMA_CACHE.size>=32)FIELD_SCHEMA_CACHE.clear();
+    FIELD_SCHEMA_CACHE.set(signature,schema);
+  }
+  return schema;
+}
+function pickField(row,aliases){
   for(const a of aliases){if(Object.prototype.hasOwnProperty.call(row,a))return row[a];}
-  const normalized=keys.map(k=>[k,normFieldName(k)]);
+  const normalized=fieldSchema(row);
   for(const a of aliases){
     const na=normFieldName(a);
     const hit=normalized.find(([k,nk])=>nk===na || nk.includes(na) || na.includes(nk));
@@ -1723,6 +1748,21 @@ function rowStatusRank(row){
   const s=String(pickField(row,['Status','Call Status'])||'').toLowerCase();
   return s==='completed'?3:s==='failed'?2:s==='initiated'?1:0;
 }
+const DEDUPE_COMPLETENESS_FIELDS=['Lead Temp.','Review Band','Bot Conf.','Need Score','Summary','Full Transcript','Campaign','Campaign ID','Failure Stage','Failure Reason','Failure Detail','SIP / Hangup Code','Hangup Cause'];
+function rowCompletenessScore(row){
+  return DEDUPE_COMPLETENESS_FIELDS.reduce((n,key)=>n+(String(pickField(row,[key])??'').trim()?1:0),0);
+}
+function rowLifecycleTime(row){
+  const dt=parseDateFull(pickField(row,['Created At (IST)','Created At','Timestamp','Call Time','Call Date','Date','Started At','Start Time','created_at','createdAt']));
+  return dt?Date.parse(`${dt.iso}T${String(dt.h).padStart(2,'0')}:${String(dt.m).padStart(2,'0')}:00`):0;
+}
+function preferLifecycleRow(candidate,previous){
+  const rankDelta=rowStatusRank(candidate)-rowStatusRank(previous);
+  if(rankDelta)return rankDelta>0;
+  const timeDelta=rowLifecycleTime(candidate)-rowLifecycleTime(previous);
+  if(timeDelta)return timeDelta>0;
+  return rowCompletenessScore(candidate)>=rowCompletenessScore(previous);
+}
 function dedupeRowsByCallId(rows){
   // Collapse each Call ID to its most-advanced lifecycle row so one call = one row. Rows with no Call ID
   // (older/other exports) are passed through untouched, preserving prior single-row-per-call behaviour.
@@ -1731,7 +1771,7 @@ function dedupeRowsByCallId(rows){
     const cid=rowCallId(row);
     if(!cid){noId.push(row);continue;}
     const prev=byId.get(cid);
-    if(!prev || rowStatusRank(row)>rowStatusRank(prev))byId.set(cid,row);
+    if(!prev || preferLifecycleRow(row,prev))byId.set(cid,row);
   }
   return [...byId.values(),...noId];
 }
@@ -2036,7 +2076,7 @@ function boot(){
   $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>syncSidebarActive("sec-overview"),80);
   // Span the date range across ALL dials (incl. failed/initiated), so outbound connectivity for a day
   // with dials but no completed conversation is still inside the default range.
-  const datesAll=(ALL_DIALS.length?ALL_DIALS:RECORDS).map(r=>r.d).filter(Boolean).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
+  const{min:dmin,max:dmax}=recordDateBounds(ALL_DIALS.length?ALL_DIALS:RECORDS);
 
   // Backup all records for filtering
   ALL_RECORDS_BACKUP=[...RECORDS];
@@ -2056,7 +2096,9 @@ function boot(){
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
+  const generation=++renderGeneration;
   requestAnimationFrame(()=>{
+    if(generation!==renderGeneration)return;
     paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
     try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
     $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
@@ -2874,4 +2916,3 @@ function exportCallbacks(){
   });
   downloadCSV('callback_requests_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
-
