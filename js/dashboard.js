@@ -183,8 +183,7 @@ function autoLoadLatestExcel(){
         }
       }
       setDashboardLoadingMessage('Reading workbook…');
-      const file=new File([fileBytes],'voice_analytics.xlsx',{type:'application/vnd.ms-excel'});
-      handle(file);
+      await processWorkbookBytes(fileBytes,'voice_analytics.xlsx');
     })
     .catch(err=>{
       const timedOut=err && err.name==='AbortError';
@@ -276,33 +275,34 @@ async function parseWorkbookBytes(bytes){
     return parseWorkbookOnMainThread(bytes);
   }
 }
-function handle(file){
+async function processWorkbookBytes(bytes,sourceName){
   if($('err'))$('err').textContent='';
   if(typeof XLSX==='undefined'){
     setDashboardPlaceholder('Spreadsheet engine unavailable','The spreadsheet parser did not load. Please check internet/CDN access and refresh the dashboard.');
     return;
   }
+  try{
+    setDashboardLoadingMessage('Parsing workbook…');
+    const chosen=await parseWorkbookBytes(bytes);
+    if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
+    setDashboardLoadingMessage(`Preparing dashboard from ${chosen.rows.length.toLocaleString()} rows…`);
+    const rows=dedupeRowsByCallId(chosen.rows);
+    const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
+    ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)
+    RECORDS=allCalls.filter(isConversationRecord);   // conversation universe -- every existing analytic
+    SRC=sourceName;
+    if(!RECORDS.length){
+      const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
+      setDashboardPlaceholder('No valid call records','The export loaded from <b>'+esc(chosen.name)+'</b>, but the dashboard could not identify a valid call date column.<br><br><b>Columns seen:</b> '+esc(headers||'none'));
+      return;
+    }
+    boot();
+  }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
+}
+function handle(file){
   const rd=new FileReader();
   rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
-  rd.onload=async e=>{
-    try{
-      setDashboardLoadingMessage('Parsing workbook…');
-      const chosen=await parseWorkbookBytes(new Uint8Array(e.target.result));
-      if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
-      setDashboardLoadingMessage(`Preparing dashboard from ${chosen.rows.length.toLocaleString()} rows…`);
-      const rows=dedupeRowsByCallId(chosen.rows);
-      const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
-      ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)
-      RECORDS=allCalls.filter(isConversationRecord);   // conversation universe -- every existing analytic
-      SRC=file.name;
-      if(!RECORDS.length){
-        const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
-        setDashboardPlaceholder('No valid call records','The export loaded from <b>'+esc(chosen.name)+'</b>, but the dashboard could not identify a valid call date column.<br><br><b>Columns seen:</b> '+esc(headers||'none'));
-        return;
-      }
-      boot();
-    }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
-  };
+  rd.onload=e=>processWorkbookBytes(new Uint8Array(e.target.result),file.name);
   rd.readAsArrayBuffer(file);
 }
 
