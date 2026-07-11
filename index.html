@@ -169,7 +169,7 @@ body::before{display:none!important}
 .wrap{max-width:none!important;margin:0!important;padding:0 0 76px!important}
 #reportView{padding-top:0}
 #reportView header{background:rgba(255,255,255,.94)!important;border:1px solid var(--line)!important;border-radius:28px!important;padding:24px 26px!important;margin:0 0 24px!important;box-shadow:var(--shadow)!important;overflow:visible!important}
-#reportView header>div:first-child{border-bottom:1px solid var(--line2)!important;padding-bottom:18px!important;align-items:flex-start!important}
+#reportView header>div:first-child{align-items:flex-start!important}
 .top-brand{display:flex!important;align-items:center!important;gap:18px!important}
 .top-logo-img{width:300px;max-width:min(42vw,300px);height:auto;object-fit:contain;display:block}
 .top-title-wrap{border-left:1px solid var(--line);padding-left:18px;min-width:220px}
@@ -179,8 +179,8 @@ body::before{display:none!important}
 #meta{gap:8px!important;justify-content:flex-end!important}
 #meta>div,#selectedDateRange{background:#f8fafc!important;border:1px solid var(--line)!important;border-radius:999px!important;color:var(--muted)!important;padding:7px 12px!important;box-shadow:none!important}
 #meta b,#dateRangeText{color:var(--navy)!important;font-weight:800!important}
-#reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{border-top:1px solid var(--line2)!important;margin-top:12px!important;padding-top:14px!important}
-header label{color:var(--muted)!important;font-weight:800!important;text-transform:uppercase;letter-spacing:.08em!important}
+.filter-bar{background:rgba(255,255,255,.97)!important;border:1px solid var(--line)!important;border-radius:16px!important;padding:12px 16px!important;margin-bottom:24px!important;box-shadow:0 8px 22px rgba(11,31,58,.06)!important}
+.filter-bar label{color:var(--muted)!important;font-weight:800!important;text-transform:uppercase;letter-spacing:.08em!important}
 button,#reportView button,.cbfilt{border-radius:999px!important;border:1px solid var(--line)!important;background:#ffffff!important;color:var(--navy)!important;font-weight:800!important;box-shadow:none!important;transition:.16s ease!important}
 button:hover,#reportView button:hover,.cbfilt:hover,.cbfilt.on{background:#f6f8fc!important;border-color:#b08a3c!important;color:var(--navy)!important;transform:translateY(-1px)}
 #btn-today,#btn-yesterday,#btn-week,#btn-month,#btn-all,#btn-custom{padding:8px 14px!important;background:#fff!important;color:var(--navy)!important;border-color:var(--line)!important}
@@ -539,16 +539,10 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
   .side-link{width:100%!important;white-space:normal!important;flex:initial!important;padding:9px 12px!important;}
   .side-group-label{padding:12px 12px 5px!important;}
   .wrap{min-width:0!important;width:100%!important;}
-  /* Pin the header so date/direction/campaign/search filters stay reachable while scrolling. */
-  #reportView header{position:sticky!important;top:12px!important;z-index:90!important;transition:padding .18s ease,box-shadow .18s ease!important;}
-  /* On scroll, collapse the logo/title but KEEP the meta pills (Period/Calls/Cost/…) as at-a-glance
-     context, so the pinned bar stays slim yet still shows what the current view covers. */
-  body.header-condensed #reportView header .top-brand{display:none!important;}
-  body.header-condensed #reportView header>div:first-child{padding-bottom:10px!important;gap:8px!important;justify-content:flex-start!important;}
-  body.header-condensed #meta{justify-content:flex-start!important;gap:6px!important;}
-  body.header-condensed #meta>div{padding:4px 10px!important;font-size:10.5px!important;}
-  body.header-condensed #reportView header{padding-top:12px!important;padding-bottom:12px!important;background:#fff!important;box-shadow:0 10px 26px rgba(11,31,58,.12)!important;}
-  body.header-condensed #reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{border-top:0!important;margin-top:6px!important;padding-top:10px!important;}
+  /* Pin ONLY the slim filter bar (constant height) so filters stay reachable while scrolling,
+     without covering much and — crucially — without changing height, so pinning never reflows
+     the page or jumps the scroll (that feedback was the old "dancing" header). */
+  #filterBar.filter-bar{position:sticky!important;top:10px!important;z-index:90!important;}
 }
 
 /* Short desktop screens (laptops): compact the sidebar so the full 19-link map fits with
@@ -660,7 +654,7 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
     padding-bottom:6px!important;
     -webkit-overflow-scrolling:touch!important;
   }
-  #reportView header label{flex:0 0 auto!important;align-self:center!important;}
+  .filter-bar label{flex:0 0 auto!important;align-self:center!important;}
   #btn-today,#btn-yesterday,#btn-week,#btn-month,#btn-all,#btn-custom,#customFilterPanel,#selectedDateRange,#searchMobile{flex:0 0 auto!important;}
   #searchMobile{width:190px!important;max-width:70vw!important;}
   #customFilterPanel{min-width:max-content!important;}
@@ -985,14 +979,9 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
   }
 
   /* Filter block compacting without changing filter logic. */
-  #reportView header [style*="border-top:1px solid rgba(0,212,170,0.12)"]{
-    margin-top:8px!important;
-    padding-top:9px!important;
-  }
-  #reportView header [style*="display:flex;flex-wrap:wrap;gap:8px;align-items:center"]{
-    gap:6px!important;
-  }
-  header label{font-size:9.5px!important;letter-spacing:.07em!important;}
+  .filter-bar{padding:10px 12px!important;margin-bottom:14px!important;border-radius:16px!important;}
+  .filter-bar .filter-bar-row{gap:6px!important;}
+  .filter-bar label{font-size:9.5px!important;letter-spacing:.07em!important;}
   #btn-today,#btn-yesterday,#btn-week,#btn-month,#btn-all,#btn-custom{
     padding:6px 9px!important;
     font-size:10.8px!important;
@@ -1164,7 +1153,7 @@ body.profile-open .profile-overlay{display:block;}
 @media print{
   @page{size:A4;margin:14mm}
   body{background:#fff!important;color:#0b1f3a!important}
-  .exec-sidebar,#reportView>header,.hero,.strip,section:not(#sec-brief),footer,#kpiOverlay,#kpiPanel,#profileOverlay,#userSearchResult,.summary-jump-btn,.brief-print-btn{display:none!important}
+  .exec-sidebar,#reportView>header,#filterBar,.hero,.strip,section:not(#sec-brief),footer,#kpiOverlay,#kpiPanel,#profileOverlay,#userSearchResult,.summary-jump-btn,.brief-print-btn{display:none!important}
   #briefKpis{display:grid!important;grid-template-columns:repeat(4,1fr)!important}
   #dashboardContent,#mainShell,#mainWrap,#reportView,#sec-brief{display:block!important;visibility:visible!important}
   .app-shell{display:block!important;padding:0!important}
@@ -1556,20 +1545,22 @@ window.addEventListener('DOMContentLoaded',()=>{
 </div>
 
 <div id="reportView">
-  <header style="background:#fff;border:1px solid var(--line);padding:24px;margin-bottom:32px">
+  <header style="background:#fff;border:1px solid var(--line);padding:24px;margin-bottom:16px">
 
-    <!-- TOPBAR -->
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding-bottom:16px">
+    <!-- TOPBAR (brand + meta) — scrolls away normally -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div class="top-brand">
         <img class="top-logo-img" src="assets/logo.jpg" alt="BITS Pilani Digital logo">
         <div class="top-title-wrap"><div class="top-title">Anya Voice Dashboard</div><div class="top-subtitle">Call quality, lead intelligence and follow-up priorities</div></div>
       </div>
       <div id="meta" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
+  </header>
 
-    <!-- FILTER BAR -->
-    <div style="border-top:1px solid rgba(0,212,170,0.12);padding:12px 0">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+  <!-- FILTER BAR — a constant-height sticky bar (desktop) so you can filter on the fly.
+       Constant height means no reflow/scroll-jump when it pins (fixes the "dancing" header). -->
+  <div id="filterBar" class="filter-bar">
+      <div class="filter-bar-row" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         <label style="font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap">Filter:</label>
         <button onclick="quickFilter('today')" id="btn-today" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Today</button>
         <button onclick="quickFilter('yesterday')" id="btn-yesterday" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Yesterday</button>
@@ -1602,8 +1593,7 @@ window.addEventListener('DOMContentLoaded',()=>{
           <input type="search" id="searchMobile" placeholder="Search a lead by mobile…" aria-label="Search a lead by mobile number" oninput="debouncedSearch(this.value)">
         </div>
       </div>
-    </div>
-  </header>
+  </div>
 
   <!-- Hero: Call Quality Score + Gauge -->
   <div class="hero" id="sec-overview">
@@ -1859,11 +1849,10 @@ function getStickyTopOffset(){
   if(window.innerWidth<=900 && nav && nav.offsetParent!==null){
     return Math.min(Math.max(nav.offsetHeight+12,96),150);
   }
-  // Desktop: the header is pinned, so land sections just below it (measured, so it
-  // stays correct whether the header is full-height or collapsed).
-  const hdr=document.querySelector('#reportView header');
-  if(hdr && window.innerWidth>900 && getComputedStyle(hdr).position==='sticky' && hdr.offsetParent!==null){
-    return hdr.offsetHeight+22;
+  // Desktop: the slim filter bar is pinned, so land sections just below it (measured).
+  const fb=document.querySelector('#filterBar');
+  if(fb && window.innerWidth>900 && getComputedStyle(fb).position==='sticky' && fb.offsetParent!==null){
+    return fb.offsetHeight+20;
   }
   return 24;
 }
@@ -1875,30 +1864,11 @@ function scrollToWithStickyOffset(el, behavior='smooth'){
 function updateMobileNavShadow(){
   document.body.classList.toggle('mobile-nav-scrolled',window.innerWidth<=900 && window.scrollY>8);
 }
-function updateHeaderCondense(){
-  // Collapse the branded header row to a slim filter bar once the user scrolls (desktop only).
-  document.body.classList.toggle('header-condensed',window.innerWidth>900 && window.scrollY>130);
-}
-let sidebarUserToggled=false;
 function toggleSideGroup(group){
-  sidebarUserToggled=true;
+  // Manual, sticky collapse/expand only. Groups never auto-collapse -- the sidebar simply scrolls
+  // internally if the full map is taller than the viewport, which stays predictable while you
+  // scroll past it (the earlier auto-fit kept re-collapsing groups, which was confusing).
   group.classList.toggle('open');
-}
-function fitSidebar(){
-  // On the desktop vertical sidebar, collapse lower-priority groups until the full map fits the
-  // viewport without an internal scrollbar. Skips once the user has manually toggled a group
-  // (their choice wins) and on mobile (the nav is a flat horizontal scroller there).
-  if(window.innerWidth<=900 || sidebarUserToggled)return;
-  const side=document.querySelector('.exec-sidebar');
-  const groups=[...document.querySelectorAll('.side-group')];
-  if(!side || !groups.length)return;
-  groups.forEach(g=>g.classList.add('open'));
-  // Collapse in this order; Overview stays open, Outbound (the focus area) collapses last.
-  ['leadership','demand','leads','outbound'].forEach(key=>{
-    if(side.scrollHeight<=side.clientHeight+2)return;
-    const g=document.querySelector('.side-group[data-group="'+key+'"]');
-    if(g)g.classList.remove('open');
-  });
 }
 
 function syncSidebarActive(forceId){
@@ -1947,8 +1917,16 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.side-group-label').forEach(lbl=>{
     lbl.addEventListener('click',()=>{const g=lbl.closest('.side-group');if(g)toggleSideGroup(g);});
   });
-  window.addEventListener('scroll',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();},{passive:true});
-  window.addEventListener('resize',()=>{syncSidebarActive();updateMobileNavShadow();updateHeaderCondense();fitSidebar();},{passive:true});
+  // Throttle scroll/resize work to one update per animation frame -- syncSidebarActive reads
+  // layout for every section, so running it on every raw scroll event caused jank.
+  let viewportTicking=false;
+  const onViewportChange=()=>{
+    if(viewportTicking)return;
+    viewportTicking=true;
+    requestAnimationFrame(()=>{viewportTicking=false;syncSidebarActive();updateMobileNavShadow();});
+  };
+  window.addEventListener('scroll',onViewportChange,{passive:true});
+  window.addEventListener('resize',onViewportChange,{passive:true});
   const directionSwitch=document.getElementById('directionSwitch');
   if(directionSwitch){
     directionSwitch.addEventListener('click',e=>{
@@ -1961,7 +1939,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   syncSidebarActive('sec-overview');
   updateMobileNavShadow();
-  updateHeaderCondense();
 });
 
 const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",indigo:"#5b47d6",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
@@ -2259,8 +2236,9 @@ function applyFilters(){
     $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   }
   const o=aggregate(RECORDS);
+  // Paint the top-of-page essentials synchronously so the filter feels instant...
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  
+
   // Trigger KPI and verdict animations
   document.querySelectorAll('.kpi').forEach(kpi=>{
     kpi.classList.remove('pulse');
@@ -2271,8 +2249,13 @@ function applyFilters(){
     verdict.classList.remove('pulse');
     setTimeout(()=>verdict.classList.add('pulse'),10);
   }
-  paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
-  try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
+  // ...then defer the heavier, mostly below-the-fold sections (outbound sweeps, campaign leaderboard,
+  // anomaly decomposition, ledger) to the next frame, so applying a filter doesn't freeze the tab
+  // while everything repaints at once.
+  requestAnimationFrame(()=>{
+    paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
+    try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120);
+  });
   closeUserSearch();
 }
 
@@ -3883,7 +3866,7 @@ function boot(){
   if(!RECORDS.length){$("err").textContent="No valid call records found. Check your file format.";return;}
   window.DATA_LOADED=true;
   setDashboardReady();
-  $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>{syncSidebarActive("sec-overview");fitSidebar();},80);
+  $("uploadView").style.display="none";$("reportView").style.display="block";window.scrollTo(0,0);setTimeout(()=>syncSidebarActive("sec-overview"),80);
   // Span the date range across ALL dials (incl. failed/initiated), so outbound connectivity for a day
   // with dials but no completed conversation is still inside the default range.
   const datesAll=(ALL_DIALS.length?ALL_DIALS:RECORDS).map(r=>r.d).filter(Boolean).sort();const dmin=datesAll[0],dmax=datesAll[datesAll.length-1];
@@ -3903,10 +3886,14 @@ function boot(){
   const totalCost=totalMins*5;
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${m[0]} <b style="color:#e8e8e8">${m[1]}</b></div>`).join("");
   const o=aggregate(RECORDS);
+  // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
+  // fill in on the next frame instead of blocking the initial render all at once.
   paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
-  paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
-  try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
-  $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
+  requestAnimationFrame(()=>{
+    paintIntents(o);paintMsgImpact(o);dayChart(o.daily);hourChart(o.hourly);paintFrustBreak(o);paintFrustCost(o);paintHottestLeads(RECORDS);paintSerialCallers(RECORDS);paintBandBars(o);paintGeo(o);paintDirectionSplit();paintDirectionCompare();paintOutboundPerf();paintOutboundCadence();paintCampaignSection();paintIntentQuality(RECORDS);paintAnomalyCards();renderExplorer(true);
+    try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);} try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);} setTimeout(()=>syncSidebarActive(),120);
+    $("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;
+  });
 }
 
 function paintHealth(o){
