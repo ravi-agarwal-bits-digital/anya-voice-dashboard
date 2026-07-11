@@ -8,7 +8,7 @@ assert(html.includes('href="css/dashboard.css"'), 'Dashboard stylesheet link is 
 assert(!/<style(?:\s|>)/i.test(html), 'Dashboard must not contain embedded style blocks');
 assert(html.includes('src="js/auth.js"'), 'Dashboard authentication script link is missing');
 assert(html.includes('src="js/dashboard.js"'), 'Dashboard application script link is missing');
-const inlineScripts = [...html.matchAll(/<script(?![^>]*\\bsrc=)[^>]*>([\\s\\S]*?)<\\/script>/gi)]
+const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .filter(script => script.trim());
 assert.equal(inlineScripts.length, 0, 'Dashboard must not contain inline application scripts');
