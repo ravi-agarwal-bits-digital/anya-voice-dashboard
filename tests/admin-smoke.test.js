@@ -7,11 +7,13 @@ const html = fs.readFileSync('admin/index.html', 'utf8');
 assert(html.includes('href="../css/admin.css"'), 'Admin stylesheet link is missing');
 assert(!/<style(?:\s|>)/i.test(html), 'Admin must not contain embedded style blocks');
 assert(fs.existsSync('css/admin.css'), 'Admin stylesheet file is missing');
-const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+assert(html.includes('src="../js/admin.js"'), 'Admin application script link is missing');
+const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .filter(script => script.trim());
-
-assert.equal(scripts.length, 1, 'Admin must contain one inline application script');
+assert.equal(inlineScripts.length, 0, 'Admin must not contain inline application scripts');
+assert(fs.existsSync('js/admin.js'), 'Admin application script file is missing');
+const scripts = [fs.readFileSync('js/admin.js', 'utf8')];
 new Function(scripts[0]);
 
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'admin/**'
+      - 'js/admin.js'
       - 'assets/xlsx.full.min.js'
       - 'tests/admin-smoke.test.js'
       - '.github/workflows/admin-checks.yml'
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'admin/**'
+      - 'js/admin.js'
       - 'assets/xlsx.full.min.js'
       - 'tests/admin-smoke.test.js'
 
