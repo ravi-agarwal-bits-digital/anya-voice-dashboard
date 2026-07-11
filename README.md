@@ -10,6 +10,8 @@ This project is maintained as a static web application. The production dashboard
 .
 ├── index.html
 ├── README.md
+├── CHANGELOG.md
+├── THIRD_PARTY_NOTICES.md
 ├── admin/
 │   └── index.html
 ├── assets/
@@ -68,6 +70,8 @@ Before merging a dashboard change:
 - Test the primary filters and interactive panels.
 - Check desktop and mobile layouts.
 - Confirm the administration page still targets the expected production file when relevant.
+- Run `node tests/admin-smoke.test.js` when admin code changes.
+- Run `node tests/dashboard-smoke.test.js` when dashboard code changes.
 
 ## Repository hygiene
 

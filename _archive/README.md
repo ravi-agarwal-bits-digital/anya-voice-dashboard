@@ -2,6 +2,8 @@
 
 These files are retained only for historical reference and rollback investigation.
 
+Do not modify archived files during normal development. Use the canonical root `index.html` and `admin/index.html` files for all active work.
+
 - `legacy-dashboards/` contains superseded dashboard implementations.
 - `legacy-admin/` contains the retired upload console.
 
