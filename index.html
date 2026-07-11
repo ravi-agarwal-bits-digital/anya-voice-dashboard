@@ -3112,7 +3112,7 @@ function paintOutboundPerf(){
     ["neut",numbersHot,"Hot leads reached","window.__obHot",()=>true]
   ].map(c=>`<div class="kpi ${c[0]}" onclick="openFilteredPanel('${esc(c[2])}',${c[4]},${c[3]})" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join("");
 
-  paintOutboundFunnel(n,buckets.connected,buckets.failed,buckets.initiated,window.__obHot.length);
+  paintOutboundFunnel(n,buckets.connected,buckets.failed,buckets.initiated,window.__obHot.length,numbersTotal,numbersReached,numbersHot);
   paintDispositionBreak(obRecs);
   paintUnreachableList(unreachable,avgDials);
   paintRedialCurve(obRecs);
@@ -3121,22 +3121,25 @@ function paintOutboundPerf(){
 }
 // Outbound conversion funnel: dials placed -> numbers reached -> connected conversations -> hot leads.
 // Shows exactly where outbound effort leaks on the way to a convertible lead.
-function paintOutboundFunnel(totalDials,connectedDials,failedDials,initiatedDials,hotCalls){
+function paintOutboundFunnel(totalDials,connectedDials,failedDials,initiatedDials,hotCalls,numbersTotal,numbersReached,numbersHot){
   const el=$('outboundFunnel');
   if(!el)return;
   // Dial/call-level and monotonic: every dial placed -> the ones that connected -> the hot leads among them.
   // The big drop from dials to connected IS the failed-call leakage, shown explicitly so wasted effort is visible.
+  // Each step also shows the DISTINCT-NUMBER count beneath the dial/call count, so the effect of redialling the
+  // same number (which inflates the raw dial/call totals) is visible right in the funnel.
   const steps=[
-    ['Dials placed',totalDials,C.blue,'window.__obRecs'],
-    ['Connected',connectedDials,C.teal,'window.__obConnected'],
-    ['Hot-lead calls',hotCalls,C.gold||'#b08a3c','window.__obHot']
+    ['Dials placed',totalDials,C.blue,'window.__obRecs',numbersTotal,'distinct numbers dialed'],
+    ['Connected',connectedDials,C.teal,'window.__obConnected',numbersReached,'distinct numbers reached'],
+    ['Hot-lead calls',hotCalls,C.gold||'#b08a3c','window.__obHot',numbersHot,'distinct hot leads']
   ];
   const max=totalDials||1;
   const stepHtml=(s,i)=>{
     const pct=Math.round(s[1]/max*100);
     const ofPrev=i>0&&steps[i-1][1]?Math.round(s[1]/steps[i-1][1]*100):100;
+    const numSub=(s[4]!=null)?`<div style="font-size:10.5px;color:var(--faint);font-weight:700;margin-top:2px">${Number(s[4]).toLocaleString()} ${s[5]}</div>`:'';
     return `<div class="opf-funnel-step" onclick="openFilteredPanel('${esc(s[0])} (outbound)',()=>true,${s[3]})" title="Click for details">`+
-      `<div class="opf-funnel-label">${esc(s[0])}</div>`+
+      `<div class="opf-funnel-label">${esc(s[0])}${numSub}</div>`+
       `<div class="opf-funnel-track"><div class="opf-funnel-fill" style="width:${Math.max(pct,3)}%;background:${s[2]}">${s[1].toLocaleString()}</div></div>`+
       `<div class="opf-funnel-pct">${i===0?'100%':ofPrev+'% of prev'}</div></div>`;
   };
@@ -3300,19 +3303,25 @@ function campaignStats(){
   const byC={};
   dials.forEach(r=>{
     const c=(r.campaign||'').trim()||'(no campaign)';
-    const b=byC[c]||(byC[c]={dials:0,connected:0,hot:0,numbers:{}});
+    const b=byC[c]||(byC[c]={dials:0,connected:0,numbers:{}});
     b.dials++;
     const conn=normalizeDisposition(r)==='connected';
-    if(conn){b.connected++;if(r.leadTemp==='Hot')b.hot++;}
+    if(conn)b.connected++;
     const num=r.from||'?';
-    if(!b.numbers[num])b.numbers[num]=false;
-    if(conn)b.numbers[num]=true;
+    // Track per-UNIQUE-number status so conversion isn't inflated by redialling the same lead:
+    // reached = ever connected; hot = ever produced a connected Hot call.
+    const st=b.numbers[num]||(b.numbers[num]={reached:false,hot:false});
+    if(conn){st.reached=true;if(r.leadTemp==='Hot')st.hot=true;}
   });
   return Object.entries(byC).map(([campaign,b])=>{
-    const numsTotal=Object.keys(b.numbers).length;
-    const reached=Object.values(b.numbers).filter(Boolean).length;
+    const nums=Object.values(b.numbers);
+    const numsTotal=nums.length;
+    const reached=nums.filter(s=>s.reached).length;
+    const numbersHot=nums.filter(s=>s.hot).length;
     return {campaign,dials:b.dials,connectPct:b.dials?Math.round(b.connected/b.dials*100):0,
-      reachPct:numsTotal?Math.round(reached/numsTotal*100):0,hotPct:b.connected?Math.round(b.hot/b.connected*100):0,numbers:numsTotal};
+      reachPct:numsTotal?Math.round(reached/numsTotal*100):0,
+      // Hot % = share of REACHED numbers that ever went hot (per-lead conversion, not per-call).
+      hotPct:reached?Math.round(numbersHot/reached*100):0,numbers:numsTotal,reached,numbersHot};
   });
 }
 function paintCampaignLeaderboard(){
@@ -3334,7 +3343,8 @@ function paintCampaignLeaderboard(){
       `<td class="num">${x.connectPct}%</td>`+
       `<td class="num">${x.reachPct}%</td>`+
       `<td class="num"><div class="iq-barwrap iq-hot" style="justify-content:flex-end;min-width:0"><div class="iq-bartrack" style="max-width:64px;flex:0 0 64px"><div class="iq-barfill" style="width:${Math.round(x.hotPct/maxHot*100)}%"></div></div><span class="iq-barval">${x.hotPct}%</span></div></td></tr>`).join('')+
-    `</tbody></table></div>`;
+    `</tbody></table></div>`+
+    `<div class="cap" style="margin-top:10px;font-size:11.5px"><b>Dials</b> = attempts placed · <b>Connect %</b> = share of dials that connected (per-dial) · <b>Reach %</b> = distinct numbers ever reached · <b>Hot %</b> = of the numbers reached, the share that produced a hot lead — counted <b>once per number</b>, so redialling the same lead doesn't inflate it.</div>`;
 }
 const SIP_LABEL={'603':'Declined by callee (SIP 603)','480':'Temporarily unavailable (480)','486':'Busy (486)','408':'No answer / timeout (408)','404':'Number not found (404)','403':'Forbidden (403)','500':'Server error (500)','503':'Service unavailable (503)','502':'Bad gateway (502)'};
 function failureReasonLabel(r){
