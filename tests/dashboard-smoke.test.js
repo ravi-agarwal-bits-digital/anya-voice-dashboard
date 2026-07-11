@@ -56,13 +56,14 @@ const makeElement = () => new Proxy({
 });
 
 const elements = new Map();
+const loadingText = makeElement();
 const getElement = id => {
   if (!elements.has(id)) elements.set(id, makeElement());
   return elements.get(id);
 };
 const document = {
   body: makeElement(), getElementById: getElement,
-  querySelector: () => makeElement(), querySelectorAll: () => [],
+  querySelector: selector => selector === '#dataLoading p' ? loadingText : makeElement(), querySelectorAll: () => [],
   createElement: () => makeElement(), addEventListener: noop
 };
 const storage = { getItem: () => null, setItem: noop, removeItem: noop, clear: noop };
@@ -89,7 +90,7 @@ for (const fn of [
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
-  'chooseWorkbookCandidates'
+  'chooseWorkbookCandidates', 'setDashboardLoadingMessage'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -126,6 +127,10 @@ assert.equal(context.normalizeDisposition({ status: '', dur: 0, msg: 0, trans: '
 assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
 assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
 assert.equal(context.intentOf('I have a portal login issue'), 'Support');
+context.setDashboardLoadingMessage('Parsing workbook…');
+assert.equal(loadingText.textContent, 'Parsing workbook…', 'Loading stage message changed');
+assert(scripts[1].includes("fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'}"), 'Workbook fetch must revalidate while allowing cached bytes');
+assert(scripts[1].includes('DATA_FETCH_TIMEOUT_MS=180000'), 'Growing workbook download timeout changed');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 14 * 1048576 }), 60000, 'Current-size workbook timeout changed');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 90 * 1048576 }), 270000, 'Growing workbook timeout must scale with size');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 200 * 1048576 }), 300000, 'Workbook timeout must remain bounded');
