@@ -235,28 +235,57 @@ function handle(file){
   }
   const rd=new FileReader();
   rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
-  rd.onload=e=>{
-    try{
-      // dense:true builds dense-array sheets, ~25% faster to parse on large exports (61k+ rows) with
-      // byte-identical sheet_to_json output. XLSX.read still runs on the main thread, so a very large
-      // file is briefly blocking — the bigger win (moving parse to a Web Worker) is a follow-up.
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,dense:true});
-      const chosen=chooseWorkbookRows(wb);
-      if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
-      const rows=dedupeRowsByCallId(chosen.rows);
-      const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
-      ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)
-      RECORDS=allCalls.filter(isConversationRecord);   // conversation universe -- every existing analytic
-      SRC=file.name;
-      if(!RECORDS.length){
-        const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
-        setDashboardPlaceholder('No valid call records','The export loaded from <b>'+esc(chosen.name)+'</b>, but the dashboard could not identify a valid call date column.<br><br><b>Columns seen:</b> '+esc(headers||'none'));
-        return;
-      }
-      boot();
-    }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
-  };
+  rd.onload=e=>ingestArrayBuffer(e.target.result,file.name);
   rd.readAsArrayBuffer(file);
+}
+
+function ingestError(err){
+  setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc((err&&err.message)||String(err)));
+}
+
+// Parse the workbook in a Web Worker so the heavy XLSX.read (~5s on a 60k-row export) runs OFF the
+// main thread — the dashboard stays interactive and the loading spinner keeps animating during load.
+// Falls back to inline main-thread parsing on any worker failure (unsupported, blocked, or errored),
+// so the worst case is exactly the previous behaviour.
+function ingestArrayBuffer(buf,name){
+  let settled=false;
+  const inline=()=>{ if(settled)return; settled=true; inlineParse(buf,name); };
+  let worker;
+  try{ worker=new Worker('js/parse-worker.js'); }
+  catch(err){ inline(); return; }
+  const timer=setTimeout(()=>{ try{worker.terminate();}catch(_){}; inline(); },90000);
+  worker.onmessage=ev=>{
+    clearTimeout(timer); try{worker.terminate();}catch(_){}
+    if(settled)return;
+    if(ev.data&&ev.data.ok){ settled=true; try{finishIngest(chooseFromSheets(ev.data.sheets),name);}catch(err){ingestError(err);} }
+    else{ inline(); }
+  };
+  worker.onerror=()=>{ clearTimeout(timer); try{worker.terminate();}catch(_){}; inline(); };
+  // Structured-clone the buffer (do NOT transfer) so it stays available for the inline fallback.
+  try{ worker.postMessage({buf}); }
+  catch(err){ clearTimeout(timer); try{worker.terminate();}catch(_){}; inline(); }
+}
+function inlineParse(buf,name){
+  try{
+    const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true,dense:true});
+    finishIngest(chooseWorkbookRows(wb),name);
+  }catch(err){ ingestError(err); }
+}
+// Shared tail: dedupe by Call ID, map to records, split the two universes, boot. Used by both the
+// worker and inline paths so the ingest result is identical regardless of which parsed the file.
+function finishIngest(chosen,name){
+  if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
+  const rows=dedupeRowsByCallId(chosen.rows);
+  const allCalls=rows.map(r=>rowToRecord(r)).filter(r=>r && r.d);
+  ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)
+  RECORDS=allCalls.filter(isConversationRecord);   // conversation universe -- every existing analytic
+  SRC=name;
+  if(!RECORDS.length){
+    const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
+    setDashboardPlaceholder('No valid call records','The export loaded from <b>'+esc(chosen.name)+'</b>, but the dashboard could not identify a valid call date column.<br><br><b>Columns seen:</b> '+esc(headers||'none'));
+    return;
+  }
+  boot();
 }
 
 let FILTERED_RECORDS=[];
@@ -1745,13 +1774,15 @@ function scoreSheetRows(rows,name){
   score+=validDates*3;
   return score;
 }
-function chooseWorkbookRows(wb){
-  const candidates=(wb.SheetNames||[]).map(name=>{
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',raw:false});
-    return{name,rows,score:scoreSheetRows(rows,name)};
-  }).filter(c=>c.rows.length);
+// Pick the best worksheet from already-parsed [{name, rows}] entries (the Web Worker returns this
+// shape). Sheet-selection scoring stays the single source of truth for both the worker and inline paths.
+function chooseFromSheets(sheets){
+  const candidates=(sheets||[]).map(({name,rows})=>({name,rows,score:scoreSheetRows(rows,name)})).filter(c=>c.rows&&c.rows.length);
   candidates.sort((a,b)=>b.score-a.score);
   return candidates[0]||null;
+}
+function chooseWorkbookRows(wb){
+  return chooseFromSheets((wb.SheetNames||[]).map(name=>({name,rows:XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',raw:false})})));
 }
 
 
