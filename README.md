@@ -25,6 +25,9 @@ This project is maintained as a static web application. The production dashboard
 ├── css/
 │   ├── dashboard.css
 │   └── admin.css
+├── js/
+│   ├── auth.js
+│   └── dashboard.js
 ├── admin/
 │   └── index.html
 ├── assets/
@@ -51,6 +54,7 @@ This project is maintained as a static web application. The production dashboard
 | `admin/index.html` | Current administration page |
 | `assets/` | Shared visual and runtime assets |
 | `css/` | Extracted dashboard and administration styles |
+| `js/` | Dashboard authentication and application scripts |
 | `data/voice_analytics.xlsx` | Current application data file |
 | `_archive/` | Superseded files retained for reference |
 
