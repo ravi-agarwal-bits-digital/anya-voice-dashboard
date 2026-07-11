@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'index.html'
+      - 'js/**'
       - 'assets/xlsx.full.min.js'
       - 'tests/dashboard-smoke.test.js'
       - '.github/workflows/dashboard-checks.yml'
@@ -11,6 +12,7 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'js/**'
       - 'assets/xlsx.full.min.js'
       - 'tests/dashboard-smoke.test.js'
 
