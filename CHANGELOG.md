@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Added callback demand to the main outcomes view, restored duration-band visibility and shortened the initial sidebar.
+
 - Removed a redundant in-memory file conversion and reread from automatic dashboard loading.
 
 - Prevented identical workbooks from creating redundant encrypted repository versions by recording a minimal public-safe publication fingerprint.

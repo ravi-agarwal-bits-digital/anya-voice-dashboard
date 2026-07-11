@@ -42,6 +42,7 @@ section{margin:46px 0}
 .hero .hx p{color:var(--muted);font-size:14px;max-width:580px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 .grid3{display:grid;grid-template-columns:1.1fr 1fr;gap:24px}
+.conversion-support{display:grid;gap:24px}
 .panel{background:linear-gradient(135deg,#0f1620,#0a0f18);border:1px solid rgba(78,201,176,0.2);border-radius:16px;padding:28px;transition:all .2s ease;box-shadow:0 8px 32px rgba(0,212,170,0.05)}
 .panel:hover{transform:translateY(-3px);border-color:rgba(78,201,176,0.4);box-shadow:0 16px 48px rgba(0,212,170,0.1)}
 .panel h4{font-family:'Source Serif 4',serif;font-size:18px;font-weight:600;margin-bottom:4px}
