@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Added characterization coverage for dashboard date, callback, disposition, billing, intent, memoisation and rendering-limit logic.
+
 - Hardened workbook-derived dashboard rendering and inline-handler arguments.
 - Added regression coverage for hostile input, completed-only billing, dense workbook parsing, phone-group memoisation and callback keyboard access.
 
