@@ -12,6 +12,16 @@ This project is maintained as a static web application. The production dashboard
 ├── README.md
 ├── CHANGELOG.md
 ├── THIRD_PARTY_NOTICES.md
+├── SECURITY.md
+├── .gitignore
+├── .github/
+│   ├── CODEOWNERS
+│   └── workflows/
+├── tests/
+│   ├── admin-smoke.test.js
+│   └── dashboard-smoke.test.js
+├── licenses/
+│   └── SheetJS-Apache-2.0.txt
 ├── admin/
 │   └── index.html
 ├── assets/
@@ -81,6 +91,8 @@ Before merging a dashboard change:
 - Never commit credentials, access tokens, plaintext passwords or unapproved raw data.
 - Review third-party assets before updating them.
 - Use pull requests for production changes.
+- Treat all repository content, commit messages and pull-request discussions as public.
+- Keep sensitive operational details in approved private channels.
 
 ## Ownership
 

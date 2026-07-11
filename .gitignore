@@ -1,0 +1,21 @@
+# Operating-system and editor artefacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE settings
+.vscode/
+.idea/
+
+# Local tooling and dependencies
+node_modules/
+.npm/
+coverage/
+*.log
+
+# Local environment and secret files
+.env
+.env.*
+!.env.example
