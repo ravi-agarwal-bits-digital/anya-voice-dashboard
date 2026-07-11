@@ -50,18 +50,24 @@ const storage = {
 };
 
 let uploaded;
+let uploadedMetadata;
 let fetchCalls = 0;
-const fetchMock = async (_url, options = {}) => {
+const fetchMock = async (url, options = {}) => {
   fetchCalls += 1;
-  if (fetchCalls === 1) return { ok: true, status: 200, json: async () => ({ sha: 'old' }) };
-  if (fetchCalls === 2) {
+  if (url.includes('.meta.json') && (!options.method || options.method === 'GET'))
+    return { ok: false, status: 404 };
+  if (url.includes('.meta.json') && options.method === 'PUT') {
+    uploadedMetadata = JSON.parse(Buffer.from(JSON.parse(options.body).content, 'base64').toString());
+    return { ok: true, status: 200, json: async () => ({ commit: { sha: 'meta' } }) };
+  }
+  if (options.method === 'PUT') {
     uploaded = Buffer.from(JSON.parse(options.body).content, 'base64');
     return { ok: true, status: 200, json: async () => ({ commit: { sha: 'new', html_url: 'https://example.test/commit' } }) };
   }
-  if (fetchCalls === 3) {
+  if (url.includes('ref=new')) {
     return { ok: true, status: 200, arrayBuffer: async () => uploaded.buffer.slice(uploaded.byteOffset, uploaded.byteOffset + uploaded.byteLength) };
   }
-  throw new Error('Unexpected fetch call');
+  return { ok: true, status: 200, json: async () => ({ sha: 'old' }) };
 };
 
 const context = {
@@ -79,7 +85,7 @@ const context = {
   window: {}
 };
 vm.createContext(context);
-vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish};`, context);
+vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes};`, context);
 
 const required = ['Created At (IST)', 'Call ID', 'Direction', 'Status', 'From', 'To', 'Duration (s)', 'Messages', 'Full Transcript'];
 const baseRow = {
@@ -122,8 +128,28 @@ assert.equal(largeValidation.metrics.dateMax.getDate(), 11, 'Large workbook maxi
   element('publishConfirm').checked = true;
   vm.runInContext(`ADMIN_PASSPHRASE='test-passphrase';validation={errors:[],bytes:new TextEncoder().encode('synthetic workbook')};`, context);
   await context.__adminTest.publish();
-  assert.equal(fetchCalls, 3, 'Publish should check, upload and verify');
+  assert.equal(fetchCalls, 5, 'Publish should check metadata and production, upload, verify and save metadata');
+  assert.match(uploadedMetadata.plaintextSha256, /^[a-f0-9]{64}$/, 'Plaintext fingerprint missing');
+  assert.equal(uploadedMetadata.dataCommitSha, 'new', 'Metadata must identify the published data commit');
+  assert.deepEqual(Object.keys(uploadedMetadata).sort(), ['dataCommitSha', 'plaintextSha256', 'publishedAt', 'schemaVersion'].sort(), 'Metadata must remain public-safe and minimal');
   assert(element('publishStatus').innerHTML.includes('Published and verified successfully'), 'Success receipt missing');
   assert(element('publishStatus').innerHTML.includes('View previous versions'), 'History link missing');
+
+  const callsBeforeDuplicate = fetchCalls;
+  const duplicateSource = new TextEncoder().encode('synthetic workbook');
+  const duplicateHash = await context.__adminTest.sha256Bytes(duplicateSource);
+  context.fetch = async url => {
+    fetchCalls += 1;
+    assert(url.includes('.meta.json'), 'Duplicate publication must stop before reading or writing the data file');
+    return {
+      ok: true, status: 200,
+      json: async () => ({ sha: 'meta', content: Buffer.from(JSON.stringify({ plaintextSha256: duplicateHash })).toString('base64') })
+    };
+  };
+  element('publishConfirm').checked = true;
+  vm.runInContext(`validation={errors:[],bytes:new TextEncoder().encode('synthetic workbook')};`, context);
+  await context.__adminTest.publish();
+  assert.equal(fetchCalls, callsBeforeDuplicate + 1, 'Duplicate workbook should make only the metadata check');
+  assert(element('publishStatus').textContent.includes('already published'), 'Duplicate block message missing');
   console.log('Admin smoke tests passed');
 })().catch(error => { console.error(error); process.exit(1); });
