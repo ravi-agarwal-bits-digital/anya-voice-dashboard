@@ -5,6 +5,7 @@ This file records public-safe repository and application milestones. Detailed in
 ## Unreleased
 
 - Extracted dashboard and administration styles into dedicated CSS files without changing application behaviour.
+- Extracted dashboard authentication and application JavaScript into dedicated files without changing execution order.
 
 ## 2026-07 — Repository test and governance foundation
 

@@ -6,11 +6,17 @@ const XLSX = require('../assets/xlsx.full.min.js');
 const html = fs.readFileSync('index.html', 'utf8');
 assert(html.includes('href="css/dashboard.css"'), 'Dashboard stylesheet link is missing');
 assert(!/<style(?:\s|>)/i.test(html), 'Dashboard must not contain embedded style blocks');
-const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+assert(html.includes('src="js/auth.js"'), 'Dashboard authentication script link is missing');
+assert(html.includes('src="js/dashboard.js"'), 'Dashboard application script link is missing');
+const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .filter(script => script.trim());
+assert.equal(inlineScripts.length, 0, 'Dashboard must not contain inline application scripts');
 
-assert(scripts.length >= 2, 'Expected dashboard security and application scripts');
+const scripts = ['js/auth.js', 'js/dashboard.js'].map(path => {
+  assert(fs.existsSync(path), `Missing dashboard script: ${path}`);
+  return fs.readFileSync(path, 'utf8');
+});
 scripts.forEach(script => new Function(script));
 
 const ids = [...html.matchAll(/\bid=["']([^"']+)["']/g)].map(match => match[1]);
