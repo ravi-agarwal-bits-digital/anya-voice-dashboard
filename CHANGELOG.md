@@ -4,8 +4,14 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- No unreleased changes.
+
+## 2026-07 — Repository test and governance foundation
+
 - Added automated dashboard regression checks using an in-memory synthetic workbook.
-- Added third-party dependency documentation.
+- Added public-safe security and ownership guidance.
+- Added third-party dependency and licence documentation.
+- Added repository hygiene rules for local artefacts.
 
 ## 2026-07 — Admin reliability sprint
 
