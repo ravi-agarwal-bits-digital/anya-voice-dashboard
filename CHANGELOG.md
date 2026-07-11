@@ -4,6 +4,9 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Hardened workbook-derived dashboard rendering and inline-handler arguments.
+- Added regression coverage for hostile input, completed-only billing, dense workbook parsing, phone-group memoisation and callback keyboard access.
+
 - Aligned dashboard lifecycle deduplication with admin validation, bounded schema lookup work, cancelled stale renders and hardened large-workbook date validation.
 - Expanded regression coverage for same-status duplicates, schema aliases and 130,000-row validation.
 
