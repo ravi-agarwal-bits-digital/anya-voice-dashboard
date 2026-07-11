@@ -5,6 +5,7 @@ on:
     paths:
       - 'admin/**'
       - 'js/admin.js'
+      - 'css/admin.css'
       - 'assets/xlsx.full.min.js'
       - 'tests/admin-smoke.test.js'
       - '.github/workflows/admin-checks.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'admin/**'
       - 'js/admin.js'
+      - 'css/admin.css'
       - 'assets/xlsx.full.min.js'
       - 'tests/admin-smoke.test.js'
 

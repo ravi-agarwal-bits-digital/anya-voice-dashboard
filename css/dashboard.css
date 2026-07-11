@@ -432,19 +432,6 @@ footer b{color:var(--navy)!important}
 @media screen and (max-width:860px){.opf-heatmap{grid-template-columns:44px repeat(6,1fr);gap:4px}.opf-heatcell{padding:7px 2px;font-size:10.5px}}
 
 /* Loading/error states must not show the dashboard chrome/sidebar */
-body.dashboard-loading #mainShell,
-body.dashboard-placeholder #mainShell,
-body.dashboard-loading .app-shell,
-body.dashboard-placeholder .app-shell,
-body.dashboard-loading .exec-sidebar,
-body.dashboard-placeholder .exec-sidebar{
-  display:none!important;
-}
-body.dashboard-loading #dataLoading,
-body.dashboard-placeholder #dataPlaceholder{
-  min-height:100vh!important;
-  width:100%!important;
-}
 body.dashboard-loading #dashboardContent,
 body.dashboard-placeholder #dashboardContent{
   padding:0!important;
@@ -581,7 +568,6 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
     scrollbar-width:none!important;
     padding:2px 2px 4px!important;
   }
-  .side-nav::-webkit-scrollbar{display:none!important;}
   .side-link{
     flex:0 0 auto!important;
     width:auto!important;
@@ -652,7 +638,6 @@ body.dashboard-loading,body.dashboard-placeholder{overflow:hidden!important}
 @media screen and (max-width:560px){
   .app-shell{padding:8px!important;}
   .side-link{min-width:96px!important;font-size:11.2px!important;padding:8px 8px!important;}
-  .side-icon{display:none!important;}
   .top-logo-img{width:220px!important;max-width:86vw!important;}
   .top-title{font-size:24px!important;}
   .strip{grid-template-columns:1fr!important;}
@@ -774,7 +759,7 @@ body.dashboard-placeholder #dataPlaceholder{min-height:100vh!important;width:100
 @media screen and (max-width:1180px){.direction-summary{grid-template-columns:1fr 1fr}.direction-card.all{grid-column:1/-1}.filter-right-actions{width:100%;margin-left:0!important;justify-content:flex-start}.direction-switch{overflow:auto}.dir-btn{min-width:max-content}.direction-switch-label{display:inline-flex}}
 @media screen and (max-width:720px){.direction-summary{grid-template-columns:1fr}.direction-card.all{grid-column:auto}.direction-switch{width:100%;border-radius:16px}.dir-btn{flex:1;padding:9px 10px!important}.direction-switch-label{display:none}.filter-right-actions{gap:8px!important}}
 
-<style id="direction-active-visibility-v10">
+\3c style id="direction-active-visibility-v10">
 /* Strong, unambiguous state for the active All / Inbound / Outbound view.
    Uses #reportView specificity so the global button theme cannot wash it out. */
 #reportView .direction-switch{

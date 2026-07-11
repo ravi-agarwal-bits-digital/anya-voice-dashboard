@@ -5,6 +5,7 @@ on:
     paths:
       - 'index.html'
       - 'js/**'
+      - 'css/dashboard.css'
       - 'assets/xlsx.full.min.js'
       - 'tests/dashboard-smoke.test.js'
       - '.github/workflows/dashboard-checks.yml'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'index.html'
       - 'js/**'
+      - 'css/dashboard.css'
       - 'assets/xlsx.full.min.js'
       - 'tests/dashboard-smoke.test.js'
 
