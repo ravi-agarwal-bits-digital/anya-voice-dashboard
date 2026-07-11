@@ -1,0 +1,30 @@
+name: Admin checks
+
+on:
+  pull_request:
+    paths:
+      - 'admin/**'
+      - 'assets/xlsx.full.min.js'
+      - 'tests/admin-smoke.test.js'
+      - '.github/workflows/admin-checks.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'admin/**'
+      - 'assets/xlsx.full.min.js'
+      - 'tests/admin-smoke.test.js'
+
+permissions:
+  contents: read
+
+jobs:
+  admin-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run admin smoke tests
+        run: node tests/admin-smoke.test.js
