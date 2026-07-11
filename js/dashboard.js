@@ -227,6 +227,44 @@ function retryDataLoad(){
   window.DATA_LOADED=false;
   autoLoadLatestExcel();
 }
+function workbookWorkerTimeout(bytes){
+  const megabytes=Math.max(1,Math.ceil(Number(bytes?.byteLength||0)/1048576));
+  return Math.min(300000,Math.max(60000,megabytes*3000));
+}
+function parseWorkbookOnMainThread(bytes){
+  const wb=XLSX.read(bytes,{type:'array',cellDates:true,dense:true});
+  return chooseWorkbookRows(wb);
+}
+function parseWorkbookInWorker(bytes){
+  return new Promise((resolve,reject)=>{
+    let worker;
+    try{worker=new Worker('js/workbook-worker.js');}catch(error){reject(error);return;}
+    let settled=false;
+    const finish=(callback,value)=>{if(settled)return;settled=true;clearTimeout(timer);worker.terminate();callback(value);};
+    const timer=setTimeout(()=>finish(reject,new Error('Workbook worker timed out.')),workbookWorkerTimeout(bytes));
+    worker.onerror=event=>finish(reject,new Error(event.message||'Workbook worker failed.'));
+    worker.onmessage=event=>{
+      try{
+        const result=event.data||{};
+        if(!result.ok){finish(reject,new Error(result.error||'Workbook worker could not parse the file.'));return;}
+        finish(resolve,chooseWorkbookCandidates(result.sheets||[]));
+      }catch(error){finish(reject,error);}
+    };
+    const buffer=bytes.byteOffset===0&&bytes.byteLength===bytes.buffer.byteLength
+      ?bytes.buffer
+      :bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+    // Do not transfer ownership: retaining the bytes allows a safe main-thread fallback on worker errors.
+    try{worker.postMessage({bytes:buffer});}catch(error){finish(reject,error);}
+  });
+}
+async function parseWorkbookBytes(bytes){
+  if(typeof Worker!=='function')return parseWorkbookOnMainThread(bytes);
+  try{return await parseWorkbookInWorker(bytes);}
+  catch(error){
+    console.warn('Workbook worker unavailable; using main-thread fallback:',error);
+    return parseWorkbookOnMainThread(bytes);
+  }
+}
 function handle(file){
   if($('err'))$('err').textContent='';
   if(typeof XLSX==='undefined'){
@@ -235,13 +273,9 @@ function handle(file){
   }
   const rd=new FileReader();
   rd.onerror=()=>setDashboardPlaceholder('Could not read data','The Excel file could not be read by the browser. Please replace the published file and try again.');
-  rd.onload=e=>{
+  rd.onload=async e=>{
     try{
-      // dense:true builds dense-array sheets, ~25% faster to parse on large exports (61k+ rows) with
-      // byte-identical sheet_to_json output. XLSX.read still runs on the main thread, so a very large
-      // file is briefly blocking — the bigger win (moving parse to a Web Worker) is a follow-up.
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true,dense:true});
-      const chosen=chooseWorkbookRows(wb);
+      const chosen=await parseWorkbookBytes(new Uint8Array(e.target.result));
       if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
       const rows=dedupeRowsByCallId(chosen.rows);
       const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
@@ -1750,13 +1784,20 @@ function scoreSheetRows(rows,name){
   score+=validDates*3;
   return score;
 }
+function chooseWorkbookCandidates(candidates){
+  const scored=(candidates||[]).filter(candidate=>candidate&&candidate.rows?.length).map(candidate=>({
+    name:candidate.name,
+    rows:candidate.rows,
+    score:scoreSheetRows(candidate.rows,candidate.name)
+  }));
+  scored.sort((a,b)=>b.score-a.score);
+  return scored[0]||null;
+}
 function chooseWorkbookRows(wb){
-  const candidates=(wb.SheetNames||[]).map(name=>{
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',raw:false});
-    return{name,rows,score:scoreSheetRows(rows,name)};
-  }).filter(c=>c.rows.length);
-  candidates.sort((a,b)=>b.score-a.score);
-  return candidates[0]||null;
+  return chooseWorkbookCandidates((wb.SheetNames||[]).map(name=>({
+    name,
+    rows:XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',raw:false})
+  })));
 }
 
 
