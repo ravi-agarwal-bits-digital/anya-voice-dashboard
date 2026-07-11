@@ -4,6 +4,9 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Moved workbook parsing to a size-aware Web Worker with a safe main-thread fallback.
+- Added dedicated workbook-worker regression coverage.
+
 - Added characterization coverage for dashboard date, callback, disposition, billing, intent, memoisation and rendering-limit logic.
 
 - Hardened workbook-derived dashboard rendering and inline-handler arguments.
