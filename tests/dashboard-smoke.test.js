@@ -217,6 +217,18 @@ assert.equal(records.find(record => record.callId === 'call-1').from, '919999999
 assert.equal(records.find(record => record.callId === 'call-2').from, '918888888888', 'Inbound learner mapping changed');
 assert.strictEqual(context.groupByPhone(records), context.groupByPhone(records), 'Phone grouping cache should reuse the same grouping');
 
+const outcomeAggregate = context.aggregate([
+  { leadTemp: 'Hot', callback: true, dur: 20, from: '919111111111', d: '2026-07-10', h: 10, intent: 'Payment', conf: 90, need: 80, band: 'Green', msg: 5 },
+  { leadTemp: 'Warm', callback: false, dur: 45, from: '919222222222', d: '2026-07-10', h: 11, intent: 'Eligibility', conf: 70, need: 60, band: 'Amber', msg: 8 },
+  { leadTemp: 'Cold', callback: true, dur: 90, from: '919333333333', d: '2026-07-10', h: 12, intent: 'Support', conf: 50, need: 40, band: 'Red', msg: 3 },
+  { leadTemp: 'Hot', callback: false, dur: 150, from: '919444444444', d: '2026-07-10', h: 13, intent: 'Programme', conf: 85, need: 75, band: 'Green', msg: 10 },
+  { leadTemp: 'Warm', callback: false, dur: 240, from: '919555555555', d: '2026-07-10', h: 14, intent: 'Other', conf: 65, need: 55, band: 'Green', msg: 12 }
+]);
+assert.equal(outcomeAggregate.callbacks, 2, 'Demand outcomes must count callback requests');
+assert.deepEqual(JSON.parse(JSON.stringify(outcomeAggregate.durBands)), { '<30s': 1, '30-60s': 1, '1-2m': 1, '2-3m': 1, '3m+': 1 }, 'Duration bands changed');
+assert(html.includes('id="durBands"'), 'Duration mix panel is missing');
+assert(scripts[1].includes('paintDurBands(o)'), 'Duration mix must be painted during dashboard rendering');
+
 const intentRecords = [
   { from: '911111111111', intent: 'Payment', leadTemp: 'Warm', band: 'Amber', frustrated: false, conf: 70, need: 60 },
   { from: '911111111111', intent: 'Payment', leadTemp: 'Hot', band: 'Green', frustrated: false, conf: 90, need: 85 },
