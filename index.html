@@ -146,7 +146,7 @@
       </div>
     </div>
 
-    <div class="side-group open" data-group="outbound">
+    <div class="side-group" data-group="outbound">
       <button type="button" class="side-group-label side-group-outbound"><span>Outbound</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link side-link-outbound" href="#sec-outbound-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle></svg></span><span>Performance</span></a>
@@ -155,7 +155,7 @@
       </div>
     </div>
 
-    <div class="side-group open" data-group="leads">
+    <div class="side-group" data-group="leads">
       <button type="button" class="side-group-label"><span>Leads &amp; follow-up</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-hottest"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><span>Prospects</span></a>
@@ -165,7 +165,7 @@
       </div>
     </div>
 
-    <div class="side-group open" data-group="leadership">
+    <div class="side-group" data-group="leadership">
       <button type="button" class="side-group-label"><span>Leadership</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-brief" title="Management Summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Mgmt Summary</span></a>
@@ -295,8 +295,11 @@
 
   <section id="sec-conversion"><div class="shead"><span class="n">03</span><h2>Demand conversion</h2></div>
     <div class="grid2">
-      <div class="panel"><h4>Conversion pipeline</h4><div class="cap">Hot, warm, and cold lead distribution across the selected period.</div><div class="funnel" id="funnel"></div></div>
-      <div class="panel"><h4>Quality by lead tier</h4><div class="cap">Average confidence and need score for each lead tier.</div><div id="tempQual"></div></div>
+      <div class="panel"><h4>Demand outcomes</h4><div class="cap">Callback demand and lead tiers across the selected period. Callback is an intent signal and can overlap with any lead tier.</div><div class="funnel" id="funnel"></div></div>
+      <div class="conversion-support">
+        <div class="panel"><h4>Quality by lead tier</h4><div class="cap">Average confidence and need score for each lead tier.</div><div id="tempQual"></div></div>
+        <div class="panel"><h4>Conversation duration mix</h4><div class="cap">Completed conversations grouped into practical duration bands.</div><div id="durBands"></div></div>
+      </div>
     </div></section>
 
   <section id="sec-perf"><div class="shead"><span class="n">04</span><h2>AI advisor &amp; quality</h2></div>
