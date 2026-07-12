@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Added raw-versus-final Call-ID status reconciliation to the Admin pre-publish review so lifecycle rows can be audited against the source worksheet without changing dashboard grain.
+
 - Clarified Admin pre-publish review scopes by separating raw worksheet rows from final per-Call-ID status counts, surfacing lifecycle duplicates, and explicitly documenting that Admin validation is structural rather than business intelligence.
 
 - Added callback demand to the main outcomes view, restored duration-band visibility and shortened the initial sidebar.
