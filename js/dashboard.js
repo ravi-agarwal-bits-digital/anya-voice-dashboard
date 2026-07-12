@@ -1228,25 +1228,39 @@ function outboundDialsInDateView(){
 function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
 function fmtDayLabel(iso){if(!iso)return '—';const p=String(iso).split('-');if(p.length<3)return String(iso);const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${p[2]} ${mon[Number(p[1])-1]||''}`;}
 function directionStats(dir){
-  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)===dir);
+  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)===dir);
   const n=recs.length;
-  if(!n)return null;
   const connected=recs.filter(r=>normalizeDisposition(r)==='connected').length;
   const hot=recs.filter(r=>r.leadTemp==='Hot').length;
   const green=recs.filter(r=>r.band==='Green').length;
-  const avgDurSec=recs.reduce((a,r)=>a+r.dur,0)/n;
-  const avgConf=recs.reduce((a,r)=>a+r.conf,0)/n;
+  const avgDurSec=n?recs.reduce((a,r)=>a+r.dur,0)/n:0;
+  const avgConf=n?recs.reduce((a,r)=>a+r.conf,0)/n:0;
   const unique=new Set(recs.map(ledgerPhoneKey).filter(Boolean)).size;
   const callbacks=recs.filter(r=>r.callback).length;
-  return{n,unique,callbacks,callbackPct:Math.round(callbacks/n*100),connectPct:Math.round(connected/n*100),hotPct:Math.round(hot/n*100),avgDurSec,avgConf:Math.round(avgConf),greenPct:Math.round(green/n*100)};
+  return{n,unique,callbacks,callbackPct:n?Math.round(callbacks/n*100):0,connectPct:n?Math.round(connected/n*100):0,hotPct:n?Math.round(hot/n*100):0,avgDurSec,avgConf:Math.round(avgConf),greenPct:n?Math.round(green/n*100):0};
+}
+function outboundGlanceStats(){
+  const dials=outboundRecordsInView(),n=dials.length,byPhone=groupByPhone(dials),groups=Object.values(byPhone);
+  const isConn=r=>normalizeDisposition(r)==='connected';
+  const connected=dials.filter(isConn),reached=groups.filter(calls=>calls.some(isConn));
+  const unreachable=groups.filter(calls=>calls.length>=3&&!calls.some(isConn));
+  const hotReached=reached.filter(calls=>calls.some(r=>isConn(r)&&r.leadTemp==='Hot'));
+  return{dials,n,connected,reached,unreachable,hotReached,numbers:groups.length,
+    connectPct:n?Math.round(connected.length/n*100):0,
+    reachPct:groups.length?Math.round(reached.length/groups.length*100):0,
+    failed:n-connected.length,failedPct:n?Math.round((n-connected.length)/n*100):0,
+    avgDials:groups.length?(n/groups.length).toFixed(1):'0.0',
+    hotReachPct:reached.length?Math.round(hotReached.length/reached.length*100):0};
 }
 function paintDirectionCompare(){
   const el=$('dirCompareTable');
   if(!el)return;
   const ib=directionStats('inbound'), ob=directionStats('outbound');
-  if(!ib || !ob){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
-  window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='inbound');
-  window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
+  window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound');
+  const ops=outboundGlanceStats();
+  window.__dirOutDials=ops.dials;window.__dirOutConnected=ops.connected;window.__dirOutFailed=ops.dials.filter(r=>normalizeDisposition(r)!=='connected');
+  window.__dirOutUnreachable=[].concat(...ops.unreachable);window.__dirOutHot=ops.connected.filter(r=>r.leadTemp==='Hot');
   // Connect/answer rate intentionally lives in the dedicated outbound section (dial-level), not here --
   // these rows compare connected conversations, where a "connect rate" would trivially be ~100% both sides.
   const rows=[
@@ -1257,12 +1271,24 @@ function paintDirectionCompare(){
     ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
     ['Quality pass rate (Green)',ib.greenPct+'%',ob.greenPct+'%',"r=>r.band==='Green'"]
   ];
-  el.innerHTML=`<table class="opf-cmp-table"><thead><tr><th>Metric</th>`+
+  const operationalRows=[
+    ['Dials placed','Not applicable',ops.n.toLocaleString(),'window.__dirOutDials'],
+    ['Connected dials','Inbound calls arrive connected',`${ops.connected.length.toLocaleString()} (${ops.connectPct}%)`,'window.__dirOutConnected'],
+    ['Distinct-number reach','Unique callers shown above',`${ops.reached.length.toLocaleString()} of ${ops.numbers.toLocaleString()} (${ops.reachPct}%)`,'window.__dirOutConnected'],
+    ['Failed / unconnected effort','Not applicable',`${ops.failed.toLocaleString()} (${ops.failedPct}%)`,'window.__dirOutFailed'],
+    ['Repeatedly unreachable','Not applicable',`${ops.unreachable.length.toLocaleString()} numbers`,'window.__dirOutUnreachable'],
+    ['Average dials per number','Not applicable',ops.avgDials,'window.__dirOutDials'],
+    ['Hot leads reached','Hot callers shown above',`${ops.hotReached.length.toLocaleString()} (${ops.hotReachPct}% of reached)`,'window.__dirOutHot']
+  ];
+  el.innerHTML=`<table class="opf-cmp-table direction-glance-table"><thead><tr><th>Metric</th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
     `<tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
-      `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
+      `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}`+
+    `<tr class="direction-glance-group"><td colspan="3">Outbound operational context</td></tr>`+
+    operationalRows.map(r=>`<tr><td>${esc(r[0])}</td><td class="direction-na">${esc(r[1])}</td><td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',()=>true,${r[3]})">${esc(r[2])}</td></tr>`).join('')+
+    `</tbody></table>`;
 }
 function paintDispositionBreak(obRecs){
   const el=$('dispositionBreak');
@@ -1531,8 +1557,20 @@ function paintUnreachableList(unreachable,avgDials){
     return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
   }).join('');
   el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers dialed 3+ times, never once connected — <b>${wastedDials.toLocaleString()}</b> wasted dials (avg ${avgDials} dials per number overall). Stop-calling / switch-to-SMS candidates.</div>`+
+    `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All repeatedly unreachable dials',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export complete CSV</button></div>`+
     `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Number</th><th>Dials</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
-    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more in the full unreachable set — click the "Unreachable numbers" KPI above for all of them.</div>`:'');
+    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in View all dials and Export complete CSV.</div>`:'');
+}
+function exportUnreachableCSV(){
+  const groups=window.__unreachGroups||[];
+  if(!groups.length){alert('No repeatedly unreachable numbers to export.');return;}
+  let csv='Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status\n';
+  groups.forEach(calls=>{
+    const sorted=calls.slice().sort((a,b)=>a.ts-b.ts),first=sorted[0],last=sorted[sorted.length-1],country=classifyPhone(first.from).country;
+    const campaigns=[...new Set(sorted.map(r=>String(r.campaign||'').trim()).filter(Boolean))].join(' | ');
+    csv+=[fullPhone(first.from),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status)].join(',')+'\n';
+  });
+  downloadCSV('repeatedly_unreachable_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
 
 // ===== OUTBOUND CADENCE & CAPACITY =====
@@ -2196,6 +2234,7 @@ function recordsInRange(fromIso,toIso){
     if(fromIso && r.d<fromIso)return false;
     if(toIso && r.d>toIso)return false;
     if(SELECTED_DIRECTION!=='all' && normalizeDirection(r.direction)!==SELECTED_DIRECTION)return false;
+    if(!recordMatchesCampaign(r))return false;
     return true;
   });
 }
@@ -2250,19 +2289,20 @@ function paintManagementBrief(){
   const curIn=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='inbound')):null;
   const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
   const kpiDefs=[
-    ['good','Enquiries','n',false,()=>true],
-    ['hot','Callbacks','callbacks',false,r=>r.callback],
-    ['neut','Priority prospects','hot',false,r=>r.leadTemp==='Hot'],
-    ['good','AI confidence','avgConf',true,()=>true],
-    ['neut','Attention signals','friction',false,r=>r.frustrated]
+    ['good','Enquiries','n','count',()=>true],
+    ['good','Unique leads','unique','ratio',()=>true],
+    ['hot','Callbacks','callbacks','ratio',r=>r.callback],
+    ['hot','Hot leads','hot','ratio',r=>r.leadTemp==='Hot'],
+    ['good','AI confidence','avgConf','percent',()=>true],
+    ['neut','Attention signals','friction','ratio',r=>r.frustrated]
   ];
-  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,isPct,pred])=>{
+  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,format,pred])=>{
     const val=cur[key],prevVal=old[key];
-    const fmt=n=>isPct?n+'%':n;
+    const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
-    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key])} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key])} out</div>`:'';
+    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key],curIn)} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key],curOut)} out</div>`:'';
     return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
   }).join('');
   window.__briefRecs=recs;
