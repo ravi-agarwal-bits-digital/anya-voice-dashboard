@@ -97,7 +97,7 @@ for (const fn of [
   'organizeDashboardWorkspaces', 'setDashboardWorkspaceTab', 'activateDashboardWorkspace',
   'handleWorkspaceTabKey', 'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV',
   'updateWorkspaceOperationalState', 'openPanelInLedger', 'openProfileInLedger',
-  'outboundGlanceStats', 'exportUnreachableCSV'
+  'outboundGlanceStats', 'exportUnreachableCSV', 'resolveLeadSearch', 'percentOf'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -203,6 +203,17 @@ context.__unreachGroups = [[
 ]];
 context.exportUnreachableCSV();
 assert(unreachableDownload.csv.includes('+919999999999,India,3,'), 'Unreachable CSV must aggregate the complete dial count per number');
+
+const searchRows = [
+  { from: '+91 99999 99999', ts: 2, d: '2026-07-10', direction: 'inbound', campaign: '' },
+  { from: '919999999999', ts: 1, d: '2026-06-01', direction: 'outbound', campaign: 'Older campaign' },
+  { from: '918888888888', ts: 3, d: '2026-07-10', direction: 'inbound', campaign: '' }
+];
+assert.equal(context.resolveLeadSearch('99999-99999', searchRows).calls.length, 2, 'Phone search must normalize formatting and return full lead history');
+assert.equal(context.resolveLeadSearch('+91 88888 88888', searchRows).calls.length, 1, 'Phone search must support country-code input');
+assert.equal(context.percentOf(2, 5), 40, 'Applicable count percentages changed');
+assert(scripts[1].includes('Full call history is shown'), 'Profile search must explain global history versus active filters');
+assert(scripts[1].includes('visibleCallbackCount') && scripts[1].includes('% of calls'), 'Callback count must include its applicable rate');
 assert(!scripts[1].includes('["neut",o.n,"Total enquiries","all"]'), 'Total enquiries must not be repeated below Management Summary');
 assert(scripts[1].includes('role="tab"') && scripts[1].includes('aria-selected='), 'Workspace tabs must expose accessible state');
 
