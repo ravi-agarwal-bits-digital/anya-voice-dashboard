@@ -1194,7 +1194,11 @@ body.profile-open .profile-overlay{display:block;}
 #workspace-overview .workspace-heading{display:none}
 #workspace-overview .management-brief{margin-top:22px!important}
 #workspace-overview .management-brief .brief-cover h3{display:none}
-#workspace-overview .hero{margin-top:18px!important}
+#workspace-overview .management-summary-integrated{border-top:1px solid var(--line2);margin-top:20px;padding-top:20px}
+#workspace-overview .hero{margin:0!important;box-shadow:none!important;border-color:var(--line2)!important}
+#workspace-overview .management-operational-context{margin-top:18px}
+#workspace-overview .management-context-label{font-size:10px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+#workspace-overview #kpis{margin:0!important}
 #workspace-action #sec-callbacks,#workspace-action #sec-hottest,#workspace-action #sec-friction,
 #workspace-intelligence #sec-conversion,#workspace-intelligence #sec-perf,#workspace-intelligence #sec-themes,#workspace-intelligence #sec-volume,#workspace-intelligence #sec-geo,
 #workspace-outbound #sec-outbound-perf,#workspace-outbound #sec-outbound-perf-hidden,#workspace-outbound #sec-outbound-cadence,#workspace-outbound #sec-outbound-cadence-hidden,#workspace-outbound #sec-campaigns,#workspace-outbound #sec-campaigns-hidden,
@@ -1204,6 +1208,7 @@ body.profile-open .profile-overlay{display:block;}
   .workspace-tabs{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;padding:10px 0 3px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .workspace-tabs::-webkit-scrollbar{display:none}
   .workspace-heading h2{font-size:26px}
+  #workspace-overview .management-summary-integrated{margin-top:16px;padding-top:16px}
 }
 @media print{
   #workspace-overview{display:block!important}
