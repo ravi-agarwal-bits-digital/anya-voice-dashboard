@@ -38,7 +38,8 @@ for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
   'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief',
   'btn-today', 'btn-yesterday', 'btn-week', 'btn-month', 'btn-all', 'btn-custom',
-  'filterFromDate', 'filterToDate', 'openMgmtSummaryBtn', 'kpiPanelExport', 'profileExport'
+  'filterFromDate', 'filterToDate', 'openMgmtSummaryBtn', 'kpiPanelExport', 'profileExport',
+  'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
 }
@@ -94,7 +95,8 @@ for (const fn of [
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'organizeDashboardWorkspaces', 'setDashboardWorkspaceTab', 'activateDashboardWorkspace',
-  'handleWorkspaceTabKey', 'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV'
+  'handleWorkspaceTabKey', 'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV',
+  'updateWorkspaceOperationalState', 'openPanelInLedger', 'openProfileInLedger'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -164,6 +166,10 @@ for (const workspace of ['overview', 'action', 'intelligence', 'outbound', 'reco
 }
 assert(html.includes('id="kpiPanelExport" onclick="exportPanelCSV()"'), 'Drill-down drawer CSV action is missing');
 assert(html.includes('id="profileExport" onclick="exportProfileCSV()"'), 'Profile drawer CSV action is missing');
+assert(html.includes('id="kpiPanelLedger" onclick="openPanelInLedger()"'), 'Drill-down to ledger action is missing');
+assert(html.includes('id="profileLedger" onclick="openProfileInLedger()"'), 'Profile to ledger action is missing');
+assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data freshness metadata is missing');
+assert(scripts[1].includes('workspace-tab-count'), 'Action Center live tab counts are missing');
 const drawerCSV = context.recordsToCSV([{
   from: '919999999999', direction: 'inbound', d: '2026-07-10', h: 10, m: 30, dur: 75,
   leadTemp: 'Hot', band: 'Green', intent: 'Eligibility', conf: 90, need: 80,
@@ -172,7 +178,9 @@ const drawerCSV = context.recordsToCSV([{
 assert(drawerCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(drawerCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 assert(scripts[1].includes("appendWorkspaceSections(overview,'summary',['sec-brief','sec-anomaly','sec-direction'])"), 'Overview must not duplicate summary layers');
-assert(scripts[1].includes('integrated.appendChild(hero)'), 'Quality signal must be integrated into Management Summary');
+assert(scripts[1].includes("hero.classList.add('summary-source-only')"), 'Large duplicate quality block must be suppressed below Management Summary');
+assert(scripts[1].includes("['Unique people'"), 'Direction comparison must include unique people');
+assert(scripts[1].includes("['Callback requests'"), 'Direction comparison must include callbacks');
 assert(!scripts[1].includes('["neut",o.n,"Total enquiries","all"]'), 'Total enquiries must not be repeated below Management Summary');
 assert(scripts[1].includes('role="tab"') && scripts[1].includes('aria-selected='), 'Workspace tabs must expose accessible state');
 
