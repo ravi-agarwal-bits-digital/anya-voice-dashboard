@@ -7,6 +7,7 @@ This file records public-safe repository and application milestones. Detailed in
 - Rebuilt the dashboard into focused Overview, Action Center, Intelligence, Outbound and Records workspaces, consolidated the summary layers, and preserved the production theme, global filters, analytics and CSV-enabled drawers.
 - Strengthened active workspace-tab feedback, added live Action Center counts, drawer-to-ledger handoff, publication freshness, guided empty states, and unique-lead/callback direction comparisons.
 - Fixed campaign scoping in the Management Summary, improved selected-tab count contrast, expanded the direction glance with outbound operating metrics, and added a complete number-level unreachable export.
+- Made phone search format-tolerant and global across filter scopes, added ambiguous-number selection, and paired applicable population counts with percentages across action, profile, geography and drill-down views.
 
 - Added callback demand to the main outcomes view, restored duration-band visibility and shortened the initial sidebar.
 
