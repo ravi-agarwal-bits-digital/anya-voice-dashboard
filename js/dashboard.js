@@ -31,9 +31,9 @@ function toggleSideGroup(group){
 const DASHBOARD_WORKSPACES={
   overview:{label:'Overview',icon:'<path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path>'},
   action:{label:'Action Center',icon:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path>'},
-  intelligence:{label:'Intelligence',icon:'<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path>'},
-  outbound:{label:'Outbound',icon:'<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle>'},
-  records:{label:'Records',icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path>'}
+  intelligence:{label:'Demand Intelligence',icon:'<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path>'},
+  outbound:{label:'Outbound Operations',icon:'<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle>'},
+  records:{label:'Enquiry Ledger',icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path>'}
 };
 let ACTIVE_WORKSPACE='overview';
 function renderWorkspaceNavigation(){
@@ -46,7 +46,7 @@ function workspaceTemplate(id,title,description,tabs){
   view.id=`workspace-${id}`;
   view.className='dashboard-workspace-view';
   view.dataset.workspace=id;
-  view.innerHTML=`<div class="workspace-heading"><div><div class="workspace-eyebrow">Anya workspace</div><h2>${title}</h2><p>${description}</p></div>${tabs.length>1?`<div class="workspace-tabs" role="tablist">${tabs.map((tab,i)=>`<button type="button" class="workspace-tab${i===0?' active':''}" data-workspace-tab="${tab.id}" onclick="setDashboardWorkspaceTab('${id}','${tab.id}')">${tab.label}</button>`).join('')}</div>`:''}</div><div class="workspace-panes">${tabs.map((tab,i)=>`<div class="workspace-pane${i===0?' active':''}" data-workspace-pane="${tab.id}"></div>`).join('')}</div>`;
+  view.innerHTML=`<div class="workspace-heading"><div><div class="workspace-eyebrow">Anya workspace</div><h2>${title}</h2><p>${description}</p></div>${tabs.length>1?`<div class="workspace-tabs" role="tablist" aria-label="${title} views">${tabs.map((tab,i)=>`<button type="button" role="tab" id="workspace-${id}-tab-${tab.id}" aria-controls="workspace-${id}-pane-${tab.id}" aria-selected="${i===0?'true':'false'}" tabindex="${i===0?'0':'-1'}" class="workspace-tab${i===0?' active':''}" data-workspace-tab="${tab.id}" onclick="setDashboardWorkspaceTab('${id}','${tab.id}')" onkeydown="handleWorkspaceTabKey(event,'${id}')">${tab.label}</button>`).join('')}</div>`:''}</div><div class="workspace-panes">${tabs.map((tab,i)=>`<div role="tabpanel" id="workspace-${id}-pane-${tab.id}" aria-labelledby="workspace-${id}-tab-${tab.id}" class="workspace-pane${i===0?' active':''}" data-workspace-pane="${tab.id}"></div>`).join('')}</div>`;
   return view;
 }
 function appendWorkspaceSections(view,paneId,ids){
@@ -64,7 +64,7 @@ function organizeDashboardWorkspaces(){
   const outbound=workspaceTemplate('outbound','Outbound Operations','Performance, cadence, capacity and campaign analysis in one specialist workspace.',[{id:'performance',label:'Performance'},{id:'cadence',label:'Cadence & capacity'},{id:'campaigns',label:'Campaigns'}]);
   const records=workspaceTemplate('records','Records & Investigation','Search, filter, drill into and export the complete enquiry ledger.',[{id:'ledger',label:'Ledger'}]);
   hero.before(overview,action,intelligence,outbound,records);
-  appendWorkspaceSections(overview,'summary',['sec-brief','sec-overview','kpis','sec-anomaly','sec-direction']);
+  appendWorkspaceSections(overview,'summary',['sec-brief','sec-anomaly','sec-direction']);
   appendWorkspaceSections(action,'callbacks',['sec-callbacks']);
   appendWorkspaceSections(action,'prospects',['sec-hottest']);
   appendWorkspaceSections(action,'friction',['sec-friction']);
@@ -76,13 +76,35 @@ function organizeDashboardWorkspaces(){
   appendWorkspaceSections(outbound,'cadence',['sec-outbound-cadence','sec-outbound-cadence-hidden']);
   appendWorkspaceSections(outbound,'campaigns',['sec-campaigns','sec-campaigns-hidden']);
   appendWorkspaceSections(records,'ledger',['sec-explorer']);
+  const briefCover=document.querySelector('#sec-brief .brief-cover');
+  if(briefCover){
+    const integrated=document.createElement('div');
+    integrated.className='management-summary-integrated';
+    const operational=document.createElement('div');
+    operational.className='management-operational-context';
+    operational.innerHTML='<div class="management-context-label">Operational context</div>';
+    integrated.appendChild(hero);
+    const kpis=document.getElementById('kpis');
+    if(kpis){operational.appendChild(kpis);integrated.appendChild(operational);}
+    briefCover.appendChild(integrated);
+  }
   activateDashboardWorkspace('overview',false);
 }
 function setDashboardWorkspaceTab(workspace,paneId){
   const view=document.getElementById(`workspace-${workspace}`);
   if(!view)return;
-  view.querySelectorAll('.workspace-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.workspaceTab===paneId));
+  view.querySelectorAll('.workspace-tab').forEach(btn=>{const active=btn.dataset.workspaceTab===paneId;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');btn.tabIndex=active?0:-1;});
   view.querySelectorAll('.workspace-pane').forEach(pane=>pane.classList.toggle('active',pane.dataset.workspacePane===paneId));
+}
+function handleWorkspaceTabKey(event,workspace){
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+  const tabs=[...document.querySelectorAll(`#workspace-${workspace} .workspace-tab`)];
+  if(!tabs.length)return;
+  event.preventDefault();
+  const current=Math.max(0,tabs.indexOf(event.currentTarget));
+  const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:event.key==='ArrowRight'?(current+1)%tabs.length:(current-1+tabs.length)%tabs.length;
+  setDashboardWorkspaceTab(workspace,tabs[next].dataset.workspaceTab);
+  tabs[next].focus();
 }
 function workspaceForTarget(id){
   if(String(id||'').startsWith('workspace-'))return String(id).slice(10);
@@ -2273,7 +2295,7 @@ function paintHealth(o){
     <circle cx="85" cy="85" r="${R}" fill="none" stroke="${col}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${val}" style="transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1)"/></g>
     <text x="85" y="83" text-anchor="middle" fill="${C.cream}" font-family="Source Serif 4" font-size="42" font-weight="900">${s}</text>
     <text x="85" y="105" text-anchor="middle" fill="${C.muted}" font-family="Inter" font-size="10">QUALITY</text></svg>`;
-  $("heroText").innerHTML=`<h3>Summary</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:680px;margin-top:8px">A leadership view of demand, conversion quality, AI confidence, and follow-up priorities. This score blends priority-prospect conversion (${o.n?Math.round(o.hot/o.n*100):0}%), AI confidence (${Math.round(o.avgConf)}%), and quality pass rate (${o.n?Math.round(o.green/o.n*100):0}%).</p>`;
+  $("heroText").innerHTML=`<h3>Quality signal</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:680px;margin-top:8px">Composite of priority-prospect conversion (${o.n?Math.round(o.hot/o.n*100):0}%), AI confidence (${Math.round(o.avgConf)}%), and quality pass rate (${o.n?Math.round(o.green/o.n*100):0}%).</p>`;
 }
 
 function paintKPIs(o){
@@ -2282,14 +2304,10 @@ function paintKPIs(o){
   const totalCost=totalMins*5;
   const avgDurMins=o.n?Math.floor(o.totalDur/o.n/60):0;
   const avgDurSecs=o.n?Math.round((o.totalDur/o.n)%60):0;
-  const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
   // 4th field = drill-down key -- every KPI here is now a count/set over the same "all" record set,
   // even the averages (minutes, cost, duration), so clicking any of them shows what it was computed from.
-  // Operational headline row. Priority prospects & AI confidence intentionally live in the Management
-  // Summary just below (with period-over-period trend + inbound/outbound split), so they're not repeated
-  // here -- this row stays volume/cost/quality to avoid the top of the dashboard saying the same thing twice.
+  // Operational context complements the integrated Management Summary without repeating its enquiry count.
   const cards=[
-    ["neut",o.n,"Total enquiries","all"],
     ["hot",totalMins+" mins","Advisory minutes","all"],
     ["hot","₹"+totalCost,"Estimated operating cost","all"],
     ["good",o.india+" India · "+o.intl+" International","India / International","geo"],
