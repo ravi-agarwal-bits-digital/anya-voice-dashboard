@@ -1187,7 +1187,7 @@ body.profile-open .profile-overlay{display:block;}
 .workspace-tab:hover{border-color:var(--gold);color:var(--navy)}
 .workspace-tab.active,.workspace-tab[aria-selected="true"]{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;border-color:var(--navy)!important;color:#fff!important;box-shadow:0 9px 20px rgba(11,31,58,.18)!important}
 .workspace-tab[aria-selected="true"]:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px rgba(255,255,255,.22);flex:0 0 auto}
-.workspace-tab-count{min-width:19px;padding:2px 5px;border-radius:999px;background:#eef2f7;color:var(--navy);font-size:9px;line-height:1.35;text-align:center}
+.workspace-tab-count{min-width:19px;padding:2px 6px;border-radius:999px;background:#eef2f7;color:var(--navy);font-size:9px;line-height:1.35;text-align:center;white-space:nowrap}
 .workspace-tab[aria-selected="true"] .workspace-tab-count{background:var(--gold)!important;color:var(--navy)!important;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
 .workspace-empty-guidance{margin:0 0 16px;padding:13px 15px;border:1px dashed var(--line);border-radius:10px;background:#f8fafc;color:var(--muted);font-size:12px}
 .publication-freshness{color:var(--muted);font-size:10px;font-weight:700;white-space:nowrap}
@@ -1198,6 +1198,10 @@ body.profile-open .profile-overlay{display:block;}
 .opf-hit-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
 .opf-hit-actions button{padding:7px 11px!important;border:1px solid var(--line)!important;border-radius:6px!important;background:#fff!important;color:var(--navy)!important;font-size:10.5px!important;font-weight:850!important;cursor:pointer!important}
 .opf-hit-actions button:last-child{background:var(--navy)!important;border-color:var(--navy)!important;color:#fff!important}
+.profile-match-list{display:grid;gap:8px}
+.profile-match-list button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--navy);font-family:Inter,sans-serif;font-size:12px;font-weight:800;cursor:pointer}
+.profile-match-list button:hover{border-color:var(--gold);background:#fffaf0}
+.profile-match-list button span{color:var(--muted);font-size:10px;font-weight:700}
 .workspace-pane{display:none}
 .workspace-pane.active{display:block}
 .workspace-pane>section:first-child{margin-top:0!important}
