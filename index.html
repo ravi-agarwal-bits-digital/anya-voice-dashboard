@@ -91,6 +91,7 @@
     <h3 id="kpiPanelTitle" style="font-family:'Source Serif 4',serif;font-size:18px;margin:0"></h3>
     <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
       <button id="kpiPanelExport" onclick="exportPanelCSV()" class="drawer-csv-btn" style="display:none">Export CSV</button>
+      <button id="kpiPanelLedger" onclick="openPanelInLedger()" class="drawer-ledger-btn" style="display:none">Open in Ledger</button>
       <button onclick="closeKpiPanel()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;width:auto;padding:0;margin:0">✕</button>
     </div>
   </div>
@@ -235,6 +236,7 @@
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
+          <span id="publicationFreshness" class="publication-freshness" aria-live="polite" title="Published dataset timestamp">Published —</span>
           <input type="search" id="searchMobile" placeholder="Search a lead by mobile…" aria-label="Search a lead by mobile number" oninput="debouncedSearch(this.value)">
         </div>
       </div>
@@ -277,6 +279,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
         <button type="button" id="profileExport" onclick="exportProfileCSV()" class="drawer-csv-btn" style="display:none">Export CSV</button>
+        <button type="button" id="profileLedger" onclick="openProfileInLedger()" class="drawer-ledger-btn" style="display:none">Open in Ledger</button>
         <button type="button" class="profile-drawer-close" onclick="closeUserSearch()" aria-label="Close profile">✕</button>
       </div>
     </div>
