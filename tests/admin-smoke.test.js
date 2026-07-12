@@ -22,6 +22,7 @@ assert(!html.includes('data:image'), 'Admin must use shared image assets');
 assert(html.includes('../assets/favicon.ico'), 'Admin favicon is missing');
 assert(html.includes('../assets/xlsx.full.min.js'), 'Admin must use local SheetJS');
 assert(html.includes('id="reviewScopeNote"'), 'Admin review scope note is missing');
+assert(html.includes('id="reviewStatusReconciliation"'), 'Admin status reconciliation is missing');
 for (const id of ['owner', 'repo', 'branch', 'path']) {
   assert(new RegExp(`id="${id}"[^>]*readonly`).test(html), `${id} must be read-only`);
 }
@@ -106,9 +107,12 @@ const rows = XLSX.utils.sheet_to_json(roundTripWorkbook.Sheets['Voice Export'], 
 const valid = context.__adminTest.validateRows(rows, Object.keys(rows[0]));
 assert.equal(valid.errors.length, 0, 'Synthetic workbook should pass');
 assert(valid.warnings.some(item => item.includes('Future Vendor Column')), 'Extra columns should be reported');
+assert.deepEqual(valid.metrics.rawStatusCounts, { completed: 2, failed: 0, initiated: 0, other: 0 }, 'Raw status counts changed');
 assert.equal(valid.metrics.lifecycleDuplicateRows, 0, 'Unique synthetic Call IDs should have no lifecycle duplicates');
 const duplicateValidation = context.__adminTest.validateRows([{ ...baseRow }, { ...baseRow, Status: 'failed' }], required);
 assert.equal(duplicateValidation.metrics.lifecycleDuplicateRows, 1, 'Lifecycle duplicate rows should be surfaced');
+assert.deepEqual(duplicateValidation.metrics.rawStatusCounts, { completed: 1, failed: 1, initiated: 0, other: 0 }, 'Raw duplicate status counts changed');
+assert.equal(duplicateValidation.metrics.completed, 1, 'Final completed Call-ID count changed');
 assert(duplicateValidation.warnings.some(item => item.includes('raw rows repeat')), 'Lifecycle duplicate warning is missing');
 assert(context.__adminTest.validateRows(rows, required.filter(column => column !== 'Call ID')).errors.some(item => item.includes('Call ID')), 'Missing required columns should fail');
 assert(context.__adminTest.validateRows([{ ...baseRow, Status: 'future-status' }], required).errors.some(item => item.includes('unsupported Status')), 'Unknown status should fail');
