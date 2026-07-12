@@ -404,6 +404,7 @@ function validateRows(rows, headers) {
     inbound = 0;
   const dates = [],
     ids = new Map(),
+    idOccurrences = new Map(),
     outFrom = new Set(),
     outTo = new Set(),
     inFrom = new Set();
@@ -435,6 +436,7 @@ function validateRows(rows, headers) {
     if (!Number.isFinite(dur) || dur < 0 || !Number.isFinite(msg) || msg < 0)
       badNumeric++;
     if (id) {
+      idOccurrences.set(id, (idOccurrences.get(id) || 0) + 1);
       const candidate = {
           row: r,
           status: st,
@@ -478,7 +480,13 @@ function validateRows(rows, headers) {
     );
   const final = [...ids.values()].map((x) => x.row),
     counts = { completed: 0, failed: 0, initiated: 0 };
+  const lifecycleDuplicateRows = [...idOccurrences.values()].reduce((n, count) => n + Math.max(0, count - 1), 0);
+  const lifecycleDuplicateIds = [...idOccurrences.values()].filter((count) => count > 1).length;
   final.forEach((r) => counts[String(r.Status).toLowerCase()]++);
+  if (lifecycleDuplicateRows)
+    warnings.push(
+      `${lifecycleDuplicateRows.toLocaleString()} raw rows repeat ${lifecycleDuplicateIds.toLocaleString()} Call IDs; status totals below use one final lifecycle row per Call ID.`,
+    );
   if (outbound && outFrom.size > Math.max(20, Math.ceil(outbound * 0.02)))
     warnings.push(
       `Outbound From contains ${outFrom.size.toLocaleString()} unique numbers; confirm the vendor has not changed phone routing.`,
@@ -514,6 +522,8 @@ function validateRows(rows, headers) {
     metrics: {
       raw: rows.length,
       unique: ids.size,
+      lifecycleDuplicateRows,
+      lifecycleDuplicateIds,
       completed: counts.completed,
       failed: counts.failed,
       initiated: counts.initiated,
@@ -539,14 +549,15 @@ function fmtDate(d) {
 function renderReview(v) {
   const m = v.metrics,
     items = [
-      ["Raw rows", m.raw],
+      ["Raw worksheet rows", m.raw],
       ["Unique Call IDs", m.unique],
-      ["Completed", m.completed],
-      ["Failed", m.failed],
-      ["Initiated", m.initiated],
-      ["Inbound rows", m.inbound],
-      ["Outbound rows", m.outbound],
-      ["Outbound learners", m.outLearners],
+      ["Completed Call IDs", m.completed],
+      ["Failed Call IDs", m.failed],
+      ["Initiated Call IDs", m.initiated],
+      ["Lifecycle duplicate rows", m.lifecycleDuplicateRows],
+      ["Raw inbound rows", m.inbound],
+      ["Raw outbound rows", m.outbound],
+      ["Unique outbound learners", m.outLearners],
     ];
   $("summaryGrid").innerHTML = items
     .map(
@@ -556,6 +567,10 @@ function renderReview(v) {
     .join("");
   $("reviewLead").textContent =
     `${selectedFile.name} · ${formatSize(selectedFile.size)} · ${fmtDate(m.dateMin)} to ${fmtDate(m.dateMax)}`;
+  const scopeNote = $("reviewScopeNote");
+  if (scopeNote)
+    scopeNote.textContent =
+      "Admin validation checks workbook structure and publish safety only. Raw worksheet and deduplicated Call-ID counts are intentionally shown separately; no business-intelligence or lead-quality scoring is performed here.";
   $("errorList").innerHTML = v.errors.length
     ? v.errors.map((x) => `<li>${esc(x)}</li>`).join("")
     : "<li>None</li>";
