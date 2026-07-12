@@ -402,6 +402,7 @@ function validateRows(rows, headers) {
     badNumeric = 0,
     outbound = 0,
     inbound = 0;
+  const rawStatusCounts = { completed: 0, failed: 0, initiated: 0, other: 0 };
   const dates = [],
     ids = new Map(),
     idOccurrences = new Map(),
@@ -419,6 +420,8 @@ function validateRows(rows, headers) {
       dt = parseDate(r["Created At (IST)"]),
       dur = Number(r["Duration (s)"]),
       msg = Number(r.Messages);
+    if (Object.prototype.hasOwnProperty.call(rawStatusCounts, st)) rawStatusCounts[st]++;
+    else rawStatusCounts.other++;
     if (!id) blankId++;
     if (!dt) badDate++;
     else dates.push(dt);
@@ -482,7 +485,10 @@ function validateRows(rows, headers) {
     counts = { completed: 0, failed: 0, initiated: 0 };
   const lifecycleDuplicateRows = [...idOccurrences.values()].reduce((n, count) => n + Math.max(0, count - 1), 0);
   const lifecycleDuplicateIds = [...idOccurrences.values()].filter((count) => count > 1).length;
-  final.forEach((r) => counts[String(r.Status).toLowerCase()]++);
+  final.forEach((r) => {
+    const status = String(r.Status).toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status]++;
+  });
   if (lifecycleDuplicateRows)
     warnings.push(
       `${lifecycleDuplicateRows.toLocaleString()} raw rows repeat ${lifecycleDuplicateIds.toLocaleString()} Call IDs; status totals below use one final lifecycle row per Call ID.`,
@@ -521,6 +527,7 @@ function validateRows(rows, headers) {
     warnings,
     metrics: {
       raw: rows.length,
+      rawStatusCounts,
       unique: ids.size,
       lifecycleDuplicateRows,
       lifecycleDuplicateIds,
@@ -571,6 +578,11 @@ function renderReview(v) {
   if (scopeNote)
     scopeNote.textContent =
       "Admin validation checks workbook structure and publish safety only. Raw worksheet and deduplicated Call-ID counts are intentionally shown separately; no business-intelligence or lead-quality scoring is performed here.";
+  const reconciliation = $("reviewStatusReconciliation");
+  if (reconciliation) {
+    const raw = m.rawStatusCounts || { completed: 0, failed: 0, initiated: 0, other: 0 };
+    reconciliation.innerHTML = `<div class="recon-col"><strong>Raw worksheet status rows</strong><span>Completed <b>${raw.completed.toLocaleString()}</b></span><span>Failed <b>${raw.failed.toLocaleString()}</b></span><span>Initiated <b>${raw.initiated.toLocaleString()}</b></span>${raw.other ? `<span>Other / invalid <b>${raw.other.toLocaleString()}</b></span>` : ""}</div><div class="recon-col"><strong>Final unique Call-ID statuses</strong><span>Completed <b>${m.completed.toLocaleString()}</b></span><span>Failed <b>${m.failed.toLocaleString()}</b></span><span>Initiated <b>${m.initiated.toLocaleString()}</b></span></div><div class="recon-foot">Raw status rows: <b>${(raw.completed + raw.failed + raw.initiated + raw.other).toLocaleString()}</b> · Final unique Call IDs: <b>${m.unique.toLocaleString()}</b> · Lifecycle rows are reconciled by keeping the most advanced status per Call ID.</div>`;
+  }
   $("errorList").innerHTML = v.errors.length
     ? v.errors.map((x) => `<li>${esc(x)}</li>`).join("")
     : "<li>None</li>";
