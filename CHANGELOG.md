@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Clarified Admin pre-publish review scopes by separating raw worksheet rows from final per-Call-ID status counts, surfacing lifecycle duplicates, and explicitly documenting that Admin validation is structural rather than business intelligence.
+
 - Added callback demand to the main outcomes view, restored duration-band visibility and shortened the initial sidebar.
 
 - Removed a redundant in-memory file conversion and reread from automatic dashboard loading.
