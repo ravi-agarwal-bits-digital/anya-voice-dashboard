@@ -5,6 +5,7 @@ This file records public-safe repository and application milestones. Detailed in
 ## Unreleased
 
 - Rebuilt the dashboard into focused Overview, Action Center, Intelligence, Outbound and Records workspaces, consolidated the summary layers, and preserved the production theme, global filters, analytics and CSV-enabled drawers.
+- Strengthened active workspace-tab feedback, added live Action Center counts, drawer-to-ledger handoff, publication freshness, guided empty states, and unique-lead/callback direction comparisons.
 
 - Added callback demand to the main outcomes view, restored duration-band visibility and shortened the initial sidebar.
 
