@@ -95,7 +95,8 @@ function updateWorkspaceOperationalState(){
   RECORDS.forEach(r=>{const key=ledgerPhoneKey(r);if(key)phoneCounts.set(key,(phoneCounts.get(key)||0)+1);});
   RECORDS.forEach((r,i)=>{const key=ledgerPhoneKey(r)||`record-${i}`;if(r.leadTemp==='Hot'||(phoneCounts.get(key)||0)>=3)priority.add(key);});
   counts.prospects=priority.size;
-  document.querySelectorAll('#workspace-action .workspace-tab').forEach(btn=>{const badge=btn.querySelector('.workspace-tab-count');if(!badge)return;badge.textContent=String(counts[btn.dataset.workspaceTab]||0);badge.hidden=false;});
+  const denominators={callbacks:RECORDS.length,friction:RECORDS.length,prospects:new Set(RECORDS.map(ledgerPhoneKey).filter(Boolean)).size};
+  document.querySelectorAll('#workspace-action .workspace-tab').forEach(btn=>{const badge=btn.querySelector('.workspace-tab-count');if(!badge)return;const key=btn.dataset.workspaceTab,value=counts[key]||0;badge.textContent=`${value} · ${percentOf(value,denominators[key])}%`;badge.hidden=false;});
   document.querySelectorAll('.dashboard-workspace-view').forEach(view=>{
     const selected=view.querySelector('.workspace-tab[aria-selected="true"]')||view.querySelector('.workspace-tab.active')||view.querySelector('.workspace-tab');
     if(selected)setDashboardWorkspaceTab(view.dataset.workspace,selected.dataset.workspaceTab);
@@ -583,6 +584,26 @@ function applyFilters(){
 }
 
 let searchTimer;
+function percentOf(value,total){return total?Math.round(Number(value||0)/total*100):0;}
+function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
+function phoneSearchVariants(value){
+  const raw=phoneDigits(value),c=classifyPhone(value),normalized=phoneDigits((c.cc||'')+(c.national||'')),national=phoneDigits(c.national||'');
+  return [...new Set([raw,normalized,national,raw.length>10?raw.slice(-10):'',raw.length===11&&raw[0]==='0'?raw.slice(1):''].filter(v=>v.length>=4))];
+}
+function resolveLeadSearch(query,rows=ALL_RECORDS_BACKUP){
+  const qVariants=phoneSearchVariants(query),q=phoneDigits(query);
+  if(!qVariants.length)return{calls:[],matches:[],ambiguous:false};
+  const groups=new Map();
+  (rows||[]).forEach(r=>{
+    const variants=phoneSearchVariants(r.from);
+    if(!variants.some(v=>qVariants.some(term=>v===term||v.endsWith(term)||term.endsWith(v))))return;
+    const key=ledgerPhoneKey(r)||variants[0];if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
+  });
+  const matches=[...groups.entries()].map(([key,calls])=>({key,calls:calls.sort((a,b)=>b.ts-a.ts)}));
+  const exact=matches.filter(m=>phoneSearchVariants(m.calls[0]?.from).includes(q));
+  const chosen=exact.length===1?exact[0]:matches.length===1?matches[0]:null;
+  return{calls:chosen?chosen.calls:[],matches,ambiguous:!chosen&&matches.length>1};
+}
 function debouncedSearch(val){
   clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>searchUserByMobile(val),250);
@@ -593,10 +614,19 @@ function searchUserByMobile(mobile, source="search"){
   // Hide results for empty/short input — but DON'T clear the input (user is still typing)
   if(!mobile||mobile.length<4){$("userSearchResult").style.display="none";return;}
   
-  const userCalls=ALL_RECORDS_BACKUP.filter(r=>recordMatchesCurrentFilters(r)&&String(r.from||"").includes(mobile)).sort((a,b)=>b.ts-a.ts);
+  const resolved=resolveLeadSearch(mobile),userCalls=resolved.calls;
+  const activeCalls=userCalls.filter(recordMatchesCurrentFilters);
   window.__profileCalls=userCalls;
   const pexp=$("profileExport"); if(pexp)pexp.style.display=userCalls.length?'inline-flex':'none';
   const pledger=$("profileLedger"); if(pledger)pledger.style.display=userCalls.length?'inline-flex':'none';
+  if(resolved.ambiguous){
+    $("userSearchResult").style.display="block";
+    $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">Multiple leads match “${esc(mobile)}”</span>`;
+    $("userSearchStats").innerHTML=`<div class="profile-match-list">${resolved.matches.slice(0,8).map(m=>`<button type="button" onclick="openProfileForPhone(${jsArg(m.calls[0].from)},'search')">${esc(maskPhone(m.calls[0].from))} <span>${m.calls.length} call${m.calls.length===1?'':'s'}</span></button>`).join('')}</div>`;
+    $("userSearchTimeline").innerHTML="";
+    const note=$("profileSourceNote");if(note)note.textContent="More than one lead shares those digits. Select a match or enter more of the number.";
+    revealUserProfile("search");return;
+  }
   if(!userCalls.length){
     $("userSearchResult").style.display="block";
     $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">No calls found for "${esc(mobile)}"</span>`;
@@ -638,13 +668,13 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-      <div><b>Calls:</b> ${userCalls.length} (${frustrated} attention • ${general} general)</div><div><b>View:</b> ${currentDirectionLabel()}</div>
+      <div><b>Calls:</b> ${userCalls.length} (${frustrated} attention · ${percentOf(frustrated,userCalls.length)}% • ${general} general · ${percentOf(general,userCalls.length)}%)</div><div><b>View:</b> Full history · ${activeCalls.length} (${percentOf(activeCalls.length,userCalls.length)}%) in active view</div>
       <div><b>Engagement:</b> ${engagement}</div>
       <div><b>Duration:</b> ${totalDur} mins</div>
       <div><b>Total cost:</b> ₹${totalCost}</div>
       <div><b>Avg Confidence:</b> ${avgConf}%</div>
       <div><b>Avg Need Score:</b> ${avgNeed}</div>
-      <div style="grid-column:1/-1"><b>Lead tier:</b> Hot ${hot} | Warm ${warm} | Cold ${cold}</div>
+      <div style="grid-column:1/-1"><b>Lead tier:</b> Hot ${hot} (${percentOf(hot,userCalls.length)}%) | Warm ${warm} (${percentOf(warm,userCalls.length)}%) | Cold ${cold} (${percentOf(cold,userCalls.length)}%)</div>
       <div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>
     </div>
   `;
@@ -671,7 +701,8 @@ function searchUserByMobile(mobile, source="search"){
   const note=$("profileSourceNote");
   if(note){
     const label=source==="callback"?"Opened from the Priority follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from Priority prospects":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
-    note.textContent=label+". Profile appears here with the full call timeline.";
+    const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
+    note.textContent=label+`. Full call history is shown. ${scope}`;
   }
   revealUserProfile(source);
 }
@@ -2149,7 +2180,8 @@ function paintCallbacks(recs){
     }
   });
   
-  cbCount.textContent=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
+  const visibleCallbackCount=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
+  cbCount.textContent=`${visibleCallbackCount} (${percentOf(visibleCallbackCount,recs.length)}% of calls)`;
 
   // Cap the number of callback CARDS rendered (each card renders all of its calls, incl. hidden
   // "more" requests, so rendering every group at once was the single biggest filter-lag cost on
@@ -2479,7 +2511,8 @@ function defaultDrillStats(rows){
   if(!n)return[["Matching calls",0]];
   const avgConf=Math.round(rows.reduce((a,r)=>a+r.conf,0)/n);
   const avgNeed=Math.round(rows.reduce((a,r)=>a+r.need,0)/n);
-  return[["Matching calls",n],["Avg confidence",avgConf+"%"],["Avg need",avgNeed],["Hot leads",rows.filter(r=>r.leadTemp==="Hot").length],["Callbacks",rows.filter(r=>r.callback).length],["International",rows.filter(r=>classifyPhone(r.from).intl).length]];
+  const ratio=v=>`${v} (${percentOf(v,n)}%)`,hot=rows.filter(r=>r.leadTemp==="Hot").length,callbacks=rows.filter(r=>r.callback).length,intl=rows.filter(r=>classifyPhone(r.from).intl).length;
+  return[["Matching calls",n],["Avg confidence",avgConf+"%"],["Avg need",avgNeed],["Hot leads",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
 }
 // The one function nearly every chart/bar/KPI across the dashboard calls on click: filter down to the
 // exact calls behind a number and show them. baseRows defaults to the current filtered view (RECORDS);
@@ -2501,21 +2534,23 @@ function openKpiPanel(key){
   // Stat blocks per key
   if(key==="all"){
     const mins=sumBilledMinutes(RECORDS);
-    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Hot",RECORDS.filter(r=>r.leadTemp==="Hot").length],["Frustrated",RECORDS.filter(r=>r.frustrated).length],["Callbacks",RECORDS.filter(r=>r.callback).length],["International",RECORDS.filter(r=>classifyPhone(r.from).intl).length]];
+    const ratio=v=>`${v} (${percentOf(v,RECORDS.length)}%)`;
+    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Hot",ratio(RECORDS.filter(r=>r.leadTemp==="Hot").length)],["Frustrated",ratio(RECORDS.filter(r=>r.frustrated).length)],["Callbacks",ratio(RECORDS.filter(r=>r.callback).length)],["International",ratio(RECORDS.filter(r=>classifyPhone(r.from).intl).length)]];
   }else if(key==="hot"){
     const h=rows;const avgC=h.length?Math.round(h.reduce((a,r)=>a+r.conf,0)/h.length):0;
-    stats=[["Hot leads",h.length],["% of all calls",Math.round(h.length/n*100)+"%"],["Avg confidence",avgC+"%"],["With callback",h.filter(r=>r.callback).length],["International",h.filter(r=>classifyPhone(r.from).intl).length]];
+    const callbacks=h.filter(r=>r.callback).length,intl=h.filter(r=>classifyPhone(r.from).intl).length;
+    stats=[["Hot leads",`${h.length} (${percentOf(h.length,n)}%)`],["Avg confidence",avgC+"%"],["With callback",`${callbacks} (${percentOf(callbacks,h.length)}%)`],["International",`${intl} (${percentOf(intl,h.length)}%)`]];
   }else if(key==="green"){
     stats=[["Green (pass)",RECORDS.filter(r=>r.band==="Green").length],["Amber",RECORDS.filter(r=>r.band==="Amber").length],["Red",RECORDS.filter(r=>r.band==="Red").length],["Pass rate",Math.round(RECORDS.filter(r=>r.band==="Green").length/n*100)+"%"]];
   }else if(key==="geo"){
     const india=RECORDS.filter(r=>!classifyPhone(r.from).intl).length;
     const intl=rows.length;
     const byC={};rows.forEach(r=>{const c=classifyPhone(r.from);byC[c.country]=(byC[c.country]||0)+1;});
-    stats=[["India",india],["International",intl],...Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v])];
+    stats=[["India",`${india} (${percentOf(india,n)}%)`],["International",`${intl} (${percentOf(intl,n)}%)`],...Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,`${v} (${percentOf(v,intl)}% of international)`])];
   }else if(key==="conf"){
     const cc={low:0,mid:0,high:0};RECORDS.forEach(r=>{cc[r.conf<50?"low":r.conf<80?"mid":"high"]++;});
     const avgC=Math.round(RECORDS.reduce((a,r)=>a+r.conf,0)/n);
-    stats=[["Avg confidence",avgC+"%"],["High (≥80%)",cc.high],["Mid (50-79%)",cc.mid],["Low (<50%)",cc.low]];
+    stats=[["Avg confidence",avgC+"%"],["High (≥80%)",`${cc.high} (${percentOf(cc.high,n)}%)`],["Mid (50-79%)",`${cc.mid} (${percentOf(cc.mid,n)}%)`],["Low (<50%)",`${cc.low} (${percentOf(cc.low,n)}%)`]];
   }
 
   const listHtml=key!=="conf"
@@ -2728,7 +2763,8 @@ function paintGeo(o){
   const entries=Object.entries(byCountry).sort((a,b)=>b[1]-a[1]);
   if(!entries.length){$("geoCountries").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No international leads in this range.</div>`;return;}
   const max=Math.max(...entries.map(e=>e[1]),1);
-  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px;cursor:pointer" onclick="openFilteredPanel('${k}',r=>esc(classifyPhone(r.from).country)==='${k}')"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v}</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
+  const intlTotal=entries.reduce((a,[,v])=>a+v,0);
+  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px;cursor:pointer" onclick="openFilteredPanel('${k}',r=>esc(classifyPhone(r.from).country)==='${k}')"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v} · ${percentOf(v,intlTotal)}%</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
 }
 
 function exportGeo(){
@@ -3084,8 +3120,8 @@ function paintHottestLeads(records){
         <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
-        <div><b>Lead:</b> ${typeEmoji} ${l.hot}H|${l.warm}W|${l.cold}C</div>
-        <div><b>Calls:</b> ${l.total} (${l.frustrated} attention)</div>
+        <div><b>Lead:</b> ${typeEmoji} ${l.hot}H (${percentOf(l.hot,l.total)}%) | ${l.warm}W (${percentOf(l.warm,l.total)}%) | ${l.cold}C (${percentOf(l.cold,l.total)}%)</div>
+        <div><b>Calls:</b> ${l.total} (${l.frustrated} attention · ${percentOf(l.frustrated,l.total)}%)</div>
         <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
         <div><b>Avg Conf:</b> ${l.avgConf}%</div>
         <div><b>Avg Need:</b> ${l.avgNeed}</div>
@@ -3116,8 +3152,8 @@ function paintSerialCallers(records){
         <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${s.total} calls</span>
       </div>
       <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-        <div><b style="color:var(--hot)">${s.frustrated}</b> attention</div>
-        <div><b style="color:var(--green)">${s.general}</b> general</div>
+        <div><b style="color:var(--hot)">${s.frustrated}</b> attention (${percentOf(s.frustrated,s.total)}%)</div>
+        <div><b style="color:var(--green)">${s.general}</b> general (${percentOf(s.general,s.total)}%)</div>
         <div style="grid-column:1/-1"><b style="color:var(--teal)">${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
       </div>
       ${directionMix(s.calls)}
