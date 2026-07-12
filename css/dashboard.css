@@ -1174,3 +1174,16 @@ body.profile-open .profile-overlay{display:block;}
 .drawer-csv-btn{padding:6px 13px!important;border-radius:999px!important;border:1px solid var(--gold)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
 .drawer-csv-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important;transform:translateY(-1px)!important}
 .drawer-csv-btn::before{content:'⤓ ';font-weight:900}
+.drawer-ledger-btn{padding:6px 12px!important;border-radius:999px!important;border:1px solid var(--navy)!important;background:#fff!important;color:var(--navy)!important;font-size:11px!important;font-weight:900!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
+.drawer-ledger-btn:hover{background:#eef4ff!important;border-color:var(--navy)!important;transform:translateY(-1px)!important}
+.publication-freshness{color:var(--muted);font-size:10px;font-weight:700;white-space:nowrap}
+.brief-cover .kpi .v small{font-family:Inter,sans-serif;font-size:12px;letter-spacing:0;color:var(--muted);font-weight:800}
+.direction-glance-group td{background:#f3f6fa!important;color:var(--navy)!important;font-size:10px!important;font-weight:900!important;letter-spacing:.12em;text-transform:uppercase;border-top:2px solid var(--line)!important}
+.direction-na{color:var(--faint)!important;font-size:10.5px!important;font-style:italic}
+.opf-hit-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
+.opf-hit-actions button{padding:7px 11px!important;border:1px solid var(--line)!important;border-radius:6px!important;background:#fff!important;color:var(--navy)!important;font-size:10.5px!important;font-weight:850!important;cursor:pointer!important}
+.opf-hit-actions button:last-child{background:var(--navy)!important;border-color:var(--navy)!important;color:#fff!important}
+.profile-match-list{display:grid;gap:8px}
+.profile-match-list button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--navy);font-family:Inter,sans-serif;font-size:12px;font-weight:800;cursor:pointer}
+.profile-match-list button:hover{border-color:var(--gold);background:#fffaf0}
+.profile-match-list button span{color:var(--muted);font-size:10px;font-weight:700}

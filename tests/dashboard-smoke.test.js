@@ -36,7 +36,8 @@ for (const path of [
 
 for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
-  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief'
+  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief',
+  'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
 }
@@ -90,7 +91,9 @@ for (const fn of [
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
-  'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes'
+  'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
+  'resolveLeadSearch', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
+  'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -154,6 +157,39 @@ assert.equal(context.sumBilledMinutes([
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
 assert(scripts[1].includes('id="cbShowMore" role="button" tabindex="0" onkeydown='), 'Callback pagination must be keyboard accessible');
+assert(!html.includes('id="timelinePanel"'), 'Superseded inline timeline panel must remain removed');
+assert(!scripts[1].includes('timelinePanel'), 'Dashboard logic must use the profile drawer timeline');
+assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data freshness metadata is missing');
+assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
+assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
+assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
+
+const searchRows = [
+  { from: '+91 99999 99999', ts: 2, d: '2026-07-10', direction: 'inbound', campaign: '' },
+  { from: '919999999999', ts: 1, d: '2026-06-01', direction: 'outbound', campaign: 'Older campaign' },
+  { from: '918888888888', ts: 3, d: '2026-07-10', direction: 'inbound', campaign: '' }
+];
+assert.equal(context.resolveLeadSearch('99999-99999', searchRows).calls.length, 2, 'Phone search must normalize formatting and return full lead history');
+assert.equal(context.resolveLeadSearch('+91 88888 88888', searchRows).calls.length, 1, 'Phone search must support country-code input');
+assert.equal(context.percentOf(2, 5), 40, 'Applicable count percentages changed');
+
+context.__campaignScopeRows = [
+  { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign A' },
+  { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign B' }
+];
+vm.runInContext("ALL_RECORDS_BACKUP=__campaignScopeRows;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='Campaign A';", context);
+assert.equal(context.recordsInRange('2026-07-10', '2026-07-10').length, 1, 'Management Summary campaign scope changed');
+vm.runInContext("ALL_RECORDS_BACKUP=[];SELECTED_CAMPAIGN='all';", context);
+
+let unreachableDownload = null;
+context.downloadCSV = (name, csv) => { unreachableDownload = { name, csv }; };
+context.__unreachGroups = [[
+  { from: '919999999999', d: '2026-07-09', ts: 1, h: 10, m: 0, campaign: 'Retry A', status: 'failed' },
+  { from: '919999999999', d: '2026-07-10', ts: 2, h: 11, m: 0, campaign: 'Retry A', status: 'no_answer' },
+  { from: '919999999999', d: '2026-07-11', ts: 3, h: 12, m: 0, campaign: 'Retry B', status: 'failed' }
+]];
+context.exportUnreachableCSV();
+assert(unreachableDownload && unreachableDownload.csv.includes('+919999999999,India,3,'), 'Unreachable CSV must aggregate the complete dial count per number');
 
 const overview = XLSX.utils.aoa_to_sheet([['Overview'], ['Not call data']]);
 const voiceRows = [

@@ -160,6 +160,7 @@ const DATA_FETCH_TIMEOUT_MS=180000;
 
 function autoLoadLatestExcel(){
   setDashboardLoading();
+  loadPublicationFreshness();
 
   // Revalidate on every visit, but allow the browser to reuse the encrypted body when unchanged.
   // `no-store` forced the full and continually-growing workbook to download on every page load.
@@ -197,6 +198,18 @@ function autoLoadLatestExcel(){
           : 'No voice export was found at <b>data/voice_analytics.xlsx</b>.<br><br>Once the Excel file is published in that path, this dashboard will load it automatically.'
       );
     });
+}
+
+function loadPublicationFreshness(){
+  fetchWithTimeout('data/voice_analytics.xlsx.meta.json',{cache:'no-cache'},10000)
+    .then(r=>r.ok?r.json():Promise.reject(new Error('Metadata unavailable')))
+    .then(meta=>{
+      const el=$("publicationFreshness"),raw=meta.publishedAt||meta.published_at||meta.generatedAt;
+      const date=raw?new Date(raw):null;
+      if(!el||!date||Number.isNaN(date.getTime()))return;
+      el.textContent=`Published ${new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(date)}`;
+      el.title=`Latest dataset published ${date.toLocaleString('en-IN')}`;
+    }).catch(()=>{});
 }
 
 // ===== AES-256-GCM decryption (matches admin encryption) =====
@@ -433,7 +446,7 @@ function applyFilters(){
   updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
   const toDate=$("filterToDate").value;
-  
+
   // Show selected date range
   if(fromDate && toDate){
     const from=new Date(fromDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
@@ -451,7 +464,7 @@ function applyFilters(){
   }else{
     $("selectedDateRange").style.display="none";
   }
-  
+
   FILTERED_RECORDS=ALL_RECORDS_BACKUP.filter(r=>{
     if(!r.d) return false;
     if(fromDate && r.d<fromDate) return false;
@@ -460,9 +473,10 @@ function applyFilters(){
     if(SELECTED_CAMPAIGN!=='all' && (r.campaign||'')!==SELECTED_CAMPAIGN) return false;
     return true;
   });
-  
+
   RECORDS=FILTERED_RECORDS;
   invalidateLedgerRepeatCache();
+  clearLedgerScope(false);
   // Rebuild meta pills for the current filtered set (or honest empty-state)
   if(RECORDS.length===0){
     $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
@@ -501,6 +515,26 @@ function applyFilters(){
 }
 
 let searchTimer;
+function percentOf(value,total){return total?Math.round(Number(value||0)/total*100):0;}
+function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
+function phoneSearchVariants(value){
+  const raw=phoneDigits(value),c=classifyPhone(value),normalized=phoneDigits((c.cc||'')+(c.national||'')),national=phoneDigits(c.national||'');
+  return [...new Set([raw,normalized,national,raw.length>10?raw.slice(-10):'',raw.length===11&&raw[0]==='0'?raw.slice(1):''].filter(v=>v.length>=4))];
+}
+function resolveLeadSearch(query,rows=ALL_RECORDS_BACKUP){
+  const qVariants=phoneSearchVariants(query),q=phoneDigits(query);
+  if(!qVariants.length)return{calls:[],matches:[],ambiguous:false};
+  const groups=new Map();
+  (rows||[]).forEach(r=>{
+    const variants=phoneSearchVariants(r.from);
+    if(!variants.some(v=>qVariants.some(term=>v===term||v.endsWith(term)||term.endsWith(v))))return;
+    const key=ledgerPhoneKey(r)||variants[0];if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
+  });
+  const matches=[...groups.entries()].map(([key,calls])=>({key,calls:calls.sort((a,b)=>b.ts-a.ts)}));
+  const exact=matches.filter(m=>phoneSearchVariants(m.calls[0]?.from).includes(q));
+  const chosen=exact.length===1?exact[0]:matches.length===1?matches[0]:null;
+  return{calls:chosen?chosen.calls:[],matches,ambiguous:!chosen&&matches.length>1};
+}
 function debouncedSearch(val){
   clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>searchUserByMobile(val),250);
@@ -510,10 +544,20 @@ function searchUserByMobile(mobile, source="search"){
   mobile=mobile.trim();
   // Hide results for empty/short input — but DON'T clear the input (user is still typing)
   if(!mobile||mobile.length<4){$("userSearchResult").style.display="none";return;}
-  
-  const userCalls=ALL_RECORDS_BACKUP.filter(r=>recordMatchesCurrentFilters(r)&&String(r.from||"").includes(mobile)).sort((a,b)=>b.ts-a.ts);
+
+  const resolved=resolveLeadSearch(mobile),userCalls=resolved.calls;
+  const activeCalls=userCalls.filter(recordMatchesCurrentFilters);
   window.__profileCalls=userCalls;
   const pexp=$("profileExport"); if(pexp)pexp.style.display=userCalls.length?'inline-flex':'none';
+  const pledger=$("profileLedger"); if(pledger)pledger.style.display=userCalls.length?'inline-flex':'none';
+  if(resolved.ambiguous){
+    $("userSearchResult").style.display="block";
+    $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">Multiple leads match “${esc(mobile)}”</span>`;
+    $("userSearchStats").innerHTML=`<div class="profile-match-list">${resolved.matches.slice(0,8).map(m=>`<button type="button" onclick="openProfileForPhone(${jsArg(m.calls[0].from)},'search')">${esc(maskPhone(m.calls[0].from))} <span>${m.calls.length} call${m.calls.length===1?'':'s'}</span></button>`).join('')}</div>`;
+    $("userSearchTimeline").innerHTML="";
+    const note=$("profileSourceNote");if(note)note.textContent="More than one lead shares those digits. Select a match or enter more of the number.";
+    revealUserProfile("search");return;
+  }
   if(!userCalls.length){
     $("userSearchResult").style.display="block";
     $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">No calls found for "${esc(mobile)}"</span>`;
@@ -523,7 +567,7 @@ function searchUserByMobile(mobile, source="search"){
     revealUserProfile("search");
     return;
   }
-  
+
   // Calculate stats
   const frustrated=userCalls.filter(c=>c.frustrated).length;
   const general=userCalls.length-frustrated;
@@ -531,41 +575,41 @@ function searchUserByMobile(mobile, source="search"){
   const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
   const totalDur=sumBilledMinutes(userCalls);
   const totalCost=totalDur*5;
-  
+
   // Lead temperature breakdown
   const hot=userCalls.filter(c=>c.leadTemp==="Hot").length;
   const warm=userCalls.filter(c=>c.leadTemp==="Warm").length;
   const cold=userCalls.filter(c=>c.leadTemp==="Cold").length;
-  
+
   // Determine overall lead type
   const hotRatio=hot/userCalls.length;
   let leadType="Cold", leadEmoji="Cold", leadColor="var(--cold)";
   if(hotRatio>=0.6){leadType="Hot";leadEmoji="Hot";leadColor="var(--hot)";}
   else if(hotRatio>=0.3){leadType="Warm";leadEmoji="Warm";leadColor="var(--warm)";}
-  
+
   // Intent breakdown
   const intents={};
   userCalls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
   const intentList=Object.entries(intents).sort((a,b)=>b[1]-a[1]).map(([i,cnt])=>`${esc(i)} (${cnt})`).join(" • ");
-  
+
   // Engagement score
   const engagementScore=userCalls.length*2+frustrated*3+avgNeed*0.5;
   const engagement=engagementScore>20?"Very high":engagementScore>12?"High":"Normal";
-  
+
   $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-      <div><b>Calls:</b> ${userCalls.length} (${frustrated} attention • ${general} general)</div><div><b>View:</b> ${currentDirectionLabel()}</div>
+      <div><b>Calls:</b> ${userCalls.length} (${frustrated} attention · ${percentOf(frustrated,userCalls.length)}% • ${general} general · ${percentOf(general,userCalls.length)}%)</div><div><b>View:</b> Full history · ${activeCalls.length} (${percentOf(activeCalls.length,userCalls.length)}%) in active view</div>
       <div><b>Engagement:</b> ${engagement}</div>
       <div><b>Duration:</b> ${totalDur} mins</div>
       <div><b>Total cost:</b> ₹${totalCost}</div>
       <div><b>Avg Confidence:</b> ${avgConf}%</div>
       <div><b>Avg Need Score:</b> ${avgNeed}</div>
-      <div style="grid-column:1/-1"><b>Lead tier:</b> Hot ${hot} | Warm ${warm} | Cold ${cold}</div>
+      <div style="grid-column:1/-1"><b>Lead tier:</b> Hot ${hot} (${percentOf(hot,userCalls.length)}%) | Warm ${warm} (${percentOf(warm,userCalls.length)}%) | Cold ${cold} (${percentOf(cold,userCalls.length)}%)</div>
       <div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>
     </div>
   `;
-  
+
   $("userSearchTimeline").innerHTML=userCalls.map((c,i)=>{
     const date=formatCallTime(c);
     const tag=c.frustrated?`<b style="color:var(--hot)">Attention</b>`:` <b style="color:var(--green)">General</b>`;
@@ -583,12 +627,13 @@ function searchUserByMobile(mobile, source="search"){
       ${transcriptToggle(c,'prof'+i)}
     </div>`;
   }).join("");
-  
+
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
     const label=source==="callback"?"Opened from the Priority follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from Priority prospects":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
-    note.textContent=label+". Profile appears here with the full call timeline.";
+    const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
+    note.textContent=label+`. Full call history is shown. ${scope}`;
   }
   revealUserProfile(source);
 }
@@ -661,8 +706,6 @@ function openProfileForPhone(phone,source='search',el=null){
   if(!raw)return;
   const search=$('searchMobile');
   if(search)search.value=maskPhone(raw);
-  const legacyTimeline=$('timelinePanel');
-  if(legacyTimeline)legacyTimeline.style.display='none';
   searchUserByMobile(raw,source);
 }
 
@@ -1145,37 +1188,68 @@ function outboundDialsInDateView(){
 function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
 function fmtDayLabel(iso){if(!iso)return '—';const p=String(iso).split('-');if(p.length<3)return String(iso);const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${p[2]} ${mon[Number(p[1])-1]||''}`;}
 function directionStats(dir){
-  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && normalizeDirection(r.direction)===dir);
+  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)===dir);
   const n=recs.length;
-  if(!n)return null;
   const connected=recs.filter(r=>normalizeDisposition(r)==='connected').length;
   const hot=recs.filter(r=>r.leadTemp==='Hot').length;
   const green=recs.filter(r=>r.band==='Green').length;
-  const avgDurSec=recs.reduce((a,r)=>a+r.dur,0)/n;
-  const avgConf=recs.reduce((a,r)=>a+r.conf,0)/n;
-  return{n,connectPct:Math.round(connected/n*100),hotPct:Math.round(hot/n*100),avgDurSec,avgConf:Math.round(avgConf),greenPct:Math.round(green/n*100)};
+  const avgDurSec=n?recs.reduce((a,r)=>a+r.dur,0)/n:0;
+  const avgConf=n?recs.reduce((a,r)=>a+r.conf,0)/n:0;
+  const unique=new Set(recs.map(ledgerPhoneKey).filter(Boolean)).size;
+  const callbacks=recs.filter(r=>r.callback).length;
+  return{n,unique,callbacks,callbackPct:n?Math.round(callbacks/n*100):0,connectPct:n?Math.round(connected/n*100):0,hotPct:n?Math.round(hot/n*100):0,avgDurSec,avgConf:Math.round(avgConf),greenPct:n?Math.round(green/n*100):0};
+}
+function outboundGlanceStats(){
+  const dials=outboundRecordsInView(),n=dials.length,byPhone=groupByPhone(dials),groups=Object.values(byPhone);
+  const isConn=r=>normalizeDisposition(r)==='connected';
+  const connected=dials.filter(isConn),reached=groups.filter(calls=>calls.some(isConn));
+  const unreachable=groups.filter(calls=>calls.length>=3&&!calls.some(isConn));
+  const hotReached=reached.filter(calls=>calls.some(r=>isConn(r)&&r.leadTemp==='Hot'));
+  return{dials,n,connected,reached,unreachable,hotReached,numbers:groups.length,
+    connectPct:n?Math.round(connected.length/n*100):0,
+    reachPct:groups.length?Math.round(reached.length/groups.length*100):0,
+    failed:n-connected.length,failedPct:n?Math.round((n-connected.length)/n*100):0,
+    avgDials:groups.length?(n/groups.length).toFixed(1):'0.0',
+    hotReachPct:reached.length?Math.round(hotReached.length/reached.length*100):0};
 }
 function paintDirectionCompare(){
   const el=$('dirCompareTable');
   if(!el)return;
   const ib=directionStats('inbound'), ob=directionStats('outbound');
-  if(!ib || !ob){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
-  window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='inbound');
-  window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&normalizeDirection(r.direction)==='outbound');
+  window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
+  window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound');
+  if(!ib.n || !ob.n){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
+  const ops=outboundGlanceStats();
+  window.__dirOutDials=ops.dials;window.__dirOutConnected=ops.connected;window.__dirOutFailed=ops.dials.filter(r=>normalizeDisposition(r)!=='connected');
+  window.__dirOutUnreachable=[].concat(...ops.unreachable);window.__dirOutHot=ops.connected.filter(r=>r.leadTemp==='Hot');
   // Connect/answer rate intentionally lives in the dedicated outbound section (dial-level), not here --
   // these rows compare connected conversations, where a "connect rate" would trivially be ~100% both sides.
   const rows=[
+    ['Unique people',`${ib.unique} callers`,`${ob.unique} leads dialled`,'()=>true'],
+    ['Callback requests',`${ib.callbacks} (${ib.callbackPct}%)`,`${ob.callbacks} (${ob.callbackPct}%)`,'r=>r.callback'],
     ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%',"r=>r.leadTemp==='Hot'"],
     ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec),'()=>true'],
     ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
     ['Quality pass rate (Green)',ib.greenPct+'%',ob.greenPct+'%',"r=>r.band==='Green'"]
   ];
-  el.innerHTML=`<table class="opf-cmp-table"><thead><tr><th>Metric</th>`+
+  const operationalRows=[
+    ['Dials placed','Not applicable',ops.n.toLocaleString(),'window.__dirOutDials'],
+    ['Connected dials','Inbound calls arrive connected',`${ops.connected.length.toLocaleString()} (${ops.connectPct}%)`,'window.__dirOutConnected'],
+    ['Distinct-number reach','Unique callers shown above',`${ops.reached.length.toLocaleString()} of ${ops.numbers.toLocaleString()} (${ops.reachPct}%)`,'window.__dirOutConnected'],
+    ['Failed / unconnected effort','Not applicable',`${ops.failed.toLocaleString()} (${ops.failedPct}%)`,'window.__dirOutFailed'],
+    ['Repeatedly unreachable','Not applicable',`${ops.unreachable.length.toLocaleString()} numbers`,'window.__dirOutUnreachable'],
+    ['Average dials per number','Not applicable',ops.avgDials,'window.__dirOutDials'],
+    ['Hot leads reached','Hot callers shown above',`${ops.hotReached.length.toLocaleString()} (${ops.hotReachPct}% of reached)`,'window.__dirOutHot']
+  ];
+  el.innerHTML=`<table class="opf-cmp-table direction-glance-table"><thead><tr><th>Metric</th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
     `<tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
-      `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
+      `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}`+
+    `<tr class="direction-glance-group"><td colspan="3">Outbound operational context</td></tr>`+
+    operationalRows.map(r=>`<tr><td>${esc(r[0])}</td><td class="direction-na">${esc(r[1])}</td><td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',()=>true,${r[3]})">${esc(r[2])}</td></tr>`).join('')+
+    `</tbody></table>`;
 }
 function paintDispositionBreak(obRecs){
   const el=$('dispositionBreak');
@@ -1444,8 +1518,20 @@ function paintUnreachableList(unreachable,avgDials){
     return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
   }).join('');
   el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers dialed 3+ times, never once connected — <b>${wastedDials.toLocaleString()}</b> wasted dials (avg ${avgDials} dials per number overall). Stop-calling / switch-to-SMS candidates.</div>`+
+    `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All repeatedly unreachable dials',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export complete CSV</button></div>`+
     `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Number</th><th>Dials</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
-    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more in the full unreachable set — click the "Unreachable numbers" KPI above for all of them.</div>`:'');
+    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in View all dials and Export complete CSV.</div>`:'');
+}
+function exportUnreachableCSV(){
+  const groups=window.__unreachGroups||[];
+  if(!groups.length){alert('No repeatedly unreachable numbers to export.');return;}
+  let csv='Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status\n';
+  groups.forEach(calls=>{
+    const sorted=calls.slice().sort((a,b)=>a.ts-b.ts),first=sorted[0],last=sorted[sorted.length-1],country=classifyPhone(first.from).country;
+    const campaigns=[...new Set(sorted.map(r=>String(r.campaign||'').trim()).filter(Boolean))].join(' | ');
+    csv+=[fullPhone(first.from),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status)].join(',')+'\n';
+  });
+  downloadCSV('repeatedly_unreachable_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
 
 // ===== OUTBOUND CADENCE & CAPACITY =====
@@ -1997,7 +2083,7 @@ function paintCallbacks(recs){
 
   // Group by phone number
   const byPhone=groupByPhone(cbs);
-  
+
   // Build multi-select intent filter chips (All + each intent)
   const intents=[...new Set(cbs.map(r=>r.intent))].sort();
   const showAll=CB_FILTERS.size===0;
@@ -2014,7 +2100,7 @@ function paintCallbacks(recs){
     }
     paintCallbacks(recs);
   });
-  
+
   // Filter and sort — empty set = all, otherwise match any selected intent
   const filtered={};
   Object.entries(byPhone).forEach(([ph,calls])=>{
@@ -2023,8 +2109,9 @@ function paintCallbacks(recs){
       filtered[ph]=filtered_calls.sort((a,b)=>a.ts-b.ts);
     }
   });
-  
-  cbCount.textContent=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
+
+  const visibleCallbackCount=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
+  cbCount.textContent=`${visibleCallbackCount} (${percentOf(visibleCallbackCount,recs.length)}% of calls)`;
 
   // Cap the number of callback CARDS rendered (each card renders all of its calls, incl. hidden
   // "more" requests, so rendering every group at once was the single biggest filter-lag cost on
@@ -2035,7 +2122,7 @@ function paintCallbacks(recs){
   cbList.innerHTML=cbShown.map(([ph,calls])=>{
     const phoneKey=ph.replace(/\W/g,'_');
     const totalDur=sumBilledMinutes(calls);
-    
+
     const renderCall=(c)=>`
       <div style="padding:10px;background:#ffffff;border-radius:6px;border-left:2px solid var(--teal);margin-bottom:6px;font-size:10px">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -2109,6 +2196,7 @@ function recordsInRange(fromIso,toIso){
     if(fromIso && r.d<fromIso)return false;
     if(toIso && r.d>toIso)return false;
     if(SELECTED_DIRECTION!=='all' && normalizeDirection(r.direction)!==SELECTED_DIRECTION)return false;
+    if(!recordMatchesCampaign(r))return false;
     return true;
   });
 }
@@ -2154,7 +2242,7 @@ function paintManagementBrief(){
   }
   const cbPct=pctBrief(cur.callbacks,cur.n),hotPct=pctBrief(cur.hot,cur.n);
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
-  if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
+  if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
   const hasPrev=prev.length>0;
   // Bifurcate by direction so a leader can see the inbound/outbound mix behind each headline number
   // without having to flip the All/Inbound/Outbound toggle -- only meaningful in the "All calls" view,
@@ -2163,19 +2251,20 @@ function paintManagementBrief(){
   const curIn=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='inbound')):null;
   const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
   const kpiDefs=[
-    ['good','Enquiries','n',false,()=>true],
-    ['hot','Callbacks','callbacks',false,r=>r.callback],
-    ['neut','Priority prospects','hot',false,r=>r.leadTemp==='Hot'],
-    ['good','AI confidence','avgConf',true,()=>true],
-    ['neut','Attention signals','friction',false,r=>r.frustrated]
+    ['good','Enquiries','n','count',()=>true],
+    ['good','Unique leads','unique','ratio',()=>true],
+    ['hot','Callbacks','callbacks','ratio',r=>r.callback],
+    ['hot','Hot leads','hot','ratio',r=>r.leadTemp==='Hot'],
+    ['good','AI confidence','avgConf','percent',()=>true],
+    ['neut','Attention signals','friction','ratio',r=>r.frustrated]
   ];
-  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,isPct,pred])=>{
+  if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,format,pred])=>{
     const val=cur[key],prevVal=old[key];
-    const fmt=n=>isPct?n+'%':n;
+    const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
-    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key])} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key])} out</div>`:'';
+    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key],curIn)} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key],curOut)} out</div>`:'';
     return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
   }).join('');
   window.__briefRecs=recs;
@@ -2198,7 +2287,7 @@ function boot(){
   // Backup all records for filtering
   ALL_RECORDS_BACKUP=[...RECORDS];
   FILTERED_RECORDS=[...RECORDS];
-  
+
   // Set date filter defaults
   $("filterFromDate").value=dmin;
   $("filterToDate").value=dmax;
@@ -2235,7 +2324,7 @@ function paintHealth(o){
     <circle cx="85" cy="85" r="${R}" fill="none" stroke="${col}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${val}" style="transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1)"/></g>
     <text x="85" y="83" text-anchor="middle" fill="${C.cream}" font-family="Source Serif 4" font-size="42" font-weight="900">${s}</text>
     <text x="85" y="105" text-anchor="middle" fill="${C.muted}" font-family="Inter" font-size="10">QUALITY</text></svg>`;
-  $("heroText").innerHTML=`<h3>Summary</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:680px;margin-top:8px">A leadership view of demand, conversion quality, AI confidence, and follow-up priorities. This score blends priority-prospect conversion (${o.n?Math.round(o.hot/o.n*100):0}%), AI confidence (${Math.round(o.avgConf)}%), and quality pass rate (${o.n?Math.round(o.green/o.n*100):0}%).</p>`;
+  $("heroText").innerHTML=`<h3>Quality signal</h3><div class="verdict">${verdict}</div><p style="color:var(--muted);font-size:14px;max-width:680px;margin-top:8px">Composite of priority-prospect conversion (${o.n?Math.round(o.hot/o.n*100):0}%), AI confidence (${Math.round(o.avgConf)}%), and quality pass rate (${o.n?Math.round(o.green/o.n*100):0}%).</p>`;
 }
 
 function paintKPIs(o){
@@ -2315,8 +2404,20 @@ function showKpiPanel(title,bodyHtml,rows){
   window.__panelRows=Array.isArray(rows)?rows:[];
   const btn=$("kpiPanelExport");
   if(btn)btn.style.display=window.__panelRows.length?'inline-flex':'none';
+  const ledgerBtn=$("kpiPanelLedger");
+  if(ledgerBtn)ledgerBtn.style.display=window.__panelRows.length?'inline-flex':'none';
   $("kpiOverlay").style.display='block';
   $("kpiPanel").style.transform='translateX(0)';
+}
+function openPanelInLedger(){
+  const rows=window.__panelRows||[];if(!rows.length)return;
+  LEDGER_SCOPE={title:window.__panelTitle||'Selected records',rows:rows.slice()};
+  closeKpiPanel();clearLedgerFilters(false);renderExplorer(true);scrollToWithStickyOffset($('sec-explorer'),'auto');
+}
+function openProfileInLedger(){
+  const rows=window.__profileCalls||[];if(!rows.length)return;
+  LEDGER_SCOPE={title:`Lead ${maskPhone(rows[0].from)}`,rows:rows.slice()};
+  closeUserSearch();clearLedgerFilters(false);renderExplorer(true);scrollToWithStickyOffset($('sec-explorer'),'auto');
 }
 function statsGridHtml(stats){
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">${stats.map(s=>`<div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:12px"><div style="font-size:20px;font-weight:800;font-family:'Source Serif 4',serif;color:var(--teal)">${s[1]}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(String(s[0]))}</div></div>`).join("")}</div>`;
@@ -2339,7 +2440,8 @@ function defaultDrillStats(rows){
   if(!n)return[["Matching calls",0]];
   const avgConf=Math.round(rows.reduce((a,r)=>a+r.conf,0)/n);
   const avgNeed=Math.round(rows.reduce((a,r)=>a+r.need,0)/n);
-  return[["Matching calls",n],["Avg confidence",avgConf+"%"],["Avg need",avgNeed],["Hot leads",rows.filter(r=>r.leadTemp==="Hot").length],["Callbacks",rows.filter(r=>r.callback).length],["International",rows.filter(r=>classifyPhone(r.from).intl).length]];
+  const ratio=v=>`${v} (${percentOf(v,n)}%)`,hot=rows.filter(r=>r.leadTemp==="Hot").length,callbacks=rows.filter(r=>r.callback).length,intl=rows.filter(r=>classifyPhone(r.from).intl).length;
+  return[["Matching calls",n],["Avg confidence",avgConf+"%"],["Avg need",avgNeed],["Hot leads",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
 }
 // The one function nearly every chart/bar/KPI across the dashboard calls on click: filter down to the
 // exact calls behind a number and show them. baseRows defaults to the current filtered view (RECORDS);
@@ -2361,21 +2463,23 @@ function openKpiPanel(key){
   // Stat blocks per key
   if(key==="all"){
     const mins=sumBilledMinutes(RECORDS);
-    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Hot",RECORDS.filter(r=>r.leadTemp==="Hot").length],["Frustrated",RECORDS.filter(r=>r.frustrated).length],["Callbacks",RECORDS.filter(r=>r.callback).length],["International",RECORDS.filter(r=>classifyPhone(r.from).intl).length]];
+    const ratio=v=>`${v} (${percentOf(v,RECORDS.length)}%)`;
+    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Hot",ratio(RECORDS.filter(r=>r.leadTemp==="Hot").length)],["Frustrated",ratio(RECORDS.filter(r=>r.frustrated).length)],["Callbacks",ratio(RECORDS.filter(r=>r.callback).length)],["International",ratio(RECORDS.filter(r=>classifyPhone(r.from).intl).length)]];
   }else if(key==="hot"){
     const h=rows;const avgC=h.length?Math.round(h.reduce((a,r)=>a+r.conf,0)/h.length):0;
-    stats=[["Hot leads",h.length],["% of all calls",Math.round(h.length/n*100)+"%"],["Avg confidence",avgC+"%"],["With callback",h.filter(r=>r.callback).length],["International",h.filter(r=>classifyPhone(r.from).intl).length]];
+    const callbacks=h.filter(r=>r.callback).length,intl=h.filter(r=>classifyPhone(r.from).intl).length;
+    stats=[["Hot leads",`${h.length} (${percentOf(h.length,n)}%)`],["Avg confidence",avgC+"%"],["With callback",`${callbacks} (${percentOf(callbacks,h.length)}%)`],["International",`${intl} (${percentOf(intl,h.length)}%)`]];
   }else if(key==="green"){
     stats=[["Green (pass)",RECORDS.filter(r=>r.band==="Green").length],["Amber",RECORDS.filter(r=>r.band==="Amber").length],["Red",RECORDS.filter(r=>r.band==="Red").length],["Pass rate",Math.round(RECORDS.filter(r=>r.band==="Green").length/n*100)+"%"]];
   }else if(key==="geo"){
     const india=RECORDS.filter(r=>!classifyPhone(r.from).intl).length;
     const intl=rows.length;
     const byC={};rows.forEach(r=>{const c=classifyPhone(r.from);byC[c.country]=(byC[c.country]||0)+1;});
-    stats=[["India",india],["International",intl],...Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,v])];
+    stats=[["India",`${india} (${percentOf(india,n)}%)`],["International",`${intl} (${percentOf(intl,n)}%)`],...Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,`${v} (${percentOf(v,intl)}% of international)`])];
   }else if(key==="conf"){
     const cc={low:0,mid:0,high:0};RECORDS.forEach(r=>{cc[r.conf<50?"low":r.conf<80?"mid":"high"]++;});
     const avgC=Math.round(RECORDS.reduce((a,r)=>a+r.conf,0)/n);
-    stats=[["Avg confidence",avgC+"%"],["High (≥80%)",cc.high],["Mid (50-79%)",cc.mid],["Low (<50%)",cc.low]];
+    stats=[["Avg confidence",avgC+"%"],["High (≥80%)",`${cc.high} (${percentOf(cc.high,n)}%)`],["Mid (50-79%)",`${cc.mid} (${percentOf(cc.mid,n)}%)`],["Low (<50%)",`${cc.low} (${percentOf(cc.low,n)}%)`]];
   }
 
   const listHtml=key!=="conf"
@@ -2588,7 +2692,8 @@ function paintGeo(o){
   const entries=Object.entries(byCountry).sort((a,b)=>b[1]-a[1]);
   if(!entries.length){$("geoCountries").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No international leads in this range.</div>`;return;}
   const max=Math.max(...entries.map(e=>e[1]),1);
-  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px;cursor:pointer" onclick="openFilteredPanel('${k}',r=>esc(classifyPhone(r.from).country)==='${k}')"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v}</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
+  const intlTotal=entries.reduce((a,[,v])=>a+v,0);
+  $("geoCountries").innerHTML=entries.map(([k,v])=>`<div style="margin-bottom:12px;cursor:pointer" onclick="openFilteredPanel('${k}',r=>esc(classifyPhone(r.from).country)==='${k}')"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${k}</span><b>${v} · ${percentOf(v,intlTotal)}%</b></div><div style="background:#0c121b;border-radius:5px;height:7px"><div style="background:${C.warm};height:100%;width:${v/max*100}%"></div></div></div>`).join("");
 }
 
 function exportGeo(){
@@ -2605,6 +2710,7 @@ function exportGeo(){
 // ===== CALL EXPLORER =====
 const LEDGER_DEFAULT_STATE={search:"",sort:"time_desc",limit:50};
 let LEDGER_STATE={search:"",filters:new Set(),sort:"time_desc",limit:50};
+let LEDGER_SCOPE=null;
 let EXPLORER_LIMIT=LEDGER_STATE.limit;
 const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Callback requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window",serial:"Serial caller"};
 // Chips within a group combine with OR; the groups themselves combine with AND (facet-search semantics),
@@ -2642,7 +2748,9 @@ function toggleLedgerFilter(key){
   updateLedgerState({filters});
 }
 
-function clearLedgerFilters(){
+function clearLedgerScope(render=true){LEDGER_SCOPE=null;if(render)renderExplorer(true);}
+function clearLedgerFilters(clearScope=true){
+  if(clearScope)LEDGER_SCOPE=null;
   LEDGER_STATE={search:"",filters:new Set(),sort:LEDGER_DEFAULT_STATE.sort,limit:LEDGER_DEFAULT_STATE.limit};
   EXPLORER_LIMIT=50;
   syncLedgerControls();
@@ -2743,7 +2851,7 @@ function ledgerMatchesActiveFilters(r){
 function getExplorerRows(){
   const q=String(LEDGER_STATE.search||"").trim().toLowerCase();
   const sort=LEDGER_STATE.sort||"time_desc";
-  let rows=RECORDS.slice().filter(ledgerMatchesActiveFilters);
+  let rows=(LEDGER_SCOPE?.rows||RECORDS).slice().filter(ledgerMatchesActiveFilters);
   if(q){
     const terms=q.split(/\s+/).filter(Boolean);
     rows=rows.filter(r=>{
@@ -2778,11 +2886,12 @@ function updateLedgerChrome(total,shown){
   LEDGER_STATE.filters.forEach(f=>chips.push(ledgerActiveFilterChip(f)));
   chips.push(ledgerChip(LEDGER_SORT_LABELS[LEDGER_STATE.sort]||"Sorted"));
   if(LEDGER_STATE.search.trim())chips.push(ledgerChip(`Search: ${LEDGER_STATE.search.trim()}`,true));
+  if(LEDGER_SCOPE)chips.push(`<span class="ledger-achip ledger-scope-chip">${esc(LEDGER_SCOPE.title)}<b onclick="clearLedgerScope()" role="button" aria-label="Return to all enquiries">&times;</b></span>`);
   chips.push(ledgerChip(currentViewDescription()));
   if($("ledgerActiveChips"))$("ledgerActiveChips").innerHTML=chips.join("");
   const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filters.size||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
   if($("ledgerClearBtn"))$("ledgerClearBtn").style.display=active?"inline-flex":"none";
-  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${RECORDS.length} in selected dashboard view`;
+  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${LEDGER_SCOPE?LEDGER_SCOPE.title:RECORDS.length+' in selected dashboard view'}`;
 }
 function renderExplorer(resetLimit){
   if(!$("explorerList"))return;
@@ -2906,7 +3015,7 @@ function findSerialCallers(records){
 
 function paintHottestLeads(records){
   const byPhone=groupByPhone(records);
-  
+
   const leads=Object.entries(byPhone).map(([ph,calls])=>{
     const hot=calls.filter(c=>c.leadTemp==="Hot").length;
     const warm=calls.filter(c=>c.leadTemp==="Warm").length;
@@ -2915,33 +3024,33 @@ function paintHottestLeads(records){
     const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
     const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
     const totalDur=sumBilledMinutes(calls);
-    
+
     // Lead score: Hot=3, Warm=2, Cold=1 + call frequency + need + confidence
     const leadScore=(hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2;
-    
+
     const intents={};
     calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
     const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
-    
+
     return{phone:ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",calls:calls.sort((a,b)=>b.ts-a.ts)};
   }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
-  
+
   if(!leads.length){$("hottestLeads").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No leads found.</div>";return;}
   window.HOTTEST_LEADS=leads;
-  
+
   $("hottestLeads").innerHTML=leads.map((l,i)=>{
     let typeEmoji="Cold",typeCol="var(--cold)";
     if(l.hot>=Math.ceil(l.total*0.6)){typeEmoji="Hot";typeCol="var(--hot)";}
     else if(l.hot>=Math.ceil(l.total*0.3)){typeEmoji="Warm";typeCol="var(--warm)";}
-    
+
     return`<div style="padding:14px;background:#f8fafc;border-radius:8px;border:1px solid var(--line);cursor:pointer;transition:.2s" onclick="markProfileSource(this);openLeadProfile(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
         <b style="font-family:'Inter',monospace;font-size:12px">${esc(maskPhone(l.phone))}</b>
         <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
-        <div><b>Lead:</b> ${typeEmoji} ${l.hot}H|${l.warm}W|${l.cold}C</div>
-        <div><b>Calls:</b> ${l.total} (${l.frustrated} attention)</div>
+        <div><b>Lead:</b> ${typeEmoji} ${l.hot}H (${percentOf(l.hot,l.total)}%) | ${l.warm}W (${percentOf(l.warm,l.total)}%) | ${l.cold}C (${percentOf(l.cold,l.total)}%)</div>
+        <div><b>Calls:</b> ${l.total} (${l.frustrated} attention · ${percentOf(l.frustrated,l.total)}%)</div>
         <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
         <div><b>Avg Conf:</b> ${l.avgConf}%</div>
         <div><b>Avg Need:</b> ${l.avgNeed}</div>
@@ -2964,7 +3073,7 @@ function openLeadProfile(i){
 function paintSerialCallers(records){
   const serial=findSerialCallers(records);
   if(!serial.length){$("serialCallers").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No serial engagers (3+ calls).</div>";return;}
-  
+
   $("serialCallers").innerHTML=serial.map((s,i)=>`
     <div class="drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="markProfileSource(this);showSerialTimeline(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
@@ -2972,8 +3081,8 @@ function paintSerialCallers(records){
         <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${s.total} calls</span>
       </div>
       <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-        <div><b style="color:var(--hot)">${s.frustrated}</b> attention</div>
-        <div><b style="color:var(--green)">${s.general}</b> general</div>
+        <div><b style="color:var(--hot)">${s.frustrated}</b> attention (${percentOf(s.frustrated,s.total)}%)</div>
+        <div><b style="color:var(--green)">${s.general}</b> general (${percentOf(s.general,s.total)}%)</div>
         <div style="grid-column:1/-1"><b style="color:var(--teal)">${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
       </div>
       ${directionMix(s.calls)}
@@ -2986,8 +3095,6 @@ function paintSerialCallers(records){
 function showSerialTimeline(idx){
   const s=window.SERIAL_CALLERS&&window.SERIAL_CALLERS[idx];
   if(!s)return;
-  const legacyTimeline=$('timelinePanel');
-  if(legacyTimeline)legacyTimeline.style.display='none';
   openProfileForPhone(s.phone,'repeat');
   const drawer=$('userSearchResult');
   if(drawer){
@@ -3036,7 +3143,7 @@ function exportHottestLeads(){
     const lastCall=calls.sort((a,b)=>b.ts-a.ts)[0];
     return{ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",lastCallTime:formatCallTime(lastCall),lastSummary:lastCall.summary};
   }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
-  
+
   let csv='Phone,Direction Mix,Total Calls,Hot,Warm,Cold,Frustrated,Avg Confidence %,Avg Need Score,Total Duration (mins),Lead Score,Top Intent,Last Call Time,Last Summary\n';
   leads.forEach(l=>{csv+=`${fullPhone(l.ph)},${escCSV(directionMixText(groupByPhone(RECORDS)[l.ph]||[]))},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
   downloadCSV('hottest_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
