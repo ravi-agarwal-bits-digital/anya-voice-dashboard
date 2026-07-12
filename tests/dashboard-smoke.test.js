@@ -94,7 +94,7 @@ for (const fn of [
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'organizeDashboardWorkspaces', 'setDashboardWorkspaceTab', 'activateDashboardWorkspace',
-  'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV'
+  'handleWorkspaceTabKey', 'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -171,6 +171,10 @@ const drawerCSV = context.recordsToCSV([{
 }]);
 assert(drawerCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(drawerCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
+assert(scripts[1].includes("appendWorkspaceSections(overview,'summary',['sec-brief','sec-anomaly','sec-direction'])"), 'Overview must not duplicate summary layers');
+assert(scripts[1].includes('integrated.appendChild(hero)'), 'Quality signal must be integrated into Management Summary');
+assert(!scripts[1].includes('["neut",o.n,"Total enquiries","all"]'), 'Total enquiries must not be repeated below Management Summary');
+assert(scripts[1].includes('role="tab"') && scripts[1].includes('aria-selected='), 'Workspace tabs must expose accessible state');
 
 const overview = XLSX.utils.aoa_to_sheet([['Overview'], ['Not call data']]);
 const voiceRows = [
