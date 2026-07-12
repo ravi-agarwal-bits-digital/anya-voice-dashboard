@@ -36,7 +36,9 @@ for (const path of [
 
 for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
-  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief'
+  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief',
+  'btn-today', 'btn-yesterday', 'btn-week', 'btn-month', 'btn-all', 'btn-custom',
+  'filterFromDate', 'filterToDate', 'openMgmtSummaryBtn', 'kpiPanelExport', 'profileExport'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
 }
@@ -90,7 +92,9 @@ for (const fn of [
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
-  'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes'
+  'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
+  'organizeDashboardWorkspaces', 'setDashboardWorkspaceTab', 'activateDashboardWorkspace',
+  'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -154,6 +158,19 @@ assert.equal(context.sumBilledMinutes([
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
 assert(scripts[1].includes('id="cbShowMore" role="button" tabindex="0" onkeydown='), 'Callback pagination must be keyboard accessible');
+for (const workspace of ['overview', 'action', 'intelligence', 'outbound', 'records']) {
+  assert(scripts[1].includes(`${workspace}:{label:`), `Missing ${workspace} workspace navigation definition`);
+  assert(scripts[1].includes(`workspaceTemplate('${workspace}'`), `Missing ${workspace} workspace layout`);
+}
+assert(html.includes('id="kpiPanelExport" onclick="exportPanelCSV()"'), 'Drill-down drawer CSV action is missing');
+assert(html.includes('id="profileExport" onclick="exportProfileCSV()"'), 'Profile drawer CSV action is missing');
+const drawerCSV = context.recordsToCSV([{
+  from: '919999999999', direction: 'inbound', d: '2026-07-10', h: 10, m: 30, dur: 75,
+  leadTemp: 'Hot', band: 'Green', intent: 'Eligibility', conf: 90, need: 80,
+  frustrated: false, callback: true, status: 'completed', summary: 'Synthetic export'
+}]);
+assert(drawerCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
+assert(drawerCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 
 const overview = XLSX.utils.aoa_to_sheet([['Overview'], ['Not call data']]);
 const voiceRows = [
