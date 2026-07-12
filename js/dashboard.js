@@ -28,57 +28,94 @@ function toggleSideGroup(group){
   group.classList.toggle('open');
 }
 
+const DASHBOARD_WORKSPACES={
+  overview:{label:'Overview',icon:'<path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path>'},
+  action:{label:'Action Center',icon:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path>'},
+  intelligence:{label:'Intelligence',icon:'<path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path>'},
+  outbound:{label:'Outbound',icon:'<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle>'},
+  records:{label:'Records',icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path>'}
+};
+let ACTIVE_WORKSPACE='overview';
+function renderWorkspaceNavigation(){
+  const nav=document.querySelector('.side-nav');
+  if(!nav)return;
+  nav.innerHTML=`<div class="side-group open" data-group="workspace"><button type="button" class="side-group-label"><span>Dashboard workspace</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button><div class="side-group-links">${Object.entries(DASHBOARD_WORKSPACES).map(([id,w])=>`<a class="side-link${id==='overview'?' active':''}" href="#workspace-${id}" data-workspace="${id}"><span class="side-icon"><svg viewBox="0 0 24 24">${w.icon}</svg></span><span>${w.label}</span></a>`).join('')}</div></div>`;
+}
+function workspaceTemplate(id,title,description,tabs){
+  const view=document.createElement('div');
+  view.id=`workspace-${id}`;
+  view.className='dashboard-workspace-view';
+  view.dataset.workspace=id;
+  view.innerHTML=`<div class="workspace-heading"><div><div class="workspace-eyebrow">Anya workspace</div><h2>${title}</h2><p>${description}</p></div>${tabs.length>1?`<div class="workspace-tabs" role="tablist">${tabs.map((tab,i)=>`<button type="button" class="workspace-tab${i===0?' active':''}" data-workspace-tab="${tab.id}" onclick="setDashboardWorkspaceTab('${id}','${tab.id}')">${tab.label}</button>`).join('')}</div>`:''}</div><div class="workspace-panes">${tabs.map((tab,i)=>`<div class="workspace-pane${i===0?' active':''}" data-workspace-pane="${tab.id}"></div>`).join('')}</div>`;
+  return view;
+}
+function appendWorkspaceSections(view,paneId,ids){
+  const pane=view.querySelector(`[data-workspace-pane="${paneId}"]`);
+  ids.forEach(id=>{const el=document.getElementById(id);if(el)pane.appendChild(el);});
+}
+function organizeDashboardWorkspaces(){
+  if(document.getElementById('workspace-overview'))return;
+  const report=document.getElementById('reportView'),hero=document.getElementById('sec-overview');
+  if(!report||!hero)return;
+  renderWorkspaceNavigation();
+  const overview=workspaceTemplate('overview','Management Overview','The decision-ready summary, key movements and call-flow context for the active global filters.',[{id:'summary',label:'Summary'}]);
+  const action=workspaceTemplate('action','Action Center','Callbacks, priority prospects, repeat callers and friction that require human action.',[{id:'callbacks',label:'Callbacks'},{id:'prospects',label:'Priority & repeat'},{id:'friction',label:'Friction'}]);
+  const intelligence=workspaceTemplate('intelligence','Demand Intelligence','Conversion, quality, themes, trends and geography organised as focused analytical lenses.',[{id:'conversion',label:'Conversion'},{id:'quality',label:'Quality'},{id:'themes',label:'Themes'},{id:'trends',label:'Trends & geography'}]);
+  const outbound=workspaceTemplate('outbound','Outbound Operations','Performance, cadence, capacity and campaign analysis in one specialist workspace.',[{id:'performance',label:'Performance'},{id:'cadence',label:'Cadence & capacity'},{id:'campaigns',label:'Campaigns'}]);
+  const records=workspaceTemplate('records','Records & Investigation','Search, filter, drill into and export the complete enquiry ledger.',[{id:'ledger',label:'Ledger'}]);
+  hero.before(overview,action,intelligence,outbound,records);
+  appendWorkspaceSections(overview,'summary',['sec-brief','sec-overview','kpis','sec-anomaly','sec-direction']);
+  appendWorkspaceSections(action,'callbacks',['sec-callbacks']);
+  appendWorkspaceSections(action,'prospects',['sec-hottest']);
+  appendWorkspaceSections(action,'friction',['sec-friction']);
+  appendWorkspaceSections(intelligence,'conversion',['sec-conversion']);
+  appendWorkspaceSections(intelligence,'quality',['sec-perf']);
+  appendWorkspaceSections(intelligence,'themes',['sec-themes']);
+  appendWorkspaceSections(intelligence,'trends',['sec-volume','sec-geo']);
+  appendWorkspaceSections(outbound,'performance',['sec-outbound-perf','sec-outbound-perf-hidden']);
+  appendWorkspaceSections(outbound,'cadence',['sec-outbound-cadence','sec-outbound-cadence-hidden']);
+  appendWorkspaceSections(outbound,'campaigns',['sec-campaigns','sec-campaigns-hidden']);
+  appendWorkspaceSections(records,'ledger',['sec-explorer']);
+  activateDashboardWorkspace('overview',false);
+}
+function setDashboardWorkspaceTab(workspace,paneId){
+  const view=document.getElementById(`workspace-${workspace}`);
+  if(!view)return;
+  view.querySelectorAll('.workspace-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.workspaceTab===paneId));
+  view.querySelectorAll('.workspace-pane').forEach(pane=>pane.classList.toggle('active',pane.dataset.workspacePane===paneId));
+}
+function workspaceForTarget(id){
+  if(String(id||'').startsWith('workspace-'))return String(id).slice(10);
+  const el=document.getElementById(id);
+  return el?.closest('.dashboard-workspace-view')?.dataset.workspace||'overview';
+}
+function activateDashboardWorkspace(id,scroll=true){
+  if(!DASHBOARD_WORKSPACES[id])id='overview';
+  ACTIVE_WORKSPACE=id;
+  document.body.dataset.dashboardWorkspace=id;
+  document.querySelectorAll('.dashboard-workspace-view').forEach(view=>view.classList.toggle('active',view.dataset.workspace===id));
+  document.querySelectorAll('.side-link[data-workspace]').forEach(link=>link.classList.toggle('active',link.dataset.workspace===id));
+  if(scroll){const view=document.getElementById(`workspace-${id}`);if(view)scrollToWithStickyOffset(view,'auto');}
+}
+
 function syncSidebarActive(forceId){
-  const links=[...document.querySelectorAll('.side-link')];
-  if(!links.length)return;
-  const setActive=(id)=>{
-    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
-    const summaryBtn=$('openMgmtSummaryBtn');
-    if(summaryBtn)summaryBtn.classList.toggle('active',id==='sec-brief');
-    // Highlight the group that owns the active section, so location is clear even when the
-    // group is collapsed (its links are hidden).
-    document.querySelectorAll('.side-group').forEach(g=>{
-      const lbl=g.querySelector('.side-group-label');
-      if(lbl)lbl.classList.toggle('active-group',!!g.querySelector('.side-link[href="#'+id+'"]'));
-    });
-    const activeLink=document.querySelector('.side-link[href="#'+id+'"]');
-    const activeGroup=activeLink&&activeLink.closest('.side-group');
-    if(activeGroup)activeGroup.classList.add('open');
-  };
-  if(forceId){setActive(forceId);return;}
-  const report=document.getElementById('reportView');
-  if(!report || report.offsetParent===null){setActive('sec-overview');return;}
-  const targets=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
-  if(window.scrollY<80){setActive('sec-overview');return;}
-  let best='sec-overview', bestDist=Infinity;
-  for(const el of targets){
-    const rect=el.getBoundingClientRect();
-    // A section that has fully scrolled past (bottom at/above the viewport top) must not stay
-    // "closest" just because nothing else has come into range yet -- several sections between the
-    // linked ones (e.g. Call Flow Overview, Outbound Connect Performance) have no sidebar link of
-    // their own, so without this guard the last linked section above them stays stuck highlighted
-    // for the entire scroll distance through that unlinked stretch.
-    if(rect.bottom<=0)continue;
-    const dist=Math.abs(rect.top-135);
-    if(rect.top<=220 && dist<bestDist){bestDist=dist;best=el.id;}
-  }
-  setActive(best);
+  const workspace=forceId?workspaceForTarget(forceId):ACTIVE_WORKSPACE;
+  document.querySelectorAll('.side-link[data-workspace]').forEach(link=>link.classList.toggle('active',link.dataset.workspace===workspace));
+  const summaryBtn=$('openMgmtSummaryBtn');
+  if(summaryBtn)summaryBtn.classList.toggle('active',workspace==='overview'&&isManagementSummaryVisible());
 }
 window.addEventListener('DOMContentLoaded',()=>{
+  organizeDashboardWorkspaces();
   const links=[...document.querySelectorAll('.side-link')];
   links.forEach(a=>a.addEventListener('click',e=>{
-    const el=document.querySelector(a.getAttribute('href'));
-    if(el){
-      e.preventDefault();
-      scrollToWithStickyOffset(el);
-      syncSidebarActive(el.id);
-    }
+    if(!a.dataset.workspace)return;
+    e.preventDefault();
+    activateDashboardWorkspace(a.dataset.workspace);
   }));
   document.querySelectorAll('.side-group-label').forEach(lbl=>{
     lbl.addEventListener('click',()=>{const g=lbl.closest('.side-group');if(g)toggleSideGroup(g);});
   });
-  // Throttle scroll/resize work to one update per animation frame -- syncSidebarActive reads
-  // layout for every section, so running it on every raw scroll event caused jank.
+  // Throttle responsive navigation updates to one update per animation frame.
   let viewportTicking=false;
   const onViewportChange=()=>{
     if(viewportTicking)return;
@@ -399,6 +436,7 @@ function isManagementSummaryVisible(){
 function focusManagementSummary(){
   const el=$('sec-brief');
   if(!el)return;
+  activateDashboardWorkspace('overview',false);
   scrollToWithStickyOffset(el);
   syncSidebarActive('sec-brief');
   const btn=$('openMgmtSummaryBtn');
@@ -2269,6 +2307,10 @@ function paintKPIs(o){
 function jumpToSection(id){
   const el=document.getElementById(id);
   if(!el)return;
+  const workspace=workspaceForTarget(id);
+  activateDashboardWorkspace(workspace,false);
+  const pane=el.closest('.workspace-pane');
+  if(pane)setDashboardWorkspaceTab(workspace,pane.dataset.workspacePane);
   scrollToWithStickyOffset(el);
   el.style.transition='box-shadow .3s';
   el.style.boxShadow='0 0 0 3px rgba(176,138,60,.26)';
