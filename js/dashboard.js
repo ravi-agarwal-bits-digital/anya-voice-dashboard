@@ -46,7 +46,7 @@ function workspaceTemplate(id,title,description,tabs){
   view.id=`workspace-${id}`;
   view.className='dashboard-workspace-view';
   view.dataset.workspace=id;
-  view.innerHTML=`<div class="workspace-heading"><div><div class="workspace-eyebrow">Anya workspace</div><h2>${title}</h2><p>${description}</p></div>${tabs.length>1?`<div class="workspace-tabs" role="tablist" aria-label="${title} views">${tabs.map((tab,i)=>`<button type="button" role="tab" id="workspace-${id}-tab-${tab.id}" aria-controls="workspace-${id}-pane-${tab.id}" aria-selected="${i===0?'true':'false'}" tabindex="${i===0?'0':'-1'}" class="workspace-tab${i===0?' active':''}" data-workspace-tab="${tab.id}" onclick="setDashboardWorkspaceTab('${id}','${tab.id}')" onkeydown="handleWorkspaceTabKey(event,'${id}')">${tab.label}</button>`).join('')}</div>`:''}</div><div class="workspace-panes">${tabs.map((tab,i)=>`<div role="tabpanel" id="workspace-${id}-pane-${tab.id}" aria-labelledby="workspace-${id}-tab-${tab.id}" class="workspace-pane${i===0?' active':''}" data-workspace-pane="${tab.id}"></div>`).join('')}</div>`;
+  view.innerHTML=`<div class="workspace-heading"><div><div class="workspace-eyebrow">Anya workspace</div><h2>${title}</h2><p>${description}</p></div>${tabs.length>1?`<div class="workspace-tabs" role="tablist" aria-label="${title} views">${tabs.map((tab,i)=>`<button type="button" role="tab" id="workspace-${id}-tab-${tab.id}" aria-controls="workspace-${id}-pane-${tab.id}" aria-selected="${i===0?'true':'false'}" tabindex="${i===0?'0':'-1'}" class="workspace-tab${i===0?' active':''}" data-workspace-tab="${tab.id}" onclick="setDashboardWorkspaceTab('${id}','${tab.id}')" onkeydown="handleWorkspaceTabKey(event,'${id}')"><span>${tab.label}</span><span class="workspace-tab-count" hidden></span></button>`).join('')}</div>`:''}</div><div class="workspace-panes">${tabs.map((tab,i)=>`<div role="tabpanel" id="workspace-${id}-pane-${tab.id}" aria-labelledby="workspace-${id}-tab-${tab.id}" class="workspace-pane${i===0?' active':''}" data-workspace-pane="${tab.id}"></div>`).join('')}</div>`;
   return view;
 }
 function appendWorkspaceSections(view,paneId,ids){
@@ -76,18 +76,11 @@ function organizeDashboardWorkspaces(){
   appendWorkspaceSections(outbound,'cadence',['sec-outbound-cadence','sec-outbound-cadence-hidden']);
   appendWorkspaceSections(outbound,'campaigns',['sec-campaigns','sec-campaigns-hidden']);
   appendWorkspaceSections(records,'ledger',['sec-explorer']);
-  const briefCover=document.querySelector('#sec-brief .brief-cover');
-  if(briefCover){
-    const integrated=document.createElement('div');
-    integrated.className='management-summary-integrated';
-    const operational=document.createElement('div');
-    operational.className='management-operational-context';
-    operational.innerHTML='<div class="management-context-label">Operational context</div>';
-    integrated.appendChild(hero);
-    const kpis=document.getElementById('kpis');
-    if(kpis){operational.appendChild(kpis);integrated.appendChild(operational);}
-    briefCover.appendChild(integrated);
-  }
+  // Their useful signals are rendered in briefKpis; keep these paint targets available but do not
+  // repeat two large visual sections beneath the same Management Summary.
+  hero.classList.add('summary-source-only');
+  const kpis=document.getElementById('kpis');if(kpis)kpis.classList.add('summary-source-only');
+  overview.querySelector('[data-workspace-pane="summary"]').append(hero,...(kpis?[kpis]:[]));
   activateDashboardWorkspace('overview',false);
 }
 function setDashboardWorkspaceTab(workspace,paneId){
@@ -95,6 +88,21 @@ function setDashboardWorkspaceTab(workspace,paneId){
   if(!view)return;
   view.querySelectorAll('.workspace-tab').forEach(btn=>{const active=btn.dataset.workspaceTab===paneId;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',active?'true':'false');btn.tabIndex=active?0:-1;});
   view.querySelectorAll('.workspace-pane').forEach(pane=>pane.classList.toggle('active',pane.dataset.workspacePane===paneId));
+}
+function updateWorkspaceOperationalState(){
+  const counts={callbacks:RECORDS.filter(r=>r.callback).length,friction:RECORDS.filter(r=>r.frustrated).length};
+  const phoneCounts=new Map(),priority=new Set();
+  RECORDS.forEach(r=>{const key=ledgerPhoneKey(r);if(key)phoneCounts.set(key,(phoneCounts.get(key)||0)+1);});
+  RECORDS.forEach((r,i)=>{const key=ledgerPhoneKey(r)||`record-${i}`;if(r.leadTemp==='Hot'||(phoneCounts.get(key)||0)>=3)priority.add(key);});
+  counts.prospects=priority.size;
+  document.querySelectorAll('#workspace-action .workspace-tab').forEach(btn=>{const badge=btn.querySelector('.workspace-tab-count');if(!badge)return;badge.textContent=String(counts[btn.dataset.workspaceTab]||0);badge.hidden=false;});
+  document.querySelectorAll('.dashboard-workspace-view').forEach(view=>{
+    const selected=view.querySelector('.workspace-tab[aria-selected="true"]')||view.querySelector('.workspace-tab.active')||view.querySelector('.workspace-tab');
+    if(selected)setDashboardWorkspaceTab(view.dataset.workspace,selected.dataset.workspaceTab);
+    let empty=view.querySelector('.workspace-empty-guidance');
+    if(!empty){empty=document.createElement('div');empty.className='workspace-empty-guidance';empty.innerHTML='<b>No records match this view.</b> Try All calls or widen the date range.';view.querySelector('.workspace-panes')?.prepend(empty);}
+    empty.hidden=RECORDS.length!==0;
+  });
 }
 function handleWorkspaceTabKey(event,workspace){
   if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
@@ -219,6 +227,7 @@ const DATA_FETCH_TIMEOUT_MS=180000;
 
 function autoLoadLatestExcel(){
   setDashboardLoading();
+  loadPublicationFreshness();
 
   // Revalidate on every visit, but allow the browser to reuse the encrypted body when unchanged.
   // `no-store` forced the full and continually-growing workbook to download on every page load.
@@ -256,6 +265,17 @@ function autoLoadLatestExcel(){
           : 'No voice export was found at <b>data/voice_analytics.xlsx</b>.<br><br>Once the Excel file is published in that path, this dashboard will load it automatically.'
       );
     });
+}
+function loadPublicationFreshness(){
+  fetchWithTimeout('data/voice_analytics.xlsx.meta.json',{cache:'no-cache'},10000)
+    .then(r=>r.ok?r.json():Promise.reject(new Error('Metadata unavailable')))
+    .then(meta=>{
+      const el=$('publicationFreshness'),raw=meta.publishedAt||meta.published_at||meta.generatedAt;
+      const date=raw?new Date(raw):null;
+      if(!el||!date||Number.isNaN(date.getTime()))return;
+      el.textContent=`Published ${new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(date)}`;
+      el.title=`Latest dataset published ${date.toLocaleString('en-IN')}`;
+    }).catch(()=>{});
 }
 
 // ===== AES-256-GCM decryption (matches admin encryption) =====
@@ -523,6 +543,8 @@ function applyFilters(){
   
   RECORDS=FILTERED_RECORDS;
   invalidateLedgerRepeatCache();
+  clearLedgerScope(false);
+  updateWorkspaceOperationalState();
   // Rebuild meta pills for the current filtered set (or honest empty-state)
   if(RECORDS.length===0){
     $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
@@ -574,6 +596,7 @@ function searchUserByMobile(mobile, source="search"){
   const userCalls=ALL_RECORDS_BACKUP.filter(r=>recordMatchesCurrentFilters(r)&&String(r.from||"").includes(mobile)).sort((a,b)=>b.ts-a.ts);
   window.__profileCalls=userCalls;
   const pexp=$("profileExport"); if(pexp)pexp.style.display=userCalls.length?'inline-flex':'none';
+  const pledger=$("profileLedger"); if(pledger)pledger.style.display=userCalls.length?'inline-flex':'none';
   if(!userCalls.length){
     $("userSearchResult").style.display="block";
     $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">No calls found for "${esc(mobile)}"</span>`;
@@ -1213,7 +1236,9 @@ function directionStats(dir){
   const green=recs.filter(r=>r.band==='Green').length;
   const avgDurSec=recs.reduce((a,r)=>a+r.dur,0)/n;
   const avgConf=recs.reduce((a,r)=>a+r.conf,0)/n;
-  return{n,connectPct:Math.round(connected/n*100),hotPct:Math.round(hot/n*100),avgDurSec,avgConf:Math.round(avgConf),greenPct:Math.round(green/n*100)};
+  const unique=new Set(recs.map(ledgerPhoneKey).filter(Boolean)).size;
+  const callbacks=recs.filter(r=>r.callback).length;
+  return{n,unique,callbacks,callbackPct:Math.round(callbacks/n*100),connectPct:Math.round(connected/n*100),hotPct:Math.round(hot/n*100),avgDurSec,avgConf:Math.round(avgConf),greenPct:Math.round(green/n*100)};
 }
 function paintDirectionCompare(){
   const el=$('dirCompareTable');
@@ -1225,6 +1250,8 @@ function paintDirectionCompare(){
   // Connect/answer rate intentionally lives in the dedicated outbound section (dial-level), not here --
   // these rows compare connected conversations, where a "connect rate" would trivially be ~100% both sides.
   const rows=[
+    ['Unique people',`${ib.unique} callers`,`${ob.unique} leads dialled`,'()=>true'],
+    ['Callback requests',`${ib.callbacks} (${ib.callbackPct}%)`,`${ob.callbacks} (${ob.callbackPct}%)`,'r=>r.callback'],
     ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%',"r=>r.leadTemp==='Hot'"],
     ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec),'()=>true'],
     ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
@@ -2214,7 +2241,7 @@ function paintManagementBrief(){
   }
   const cbPct=pctBrief(cur.callbacks,cur.n),hotPct=pctBrief(cur.hot,cur.n);
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
-  if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
+  if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
   const hasPrev=prev.length>0;
   // Bifurcate by direction so a leader can see the inbound/outbound mix behind each headline number
   // without having to flip the All/Inbound/Outbound toggle -- only meaningful in the "All calls" view,
@@ -2258,6 +2285,7 @@ function boot(){
   // Backup all records for filtering
   ALL_RECORDS_BACKUP=[...RECORDS];
   FILTERED_RECORDS=[...RECORDS];
+  updateWorkspaceOperationalState();
   
   // Set date filter defaults
   $("filterFromDate").value=dmin;
@@ -2375,8 +2403,20 @@ function showKpiPanel(title,bodyHtml,rows){
   window.__panelRows=Array.isArray(rows)?rows:[];
   const btn=$("kpiPanelExport");
   if(btn)btn.style.display=window.__panelRows.length?'inline-flex':'none';
+  const ledgerBtn=$("kpiPanelLedger");
+  if(ledgerBtn)ledgerBtn.style.display=window.__panelRows.length?'inline-flex':'none';
   $("kpiOverlay").style.display='block';
   $("kpiPanel").style.transform='translateX(0)';
+}
+function openPanelInLedger(){
+  const rows=window.__panelRows||[];if(!rows.length)return;
+  LEDGER_SCOPE={title:window.__panelTitle||'Selected records',rows:rows.slice()};
+  closeKpiPanel();activateDashboardWorkspace('records',false);clearLedgerFilters(false);renderExplorer(true);scrollToWithStickyOffset($('sec-explorer'),'auto');
+}
+function openProfileInLedger(){
+  const rows=window.__profileCalls||[];if(!rows.length)return;
+  LEDGER_SCOPE={title:`Lead ${maskPhone(rows[0].from)}`,rows:rows.slice()};
+  closeUserSearch();activateDashboardWorkspace('records',false);clearLedgerFilters(false);renderExplorer(true);scrollToWithStickyOffset($('sec-explorer'),'auto');
 }
 function statsGridHtml(stats){
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">${stats.map(s=>`<div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:12px"><div style="font-size:20px;font-weight:800;font-family:'Source Serif 4',serif;color:var(--teal)">${s[1]}</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(String(s[0]))}</div></div>`).join("")}</div>`;
@@ -2665,6 +2705,7 @@ function exportGeo(){
 // ===== CALL EXPLORER =====
 const LEDGER_DEFAULT_STATE={search:"",sort:"time_desc",limit:50};
 let LEDGER_STATE={search:"",filters:new Set(),sort:"time_desc",limit:50};
+let LEDGER_SCOPE=null;
 let EXPLORER_LIMIT=LEDGER_STATE.limit;
 const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Callback requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window",serial:"Serial caller"};
 // Chips within a group combine with OR; the groups themselves combine with AND (facet-search semantics),
@@ -2702,7 +2743,9 @@ function toggleLedgerFilter(key){
   updateLedgerState({filters});
 }
 
-function clearLedgerFilters(){
+function clearLedgerScope(render=true){LEDGER_SCOPE=null;if(render)renderExplorer(true);}
+function clearLedgerFilters(clearScope=true){
+  if(clearScope)LEDGER_SCOPE=null;
   LEDGER_STATE={search:"",filters:new Set(),sort:LEDGER_DEFAULT_STATE.sort,limit:LEDGER_DEFAULT_STATE.limit};
   EXPLORER_LIMIT=50;
   syncLedgerControls();
@@ -2803,7 +2846,7 @@ function ledgerMatchesActiveFilters(r){
 function getExplorerRows(){
   const q=String(LEDGER_STATE.search||"").trim().toLowerCase();
   const sort=LEDGER_STATE.sort||"time_desc";
-  let rows=RECORDS.slice().filter(ledgerMatchesActiveFilters);
+  let rows=(LEDGER_SCOPE?.rows||RECORDS).slice().filter(ledgerMatchesActiveFilters);
   if(q){
     const terms=q.split(/\s+/).filter(Boolean);
     rows=rows.filter(r=>{
@@ -2838,11 +2881,12 @@ function updateLedgerChrome(total,shown){
   LEDGER_STATE.filters.forEach(f=>chips.push(ledgerActiveFilterChip(f)));
   chips.push(ledgerChip(LEDGER_SORT_LABELS[LEDGER_STATE.sort]||"Sorted"));
   if(LEDGER_STATE.search.trim())chips.push(ledgerChip(`Search: ${LEDGER_STATE.search.trim()}`,true));
+  if(LEDGER_SCOPE)chips.push(`<span class="ledger-achip ledger-scope-chip">${esc(LEDGER_SCOPE.title)}<b onclick="clearLedgerScope()" role="button" aria-label="Return to all enquiries">&times;</b></span>`);
   chips.push(ledgerChip(currentViewDescription()));
   if($("ledgerActiveChips"))$("ledgerActiveChips").innerHTML=chips.join("");
   const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filters.size||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
   if($("ledgerClearBtn"))$("ledgerClearBtn").style.display=active?"inline-flex":"none";
-  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${RECORDS.length} in selected dashboard view`;
+  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${LEDGER_SCOPE?LEDGER_SCOPE.title:RECORDS.length+' in selected dashboard view'}`;
 }
 function renderExplorer(resetLimit){
   if(!$("explorerList"))return;
