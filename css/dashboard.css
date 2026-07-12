@@ -1188,10 +1188,16 @@ body.profile-open .profile-overlay{display:block;}
 .workspace-tab.active,.workspace-tab[aria-selected="true"]{background:linear-gradient(135deg,var(--navy),var(--navy2))!important;border-color:var(--navy)!important;color:#fff!important;box-shadow:0 9px 20px rgba(11,31,58,.18)!important}
 .workspace-tab[aria-selected="true"]:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 2px rgba(255,255,255,.22);flex:0 0 auto}
 .workspace-tab-count{min-width:19px;padding:2px 5px;border-radius:999px;background:#eef2f7;color:var(--navy);font-size:9px;line-height:1.35;text-align:center}
-.workspace-tab[aria-selected="true"] .workspace-tab-count{background:rgba(255,255,255,.18);color:#fff}
+.workspace-tab[aria-selected="true"] .workspace-tab-count{background:var(--gold)!important;color:var(--navy)!important;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
 .workspace-empty-guidance{margin:0 0 16px;padding:13px 15px;border:1px dashed var(--line);border-radius:10px;background:#f8fafc;color:var(--muted);font-size:12px}
 .publication-freshness{color:var(--muted);font-size:10px;font-weight:700;white-space:nowrap}
 .drawer-ledger-btn{border:1px solid var(--navy);background:#fff;color:var(--navy);border-radius:6px;padding:7px 10px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap}
+.brief-cover .kpi .v small{font-family:Inter,sans-serif;font-size:12px;letter-spacing:0;color:var(--muted);font-weight:800}
+.direction-glance-group td{background:#f3f6fa!important;color:var(--navy)!important;font-size:10px!important;font-weight:900!important;letter-spacing:.12em;text-transform:uppercase;border-top:2px solid var(--line)!important}
+.direction-na{color:var(--faint)!important;font-size:10.5px!important;font-style:italic}
+.opf-hit-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
+.opf-hit-actions button{padding:7px 11px!important;border:1px solid var(--line)!important;border-radius:6px!important;background:#fff!important;color:var(--navy)!important;font-size:10.5px!important;font-weight:850!important;cursor:pointer!important}
+.opf-hit-actions button:last-child{background:var(--navy)!important;border-color:var(--navy)!important;color:#fff!important}
 .workspace-pane{display:none}
 .workspace-pane.active{display:block}
 .workspace-pane>section:first-child{margin-top:0!important}
