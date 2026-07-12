@@ -96,7 +96,8 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'organizeDashboardWorkspaces', 'setDashboardWorkspaceTab', 'activateDashboardWorkspace',
   'handleWorkspaceTabKey', 'recordsToCSV', 'exportPanelCSV', 'exportProfileCSV',
-  'updateWorkspaceOperationalState', 'openPanelInLedger', 'openProfileInLedger'
+  'updateWorkspaceOperationalState', 'openPanelInLedger', 'openProfileInLedger',
+  'outboundGlanceStats', 'exportUnreachableCSV'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -181,6 +182,27 @@ assert(scripts[1].includes("appendWorkspaceSections(overview,'summary',['sec-bri
 assert(scripts[1].includes("hero.classList.add('summary-source-only')"), 'Large duplicate quality block must be suppressed below Management Summary');
 assert(scripts[1].includes("['Unique people'"), 'Direction comparison must include unique people');
 assert(scripts[1].includes("['Callback requests'"), 'Direction comparison must include callbacks');
+assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
+assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
+assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
+assert(scripts[1].includes("'Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status"), 'Unreachable export must include full number-level dial counts');
+assert(scripts[1].includes("['hot','Hot leads','hot','ratio'"), 'Management Summary must show Hot leads with a rate');
+context.__campaignScopeRows = [
+  { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign A' },
+  { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign B' }
+];
+vm.runInContext("ALL_RECORDS_BACKUP=__campaignScopeRows;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='Campaign A';", context);
+assert.equal(context.recordsInRange('2026-07-10', '2026-07-10').length, 1, 'Management Summary campaign scope changed');
+
+let unreachableDownload = null;
+context.downloadCSV = (name, csv) => { unreachableDownload = { name, csv }; };
+context.__unreachGroups = [[
+  { from: '919999999999', d: '2026-07-09', ts: 1, h: 10, m: 0, campaign: 'Retry A', status: 'failed' },
+  { from: '919999999999', d: '2026-07-10', ts: 2, h: 11, m: 0, campaign: 'Retry A', status: 'no_answer' },
+  { from: '919999999999', d: '2026-07-11', ts: 3, h: 12, m: 0, campaign: 'Retry B', status: 'failed' }
+]];
+context.exportUnreachableCSV();
+assert(unreachableDownload.csv.includes('+919999999999,India,3,'), 'Unreachable CSV must aggregate the complete dial count per number');
 assert(!scripts[1].includes('["neut",o.n,"Total enquiries","all"]'), 'Total enquiries must not be repeated below Management Summary');
 assert(scripts[1].includes('role="tab"') && scripts[1].includes('aria-selected='), 'Workspace tabs must expose accessible state');
 
