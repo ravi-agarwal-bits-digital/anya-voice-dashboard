@@ -1174,3 +1174,38 @@ body.profile-open .profile-overlay{display:block;}
 .drawer-csv-btn{padding:6px 13px!important;border-radius:999px!important;border:1px solid var(--gold)!important;background:#fff8ea!important;color:#7a570f!important;font-size:11px!important;font-weight:900!important;letter-spacing:.02em!important;cursor:pointer!important;white-space:nowrap!important;box-shadow:none!important;transition:.15s ease!important;width:auto!important}
 .drawer-csv-btn:hover{background:#fff3d8!important;border-color:var(--gold)!important;color:var(--navy)!important;transform:translateY(-1px)!important}
 .drawer-csv-btn::before{content:'⤓ ';font-weight:900}
+
+/* Workspace information architecture: presentation-only; existing theme and analytics stay intact. */
+.dashboard-workspace-view{display:none}
+.dashboard-workspace-view.active{display:block}
+.workspace-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:24px 0 18px;padding:0 2px}
+.workspace-eyebrow{font-size:10px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:5px}
+.workspace-heading h2{font-family:'Source Serif 4',Georgia,serif;color:var(--navy);font-size:30px;line-height:1.05;letter-spacing:-.04em;margin:0;font-weight:750}
+.workspace-heading p{color:var(--muted);font-size:12.5px;line-height:1.55;margin:7px 0 0;max-width:720px}
+.workspace-tabs{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.workspace-tab{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;padding:8px 13px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;transition:.15s}
+.workspace-tab:hover{border-color:var(--gold);color:var(--navy)}
+.workspace-tab.active{background:linear-gradient(135deg,var(--navy),var(--navy2));border-color:var(--navy);color:#fff;box-shadow:0 9px 20px rgba(11,31,58,.13)}
+.workspace-pane{display:none}
+.workspace-pane.active{display:block}
+.workspace-pane>section:first-child{margin-top:0!important}
+.workspace-pane>section .shead>.n{display:none!important}
+.workspace-pane>section .shead{gap:8px!important}
+#workspace-overview .workspace-heading{display:none}
+#workspace-overview .management-brief{margin-top:22px!important}
+#workspace-overview .management-brief .brief-cover h3{display:none}
+#workspace-overview .hero{margin-top:18px!important}
+#workspace-action #sec-callbacks,#workspace-action #sec-hottest,#workspace-action #sec-friction,
+#workspace-intelligence #sec-conversion,#workspace-intelligence #sec-perf,#workspace-intelligence #sec-themes,#workspace-intelligence #sec-volume,#workspace-intelligence #sec-geo,
+#workspace-outbound #sec-outbound-perf,#workspace-outbound #sec-outbound-perf-hidden,#workspace-outbound #sec-outbound-cadence,#workspace-outbound #sec-outbound-cadence-hidden,#workspace-outbound #sec-campaigns,#workspace-outbound #sec-campaigns-hidden,
+#workspace-records #sec-explorer{margin-top:0!important}
+@media screen and (max-width:900px){
+  .workspace-heading{display:block;margin-top:18px}
+  .workspace-tabs{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;padding:10px 0 3px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .workspace-tabs::-webkit-scrollbar{display:none}
+  .workspace-heading h2{font-size:26px}
+}
+@media print{
+  #workspace-overview{display:block!important}
+  .workspace-heading{display:none!important}
+}
