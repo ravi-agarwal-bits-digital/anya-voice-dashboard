@@ -2224,7 +2224,8 @@ function topIntentFor(recs){
   return top?{name:top[0],count:top[1]}:{name:'None',count:0};
 }
 function briefPack(recs){
-  return{n:recs.length,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,avgConf:recs.length?Math.round(recs.reduce((a,r)=>a+Number(r.conf||0),0)/recs.length):0,topIntent:topIntentFor(recs)};
+  const mins=sumBilledMinutes(recs);
+  return{n:recs.length,mins,cost:mins*5,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,avgConf:recs.length?Math.round(recs.reduce((a,r)=>a+Number(r.conf||0),0)/recs.length):0,topIntent:topIntentFor(recs)};
 }
 function pctBrief(num,den){return den?Math.round(num/den*100):0;}
 function deltaClass(cur,prev){if(cur>prev)return'up';if(cur<prev)return'down';return'flat';}
@@ -2264,14 +2265,16 @@ function paintManagementBrief(){
   const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
   const kpiDefs=[
     ['good','Enquiries','n','count',()=>true],
+    ['hot','Advisory minutes','mins','minutes',()=>true],
+    ['hot','Estimated operating cost','cost','currency',()=>true],
     ['good','Unique leads','unique','ratio',()=>true],
-    ['hot','Callbacks','callbacks','ratio',r=>r.callback],
+    ['hot','Follow-up requests','callbacks','ratio',r=>r.callback],
     ['hot','Hot leads','hot','ratio',r=>r.leadTemp==='Hot']
   ];
   if(!reducedAiViewEnabled())kpiDefs.push(['good','AI confidence','avgConf','percent',()=>true],['neut','Attention signals','friction','ratio',r=>r.frustrated]);
   if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,format,pred])=>{
     const val=cur[key],prevVal=old[key];
-    const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
+    const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='minutes'?`${n} mins`:format==='currency'?`₹${n}`:format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;

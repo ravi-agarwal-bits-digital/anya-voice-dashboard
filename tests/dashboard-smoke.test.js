@@ -190,6 +190,8 @@ assert(html.includes('Management readout'), 'Management readout must sit in the 
 assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be merged into overview');
 assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
 assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard render must not target the removed KPI strip');
+assert(scripts[1].includes("['hot','Advisory minutes','mins','minutes',()=>true]"), 'Management readout must retain advisory minutes');
+assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',()=>true]"), 'Management readout must retain operating cost');
 assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
 assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
