@@ -37,7 +37,7 @@ for (const path of [
 
 for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
-  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief',
+  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-overview',
   'resetAllFilters', 'metricDefinitions',
   'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
 ]) {
@@ -186,8 +186,8 @@ assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section he
 assert(html.includes('<h4>Follow-up queue</h4>'), 'Follow-up queue panel title is missing');
 assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
 assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
-assert(html.includes('<h2>Executive summary</h2>'), 'Executive summary title is missing');
-assert(html.includes('>Executive summary</button>'), 'Executive summary header action is missing');
+assert(html.includes('Management readout'), 'Management readout must sit in the overview');
+assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be merged into overview');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
@@ -207,7 +207,7 @@ assert(html.includes('<h4>Why we never reached them</h4>'), 'Failure section sho
 assert(scripts[1].includes('entries.slice(0,7)'), 'Failure reasons should be capped at the top seven');
 assert(scripts[1].includes("Other reasons"), 'Failure reasons should group the long tail');
 for (const marker of [
-  'id="sec-overview" data-hide-in-reduced-view="true"',
+  'id="sec-quality" data-hide-in-reduced-view="true"',
   'id="sec-anomaly" data-hide-in-reduced-view="true"',
   'id="sec-perf" data-hide-in-reduced-view="true"',
   'id="sec-themes" data-hide-in-reduced-view="true"',
@@ -268,7 +268,7 @@ const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 
 assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
-assert(scopedCSV.includes('Callback Window'), 'Standard CSV callback column is missing');
+assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
 const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
 assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope)"), 'International export must use the standard CSV schema');
@@ -284,6 +284,7 @@ let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
 context.exportCallbacks();
 assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
+assert(exportCapture.name.startsWith('requested_follow_ups_'), 'Requested follow-up export filename is unclear');
 assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
 context.exportHottestLeads();
 assert(exportCapture.csv.startsWith('Follow-up Rank,Phone,Lead Tier'), 'Follow-up export must use an action-ready summary schema');
@@ -430,6 +431,6 @@ const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
 }));
 context.__callbackRecords = callbackRecords;
 vm.runInContext('ALL_RECORDS_BACKUP=__callbackRecords; CB_RENDER_LIMIT=50; paintCallbacks(__callbackRecords);', context);
-assert(getElement('cbList').innerHTML.includes('Show more — 1 more callback number'), 'Callback rendering cap changed');
+assert(getElement('cbList').innerHTML.includes('Show more — 1 more lead'), 'Requested follow-up rendering cap changed');
 
 console.log('Dashboard smoke tests passed');

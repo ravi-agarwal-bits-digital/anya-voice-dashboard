@@ -33,8 +33,6 @@ function syncSidebarActive(forceId){
   if(!links.length)return;
   const setActive=(id)=>{
     links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
-    const summaryBtn=$('openMgmtSummaryBtn');
-    if(summaryBtn)summaryBtn.classList.toggle('active',id==='sec-brief');
     // Highlight the group that owns the active section, so location is clear even when the
     // group is collapsed (its links are hidden).
     document.querySelectorAll('.side-group').forEach(g=>{
@@ -445,32 +443,25 @@ function updateFilterButtons(active){
 }
 
 
-// Management Summary is a normal in-flow section -- "visible" means "on screen right now", same
+// The Management readout is a normal in-flow section -- "visible" means "on screen right now", same
 // scroll-based check every other section-highlight decision in the dashboard already uses.
 function isManagementSummaryVisible(){
-  const el=$('sec-brief');
+  const el=$('sec-overview');
   if(!el)return false;
   const rect=el.getBoundingClientRect();
   const vh=window.innerHeight||document.documentElement.clientHeight||0;
   return rect.top<vh*0.72 && rect.bottom>120;
 }
 function focusManagementSummary(){
-  const el=$('sec-brief');
+  const el=$('sec-overview');
   if(!el)return;
   scrollToWithStickyOffset(el);
-  syncSidebarActive('sec-brief');
-  const btn=$('openMgmtSummaryBtn');
-  if(btn)btn.classList.add('active');
+  syncSidebarActive('sec-overview');
   el.classList.remove('summary-focus');
   void el.offsetWidth;
   el.classList.add('summary-focus');
   setTimeout(()=>{if(el)el.classList.remove('summary-focus');},1400);
 }
-function openManagementSummary(){
-  paintManagementBrief();
-  focusManagementSummary();
-}
-
 // Run a batch of paint steps a few per animation frame instead of all in one frame, so no single
 // frame is a long freeze and sections pop in progressively. Guarded by renderGeneration: if a newer
 // render (e.g. another filter toggle) starts, the stale batch stops immediately.
@@ -664,7 +655,7 @@ function searchUserByMobile(mobile, source="search"){
       <div class="profile-call-meta">
         ${reducedView?`<b>Temp:</b> ${esc(c.leadTemp)}`:`<b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}`}<br>
         <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${esc(c.cbReason)}<br>
-        <b>Detected callback window:</b> ${esc(c.cbPreferred||"Not specified")}<br>
+        <b>Requested time:</b> ${esc(c.cbPreferred||"Not specified")}<br>
         <span class="profile-call-summary">${esc(c.summary)}</span>
       </div>
       ${transcriptToggle(c,'prof'+i)}
@@ -887,9 +878,9 @@ function titleCaseSmall(s){
 }
 
 function resolveCallbackWindow(row, transcript, summary, callIso){
-  // Detected callback window is extracted from transcript/summary and normalized to an actual date + time when possible.
-  // We deliberately do not invent a callback window when both date and timing are missing.
-  // Returns {date, label}: `date` is a real Date (or null) so callers can do SLA/aging math; `label` is the display string.
+  // Requested time is extracted from transcript/summary and normalized to an actual date + time when possible.
+  // We deliberately do not invent a requested time when both date and timing are missing.
+  // Returns {date, label}: `date` is a real Date (or null) and `label` is the display string.
   const months={jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,sept:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
   const monNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const weekdays={sunday:0,sun:0,monday:1,mon:1,tuesday:2,tue:2,tues:2,wednesday:3,wed:3,thursday:4,thu:4,thur:4,thurs:4,friday:5,fri:5,saturday:6,sat:6};
@@ -1269,7 +1260,7 @@ function paintDirectionCompare(){
   // inbound/outbound conversation comparison, avoiding repeated reach and failure metrics.
   const rows=[
     ['Unique people',`${ib.unique} callers`,`${ob.unique} leads dialled`,'()=>true'],
-    ['Callback requests',`${ib.callbacks} (${ib.callbackPct}%)`,`${ob.callbacks} (${ob.callbackPct}%)`,'r=>r.callback'],
+    ['Follow-up requests',`${ib.callbacks} (${ib.callbackPct}%)`,`${ob.callbacks} (${ob.callbackPct}%)`,'r=>r.callback'],
     ['Hot-lead rate',ib.hotPct+'%',ob.hotPct+'%',"r=>r.leadTemp==='Hot'"],
     ['Avg call duration',fmtDurLabel(ib.avgDurSec),fmtDurLabel(ob.avgDurSec),'()=>true'],
     ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
@@ -1865,50 +1856,27 @@ function paintAnomalyCards(){
   el.innerHTML=cards.slice(0,4).map(c=>`<div class="anom ${c.cls}"><span class="anom-tag">${c.tag}</span><h3>${c.title}</h3><div class="anom-metric">${c.metric}</div><div class="anom-why">${c.why}</div></div>`).join('');
 }
 
-// ===== CALLBACK SLA =====
-// Ages each callback request's detected preferred window against the most recent call timestamp in the
-// export (this is a static offline report, not a live clock) — not outbound-specific, since callback
-// requests already come from both directions today.
-function datasetAsOf(){
-  if(!ALL_RECORDS_BACKUP.length)return new Date();
-  return new Date(Math.max(...ALL_RECORDS_BACKUP.map(r=>r.ts))*1000);
+// Requested follow-ups are signals extracted from conversations. This dashboard does not know task
+// assignment or completion, so it deliberately shows readiness rather than a misleading SLA.
+let CB_TIME_FILTER='all'; // 'all' | 'timed' | 'unscheduled'
+function callbackHasRequestedTime(calls){
+  return calls.some(r=>r.cbPreferred&&r.cbPreferred!=='Not specified');
 }
-function datasetAsOfLabel(d){
-  const monNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${String(d.getDate()).padStart(2,'0')} ${monNames[d.getMonth()]} ${d.getFullYear()}`;
-}
-function classifyCallbackAging(r,asOf){
-  if(!r.cbPreferredDate)return 'ontime'; // no detected deadline -> nothing to be overdue against
-  const d=new Date(r.cbPreferredDate.getFullYear(),r.cbPreferredDate.getMonth(),r.cbPreferredDate.getDate());
-  const ref=new Date(asOf.getFullYear(),asOf.getMonth(),asOf.getDate());
-  if(d<ref)return 'overdue';
-  if(d.getTime()===ref.getTime())return 'due';
-  return 'ontime';
-}
-let CB_SLA_FILTER='all'; // 'all' | 'ontime' | 'due' | 'overdue' -- set by clicking a Callback SLA chip; click the active one again to clear
-function paintCallbackSLA(recs,asOf){
-  const el=$('cbSla');
+function paintFollowUpReadiness(byPhone,recs){
+  const el=$('cbReadiness');
   if(!el)return;
-  const cbs=recs.filter(r=>r.callback);
-  if(!cbs.length){el.innerHTML='';return;}
-  asOf=asOf||datasetAsOf();
-  const counts={ontime:0,due:0,overdue:0};
-  cbs.forEach(r=>{counts[classifyCallbackAging(r,asOf)]++;});
+  const groups=Object.values(byPhone);
+  const timed=groups.filter(callbackHasRequestedTime).length;
+  const unscheduled=groups.length-timed;
   const chip=(key,label,count)=>{
-    const active=CB_SLA_FILTER===key;
-    return `<button type="button" class="opf-sla-chip opf-${key}${active?' opf-sla-active':''}" data-sla="${key}" aria-pressed="${active}"><span class="opf-sla-n">${count}</span><span>${esc(label)}</span></button>`;
+    const active=CB_TIME_FILTER===key;
+    return `<button type="button" class="follow-up-readiness-chip${active?' follow-up-readiness-active':''}" data-readiness="${key}" aria-pressed="${active}"><span class="follow-up-readiness-n">${count}</span><span>${esc(label)}</span></button>`;
   };
-  el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Callback SLA</div>`+
-    `<div class="opf-sla-strip">`+
-    chip('ontime','On time',counts.ontime)+
-    chip('due','Due today',counts.due)+
-    chip('overdue','Overdue',counts.overdue)+
-    `</div>`+
-    `<div class="cap" style="font-size:12px;margin-top:2px">Aged against each caller's detected callback window, as of the latest call in this export (${datasetAsOfLabel(asOf)}). Click a chip to filter the list below${CB_SLA_FILTER!=='all'?' — click it again to clear':''}.</div>`;
-  el.querySelectorAll('.opf-sla-chip').forEach(btn=>{
+  el.innerHTML=`<div class="follow-up-readiness-title">Follow-up readiness</div><div class="follow-up-readiness-strip">${chip('all','All leads',groups.length)}${chip('timed','Requested time',timed)}${chip('unscheduled','Needs scheduling',unscheduled)}</div><div class="cap follow-up-readiness-note">Requested time is detected from the conversation. It is not a task-completion or SLA status.</div>`;
+  el.querySelectorAll('.follow-up-readiness-chip').forEach(btn=>{
     btn.onclick=()=>{
-      const key=btn.dataset.sla;
-      CB_SLA_FILTER=(CB_SLA_FILTER===key)?'all':key;
+      const key=btn.dataset.readiness;
+      CB_TIME_FILTER=(CB_TIME_FILTER===key)?'all':key;
       paintCallbacks(recs);
     };
   });
@@ -2114,15 +2082,14 @@ let CB_RENDER_LIMIT=50;   // cap callback CARDS rendered at once; "Show more" ra
 function paintCallbacks(recs){
   const cbCount=$("cbCount"),cbList=$("cbList"),cbFilters=$("cbFilters");
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
-  const asOf=datasetAsOf();
-  try{paintCallbackSLA(recs,asOf);}catch(e){console.warn("paintCallbackSLA error:",e);}
   const cbsAll=recs.filter(r=>r.callback);
-  if(!cbsAll.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callback requests detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
-  const cbs=CB_SLA_FILTER==='all'?cbsAll:cbsAll.filter(r=>classifyCallbackAging(r,asOf)===CB_SLA_FILTER);
-  if(!cbs.length){cbCount.textContent="0";cbList.innerHTML=emptyViewHtml("No callbacks match the selected SLA filter");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
-
-  // Group by phone number
-  const byPhone=groupByPhone(cbs);
+  const readiness=$('cbReadiness');
+  if(!cbsAll.length){cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No requested follow-ups detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");if(readiness)readiness.innerHTML="";return;}
+  const allByPhone=groupByPhone(cbsAll);
+  paintFollowUpReadiness(allByPhone,recs);
+  const byPhone=Object.fromEntries(Object.entries(allByPhone).filter(([,calls])=>CB_TIME_FILTER==='all'||(CB_TIME_FILTER==='timed'?callbackHasRequestedTime(calls):!callbackHasRequestedTime(calls))));
+  const cbs=Object.values(byPhone).flat();
+  if(!cbs.length){cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No follow-ups match the selected readiness filter");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
 
   // Build multi-select intent filter chips (All + each intent)
   const intents=[...new Set(cbs.map(r=>r.intent))].sort();
@@ -2151,7 +2118,8 @@ function paintCallbacks(recs){
   });
 
   const visibleCallbackCount=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
-  cbCount.textContent=`${visibleCallbackCount} (${percentOf(visibleCallbackCount,recs.length)}% of calls)`;
+  const visibleLeadCount=Object.keys(filtered).length;
+  cbCount.textContent=`${visibleLeadCount} lead${visibleLeadCount===1?'':'s'} · ${visibleCallbackCount} request${visibleCallbackCount===1?'':'s'}`;
 
   // Cap the number of callback CARDS rendered (each card renders all of its calls, incl. hidden
   // "more" requests, so rendering every group at once was the single biggest filter-lag cost on
@@ -2170,7 +2138,7 @@ function paintCallbacks(recs){
           <span style="color:var(--muted)">${formatDuration(c.dur)}</span>
         </div>
         <div style="color:var(--muted);margin-bottom:4px">${reducedAiViewEnabled()?'':`Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | `}${esc(c.cbReason)}</div>
-        <div class="callback-preferred ${(!c.cbPreferred || c.cbPreferred==='Not specified')?'unspecified':''}"><span>Detected callback window</span><b>${esc(c.cbPreferred||'Not specified')}</b></div>
+        <div class="callback-preferred ${(!c.cbPreferred || c.cbPreferred==='Not specified')?'unspecified':''}"><span>Requested time</span><b>${esc(c.cbPreferred||'No time requested')}</b></div>
         ${c.summary?`<div style="color:#344054;line-height:1.6;border-top:1px solid var(--line2);padding-top:7px;margin-top:6px;font-size:12px">${esc(c.summary)}</div>`:""}
       </div>`;
 
@@ -2193,14 +2161,14 @@ function paintCallbacks(recs){
           <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${esc(maskPhone(ph))}</b>
           <span style="font-size:10px;color:var(--teal);font-weight:600">${totalDur} mins</span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone(${jsArg(ph)},'callback',this.closest('[data-profile-source]')||this)">Open drawer</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} callback${calls.length>1?"s":""}</span></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone(${jsArg(ph)},'callback',this.closest('[data-profile-source]')||this)">Open profile</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} request${calls.length>1?"s":""}</span></div>
       </div>
       ${directionMix(calls)}
-      <div class="drawer-action-hint">Click anywhere on this callback card to open the profile drawer</div>
+      <div class="drawer-action-hint">Click anywhere on this follow-up card to open the full profile</div>
       ${renderCall(latest)}
       ${moreSection}
     </div>`;
-  }).join("")+(cbHidden>0?`<div id="cbShowMore" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:12px;text-align:center;cursor:pointer;color:var(--teal);font-weight:800;font-size:12px;border:1px dashed var(--line);border-radius:10px;background:#fff">Show more — ${cbHidden.toLocaleString()} more callback number${cbHidden>1?'s':''}</div>`:"");
+  }).join("")+(cbHidden>0?`<div id="cbShowMore" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:12px;text-align:center;cursor:pointer;color:var(--teal);font-weight:800;font-size:12px;border:1px dashed var(--line);border-radius:10px;background:#fff">Show more — ${cbHidden.toLocaleString()} more lead${cbHidden>1?'s':''}</div>`:"");
   if(cbHidden>0){const mb=$("cbShowMore");if(mb)mb.onclick=()=>{CB_RENDER_LIMIT+=100;paintCallbacks(recs);};}
 }
 
@@ -2267,7 +2235,7 @@ function deltaPctText(cur,prev){
   return `${pct>0?'+':''}${pct}%`;
 }
 function paintManagementBrief(){
-  if(!$('sec-brief'))return;
+  if(!$('sec-overview'))return;
   const range=currentBriefRange();
   const recs=recordsInRange(range.from,range.to);
   const prevRange=previousRangeFor(range.from,range.to);
@@ -2424,7 +2392,7 @@ function drawerScopeHtml(label='Dashboard scope'){
 // Standard record -> CSV used by every drawer/section export, so a downloaded file always has the
 // same columns wherever it came from. Phone is full (unmasked) for actioning the lead.
 function recordsToCSV(rows,scopeLabel=activeFilterScopeLabel()){
-  let csv='Call ID,Phone,Country,Direction,Call Time,Campaign,Status,Duration (mins),Lead Temp,Callback,Callback Window,Intent,Failure Reason,Summary,Filter Scope\n';
+  let csv='Call ID,Phone,Country,Direction,Call Time,Campaign,Status,Duration (mins),Lead Temp,Follow-up Requested,Requested Time,Intent,Failure Reason,Summary,Filter Scope\n';
   rows.forEach(r=>{
     const c=classifyPhone(r.from);
     csv+=[escCSV(r.callId),fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
@@ -2548,7 +2516,7 @@ function paintFunnel(o){
   const pct=a=>Math.round(a/o.n*100);
   const F=[
     [o.n,"Calls started","#5a9bd8",100,()=>true],
-    [o.callbacks,"Callback requested — intent signal",C.teal,Math.round(o.callbacks/o.n*60)+24,r=>r.callback],
+    [o.callbacks,"Follow-up requested — intent signal",C.teal,Math.round(o.callbacks/o.n*60)+24,r=>r.callback],
     [o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*60)+30,r=>r.leadTemp==='Hot'],
     [o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+20,r=>r.leadTemp==='Warm'],
     [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",Math.round(o.cold/o.n*40)+12,r=>r.leadTemp!=='Hot'&&r.leadTemp!=='Warm']
@@ -2763,7 +2731,7 @@ const LEDGER_DEFAULT_STATE={search:"",sort:"time_desc",limit:50};
 let LEDGER_STATE={search:"",filters:new Set(),sort:"time_desc",limit:50};
 let LEDGER_SCOPE=null;
 let EXPLORER_LIMIT=LEDGER_STATE.limit;
-const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Callback requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Callback window",serial:"Serial caller"};
+const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Follow-up requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Requested time",serial:"Serial caller"};
 // Chips within a group combine with OR; the groups themselves combine with AND (facet-search semantics),
 // so e.g. "Hot" + "India" narrows to hot leads in India, while "Has transcript" + "No transcript" (same
 // group) reads as either -- selecting a mutually-exclusive pair is equivalent to not filtering on it.
@@ -3098,7 +3066,7 @@ function paintHottestLeads(records){
         <div><b>${l.totalDur}</b><span>Minutes</span></div>
         <div><b>₹${l.totalDur*5}</b><span>Cost</span></div>
       </div>
-      <div class="follow-up-card-meta">${directionMix(l.calls)}${callback?'<span class="follow-up-callback">Callback requested</span>':''}</div>
+      <div class="follow-up-card-meta">${directionMix(l.calls)}${callback?'<span class="follow-up-callback">Follow-up requested</span>':''}</div>
       <div class="drawer-action-hint">Open full profile</div>
     </article>`;
   }).join("");
@@ -3208,6 +3176,6 @@ function exportSerialEngagers(){
 
 function exportCallbacks(){
   const cbs=RECORDS.filter(r=>r.callback);
-  if(!cbs.length){alert("No callback requests to export for the current date and direction view.");return;}
-  downloadCSV('callback_requests_'+csvDateStamp()+'.csv',recordsToCSV(cbs.sort((a,b)=>b.ts-a.ts),`${activeFilterScopeLabel()} · Callback requests`));
+  if(!cbs.length){alert("No requested follow-ups to export for the current date and direction view.");return;}
+  downloadCSV('requested_follow_ups_'+csvDateStamp()+'.csv',recordsToCSV(cbs.sort((a,b)=>b.ts-a.ts),`${activeFilterScopeLabel()} · Requested follow-ups`));
 }

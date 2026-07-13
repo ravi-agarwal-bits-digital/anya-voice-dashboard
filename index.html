@@ -110,18 +110,12 @@
       <button type="button" class="side-group-label"><span>Leads &amp; follow-up</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-hottest"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><span>Follow-up queue</span></a>
-        <a class="side-link" href="#sec-callbacks"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path></svg></span><span>Follow-up</span></a>
+        <a class="side-link" href="#sec-callbacks"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path></svg></span><span>Requested follow-ups</span></a>
         <a class="side-link" href="#sec-friction" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M10.3 4.3 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span><span>Friction</span></a>
         <a class="side-link" href="#sec-explorer"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path></svg></span><span>Ledger</span></a>
       </div>
     </div>
 
-    <div class="side-group" data-group="leadership">
-      <button type="button" class="side-group-label"><span>Executive</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
-      <div class="side-group-links">
-        <a class="side-link" href="#sec-brief" title="Executive summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Executive summary</span></a>
-      </div>
-    </div>
   </nav>
   <div class="side-punch"><span>BITS PILANI'S LEGACY</span><strong>DIGITAL INTELLIGENCE</strong></div>
 </aside>
@@ -183,7 +177,6 @@
         </div>
           <select id="campaignFilter" onchange="setCampaignFilter(this.value)" title="Filter the whole dashboard to one outbound campaign" style="display:none"></select>
           <span id="directionCurrent" class="direction-current all" aria-live="polite">All calls</span>
-          <button type="button" id="openMgmtSummaryBtn" class="summary-jump-btn" onclick="openManagementSummary()" title="Open executive summary for the selected view">Executive summary</button>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
@@ -194,13 +187,32 @@
   </div>
 
   <!-- Hero: Call Quality Score + Gauge -->
-  <div class="hero" id="sec-overview" data-hide-in-reduced-view="true">
+  <div class="hero" id="sec-quality" data-hide-in-reduced-view="true">
     <div id="gauge"></div>
     <div class="hx" id="heroText"></div>
   </div>
 
   <!-- KPI Strip -->
   <div class="strip" id="kpis"></div>
+
+  <section id="sec-overview" class="management-brief">
+    <div class="overview-readout-head"><div><div class="brief-eyebrow">Management readout</div><h2>Overview</h2></div><button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button></div>
+    <div class="brief-cover">
+      <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
+      <div class="strip" id="briefKpis"></div>
+    </div>
+    <details id="metricDefinitions" class="metric-definitions">
+      <summary>Metric definitions</summary>
+      <div class="metric-definition-grid">
+        <div><b>Enquiries</b><span>Final unique Call-ID conversation records in the active dashboard scope.</span></div>
+        <div><b>Unique leads</b><span>Distinct normalized lead phone numbers represented by those final records.</span></div>
+        <div><b>Follow-up requests / Hot leads</b><span>Final records carrying the follow-up signal or the Hot lead classification.</span></div>
+        <div data-hide-in-reduced-view="true"><b>Attention signals</b><span>Final records flagged as frustrated or requiring review.</span></div>
+        <div data-hide-in-reduced-view="true"><b>AI confidence</b><span>Average model confidence across final conversation records.</span></div>
+        <div><b>Dials, connect and reach</b><span>Dial-level metrics include final unique dials, including failed and initiated attempts.</span></div>
+      </div>
+    </details>
+  </section>
 
   <section id="sec-anomaly" data-hide-in-reduced-view="true">
     <div class="shead"><span class="n">01</span><h2>What moved, and why</h2></div>
@@ -337,10 +349,10 @@
     <div class="panel repeat-engagement-panel"><div class="repeat-engagement-heading"><div><h4 style="margin:0">Repeat engagement</h4><div class="cap">Phone numbers with 3+ calls. Select a card to view the full timeline.</div></div><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export repeat CSV</button></div><div id="serialCallers" class="repeat-engagement-grid"></div></div>
   </section>
 
-  <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Callback requests</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
-    <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number, reason, and detected callback window where available. <b id="cbCount" style="color:var(--hot)"></b> calls requiring follow-up.</div>
-    <div id="cbSla" style="margin-bottom:16px"></div>
-    <div class="queue-filter-label">Callback queue filter</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+  <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Requested follow-ups</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-ups CSV</button></div>
+    <div class="panel"><div class="cap" style="margin-bottom:16px">Leads whose conversation indicates a follow-up request. Requested time is shown only when it was detected in the conversation. <b id="cbCount" style="color:var(--hot)"></b></div>
+    <div id="cbReadiness" style="margin-bottom:16px"></div>
+    <div class="queue-filter-label">Filter by topic</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
     <div id="cbList" style="max-height:600px;overflow-y:auto"></div></div></section>
 
   <section id="sec-friction" data-hide-in-reduced-view="true"><div class="shead"><span class="n">13</span><h2>Friction analysis</h2></div>
@@ -392,7 +404,7 @@
           <span class="ledger-group-label">Signals</span>
           <div class="ledger-chip-row">
             <button type="button" class="cbfilt" data-f="frustrated" data-hide-in-reduced-view="true" onclick="toggleLedgerFilter('frustrated')">Attention</button>
-            <button type="button" class="cbfilt" data-f="callback" onclick="toggleLedgerFilter('callback')">Callback requested</button>
+            <button type="button" class="cbfilt" data-f="callback" onclick="toggleLedgerFilter('callback')">Follow-up requested</button>
             <button type="button" class="cbfilt" data-f="has_callback_window" onclick="toggleLedgerFilter('has_callback_window')">Callback window</button>
             <button type="button" class="cbfilt" data-f="serial" onclick="toggleLedgerFilter('serial')">Serial caller</button>
           </div>
@@ -418,27 +430,6 @@
       <div id="explorerMore" style="text-align:center;margin-top:12px"></div>
     </div></section>
 
-  <section id="sec-brief" class="management-brief">
-    <div class="shead"><span class="n">15</span><h2>Executive summary</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button></div>
-    <div class="cap" style="margin:-10px 0 16px">A leadership-ready snapshot of the current date &amp; direction view. Open it any time from the <b>Executive summary</b> button in the header or sidebar.</div>
-    <div class="brief-cover">
-      <div class="brief-eyebrow">Leadership snapshot</div>
-      <h3>Executive summary</h3>
-      <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
-      <div class="strip" id="briefKpis"></div>
-    </div>
-    <details id="metricDefinitions" class="metric-definitions">
-      <summary>Metric definitions</summary>
-      <div class="metric-definition-grid">
-        <div><b>Enquiries</b><span>Final unique Call-ID conversation records in the active dashboard scope.</span></div>
-        <div><b>Unique leads</b><span>Distinct normalized lead phone numbers represented by those final records.</span></div>
-        <div><b>Callbacks / Hot leads</b><span>Final records carrying the callback signal or the Hot lead classification.</span></div>
-        <div data-hide-in-reduced-view="true"><b>Attention signals</b><span>Final records flagged as frustrated or requiring review.</span></div>
-        <div data-hide-in-reduced-view="true"><b>AI confidence</b><span>Average model confidence across final conversation records.</span></div>
-        <div><b>Dials, connect and reach</b><span>Dial-level metrics include final unique dials, including failed and initiated attempts.</span></div>
-      </div>
-    </details>
-  </section>
 
     <footer id="foot"></footer>
 </div>

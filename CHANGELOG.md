@@ -10,6 +10,8 @@ This file records public-safe repository and application milestones. Detailed in
 - Added CEO-facing naming and card polish, repaired Follow-up queue and Repeat engagement profile-drawer navigation, and standardized operational CSV exports with stable Call IDs and active filter scope.
 - Reduced duplicate dashboard information by making the header contextual, keeping Call flow focused on direction comparison, assigning dial mechanics to Outbound results, and making Executive summary narrative-led.
 - Added clear spacing between the Follow-up queue and Repeat engagement panels.
+- Reworked Callback requests into Requested follow-ups: replaced the inferred SLA with an honest readiness view, clarified requested-time coverage and scheduling gaps, and aligned adjacent profile, Ledger, and CSV terminology.
+- Merged the Executive summary into the top Overview as a compact Management readout, removing the duplicate standalone destination while retaining printable leadership context and metric definitions.
 
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.
