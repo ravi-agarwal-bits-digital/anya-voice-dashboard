@@ -97,7 +97,8 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
   'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility'
+  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
+  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -181,6 +182,12 @@ assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibi
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
 assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
 assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
+assert(html.includes('label="Confidence" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence group marker is missing');
+assert(html.includes('label="Reach" data-hide-in-reduced-view="true"'), 'Reduced Ledger reach group marker is missing');
+assert(html.includes('data-f="frustrated" data-hide-in-reduced-view="true"'), 'Reduced Ledger attention filter marker is missing');
+assert(html.includes('<h4>Why we never reached them</h4>'), 'Failure section should use the concise lost-reach title');
+assert(scripts[1].includes('entries.slice(0,7)'), 'Failure reasons should be capped at the top seven');
+assert(scripts[1].includes("Other reasons"), 'Failure reasons should group the long tail');
 for (const marker of [
   'id="sec-overview" data-hide-in-reduced-view="true"',
   'id="sec-anomaly" data-hide-in-reduced-view="true"',
@@ -217,6 +224,27 @@ assert(!getElement('dirCompareTable').innerHTML.includes('Quality pass rate (Gre
 context.RECORDS = [scopeRecord];
 context.paintKPIs(context.aggregate(context.RECORDS));
 assert(!getElement('kpis').innerHTML.includes('Quality pass rate'), 'Reduced overview must hide quality pass rate');
+const compactLeadRecords = [
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 10, m: 0, ts: 3, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: false, intent: 'Payment', summary: 'Synthetic lead' },
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 11, m: 0, ts: 2, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: false, intent: 'Payment', summary: 'Synthetic lead' },
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 12, m: 0, ts: 1, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: true, intent: 'Payment', summary: 'Synthetic lead' }
+];
+context.paintHottestLeads(compactLeadRecords);
+assert(getElement('hottestLeads').innerHTML.includes('<b>Calls:</b> 3'), 'Reduced priority cards should retain the call count');
+assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
+assert(!getElement('hottestLeads').innerHTML.includes('attention'), 'Reduced priority cards must hide attention breakdown');
+context.paintSerialCallers(compactLeadRecords);
+assert(getElement('serialCallers').innerHTML.includes('3 calls'), 'Reduced repeat-caller cards should retain total calls');
+assert(!getElement('serialCallers').innerHTML.includes('attention'), 'Reduced repeat-caller cards must hide attention breakdown');
+assert(!getElement('serialCallers').innerHTML.includes('general'), 'Reduced repeat-caller cards must hide general breakdown');
+const failureRows = Array.from({ length: 8 }, (_, index) => ({
+  from: `91922222222${index}`, direction: 'outbound', d: '2026-07-10', h: 10, m: index,
+  status: 'failed', dur: 0, msg: 0, failReason: `reason_${index}`, sipCode: ''
+}));
+context.__failureRows = failureRows;
+vm.runInContext('ALL_DIALS=__failureRows; SELECTED_CAMPAIGN="all"; paintFailureBreakdown();', context);
+assert(getElement('failureBreakdown').innerHTML.includes('Top reasons'), 'Failure section should show the concise top-reasons heading');
+assert(getElement('failureBreakdown').innerHTML.includes('Other reasons'), 'Failure section should group lower-volume reasons');
 vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];", context);
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
 assert(scopedCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');

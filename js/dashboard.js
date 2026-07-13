@@ -1782,11 +1782,7 @@ function paintFailureBreakdown(){
   const lost=failed.filter(r=>!reached.has(r.from||'?'));
   const recovered=failed.filter(r=>reached.has(r.from||'?'));
   window.__failLost=lost;window.__failRecovered=recovered;
-  const split=`<div class="fail-split">`+
-    `<div class="fail-split-card lost" onclick="openFilteredPanel('Failed dials — numbers never reached',()=>true,window.__failLost)"><div class="fs-v">${lost.length.toLocaleString()}</div><div class="fs-l">on numbers you <b>never reached</b><span>real lost leads — act here</span></div></div>`+
-    `<div class="fail-split-card recovered" onclick="openFilteredPanel('Failed dials — numbers reached on another attempt',()=>true,window.__failRecovered)"><div class="fs-v">${recovered.length.toLocaleString()}</div><div class="fs-l">on numbers you <b>reached anyway</b><span>cost nothing — a later try connected</span></div></div>`+
-  `</div>`;
-  if(!lost.length){el.innerHTML=split+`<div class="cap" style="margin-top:6px">Every number with a failed dial was reached on another attempt — no leads lost to failed dials in this view.</div>`;return;}
+  if(!lost.length){el.innerHTML=`<div class="cap" style="margin-top:6px">Every failed outbound dial in this view eventually reached its number.</div>`;return;}
   const groups={};let coded=0;
   lost.forEach(r=>{const l=failureReasonLabel(r);if(l){coded++;groups[l]=(groups[l]||0)+1;}});
   const uncoded=lost.length-coded;
@@ -1795,11 +1791,20 @@ function paintFailureBreakdown(){
   window.__failUncoded=lost.filter(r=>!failureReasonLabel(r));
   const note=`<div class="opf-bestwin" style="background:#f8fafc;border-color:var(--line)"><span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>${coded.toLocaleString()}</b> of these ${lost.length.toLocaleString()} lost dials carry a diagnosed code (${Math.round(coded/lost.length*100)}%). Telephony coding is newer, so older campaigns are mostly uncoded — coverage grows as fresh campaigns dial.</span></div>`;
   const entries=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
-  const max=Math.max(...entries.map(e=>e[1]),uncoded,1);
+  const topEntries=entries.slice(0,7);
+  const otherReasons=entries.slice(7).flatMap(([label])=>window.__failGroups[label]||[]).concat(window.__failUncoded);
+  if(otherReasons.length){
+    window.__failGroups['Other reasons']=otherReasons;
+    topEntries.push(['Other reasons',otherReasons]);
+  }
+  const max=Math.max(...topEntries.map(e=>Array.isArray(e[1])?e[1].length:e[1]),1);
   const colorFor=l=>/declin/i.test(l)?C.hot:/unavail|busy|no.?answer|timeout/i.test(l)?C.warm:C.cold;
-  const bars=entries.map(([l,n])=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel(${jsArg(`${l} (lost dials)`)},()=>true,window.__failGroups[${jsArg(l)}])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`).join('')+
-    (uncoded?`<div style="margin-top:4px;cursor:pointer" onclick="openFilteredPanel('Uncoded lost dials',()=>true,window.__failUncoded)"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span style="color:var(--faint)">Uncoded — no reason logged</span><b style="color:var(--faint)">${uncoded.toLocaleString()} (${Math.round(uncoded/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:#c9d3e2;height:100%;width:${Math.round(uncoded/max*100)}%"></div></div></div>`:'');
-  el.innerHTML=split+note+`<div class="subh" style="margin:14px 0 10px">Why we never reached them</div>`+bars;
+  const bars=topEntries.map(([l,bucket])=>{
+    const n=Array.isArray(bucket)?bucket.length:bucket;
+    return `<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel(${jsArg(`${l} (lost dials)`)},()=>true,window.__failGroups[${jsArg(l)}])"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px"><span>${esc(l)}</span><b>${n.toLocaleString()} (${Math.round(n/lost.length*100)}%)</b></div><div style="background:#eef2f7;border-radius:5px;height:8px;overflow:hidden"><div style="background:${colorFor(l)};height:100%;width:${Math.round(n/max*100)}%"></div></div></div>`;
+  }).join('');
+  const lostSummary=`<div class="opf-bestwin" style="background:#f8fafc;border-color:var(--line)"><span class="opf-bestwin-dot" style="background:var(--hot)"></span><span><b>${lost.length.toLocaleString()}</b> outbound dials were never followed by a successful reach. Click a reason to inspect the underlying calls.</span></div>`;
+  el.innerHTML=lostSummary+note+`<div class="subh" style="margin:14px 0 10px">Top reasons</div>`+bars;
 }
 function paintCampaignSection(){
   const sec=$('sec-campaigns'),hidden=$('sec-campaigns-hidden');
@@ -3104,6 +3109,8 @@ function paintHottestLeads(records){
     let typeEmoji="Cold",typeCol="var(--cold)";
     if(l.hot>=Math.ceil(l.total*0.6)){typeEmoji="Hot";typeCol="var(--hot)";}
     else if(l.hot>=Math.ceil(l.total*0.3)){typeEmoji="Warm";typeCol="var(--warm)";}
+    const leadBreakdown=reducedAiViewEnabled()?'':`<div><b>Lead:</b> ${typeEmoji} ${l.hot}H (${percentOf(l.hot,l.total)}%) | ${l.warm}W (${percentOf(l.warm,l.total)}%) | ${l.cold}C (${percentOf(l.cold,l.total)}%)</div>`;
+    const callBreakdown=reducedAiViewEnabled()?`<div><b>Calls:</b> ${l.total}</div>`:`<div><b>Calls:</b> ${l.total} (${l.frustrated} attention · ${percentOf(l.frustrated,l.total)}%)</div>`;
     const advancedLeadDetails=reducedAiViewEnabled()?'':`
         <div><b>Avg Conf:</b> ${l.avgConf}%</div>
         <div><b>Avg Need:</b> ${l.avgNeed}</div>
@@ -3115,8 +3122,8 @@ function paintHottestLeads(records){
         <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
-        <div><b>Lead:</b> ${typeEmoji} ${l.hot}H (${percentOf(l.hot,l.total)}%) | ${l.warm}W (${percentOf(l.warm,l.total)}%) | ${l.cold}C (${percentOf(l.cold,l.total)}%)</div>
-        <div><b>Calls:</b> ${l.total} (${l.frustrated} attention · ${percentOf(l.frustrated,l.total)}%)</div>
+        ${leadBreakdown}
+        ${callBreakdown}
         <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
         ${advancedLeadDetails}
         <div style="grid-column:1/-1"><b>Cost:</b> <span style="color:var(--hot)">₹${l.totalDur*5}</span></div>
@@ -3145,8 +3152,6 @@ function paintSerialCallers(records){
         <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${s.total} calls</span>
       </div>
       <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-        <div><b style="color:var(--hot)">${s.frustrated}</b> attention (${percentOf(s.frustrated,s.total)}%)</div>
-        <div><b style="color:var(--green)">${s.general}</b> general (${percentOf(s.general,s.total)}%)</div>
         <div style="grid-column:1/-1"><b style="color:var(--teal)">${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
       </div>
       ${directionMix(s.calls)}

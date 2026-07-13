@@ -325,7 +325,7 @@
     <div class="shead"><span class="n">10</span><h2>Campaign Performance</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Every outbound campaign side by side. Fresh, targeted lists usually convert far better than bulk batches &mdash; this makes that visible. Use the campaign selector in the header to scope the whole dashboard to one campaign.</div>
     <div class="panel"><h4>Campaign leaderboard</h4><div class="cap">Dials, connect rate, unique-number reach, and hot-lead rate per campaign. Click a row for its calls; click a header to sort.</div><div id="campaignLeaderboard"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Why dials fail</h4><div class="cap">Diagnosed failure reasons (SIP / hangup codes) for outbound dials that never connected.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Why we never reached them</h4><div class="cap">Top reasons outbound numbers were not reached. Smaller categories are grouped for a compact operating view.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
   </section>
 
   <section id="sec-campaigns-hidden" style="display:none">
@@ -334,7 +334,7 @@
 
   <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Priority prospects &amp; repeat callers</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export prospects CSV</button></div>
     <div class="panel"><h4>Priority prospects (Top 50)</h4><div class="cap">Highest-priority leads ranked for follow-up. Select a lead to open the profile drawer.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
-    <div class="panel" style="margin-top:24px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><h4 style="margin:0">Repeat callers (3+ calls)</h4><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div><div class="cap">Phone numbers with 3+ calls, including attention and general-call breakdown. Select a lead to view the timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
+    <div class="panel" style="margin-top:24px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><h4 style="margin:0">Repeat callers (3+ calls)</h4><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div><div class="cap">Phone numbers with 3+ calls. Select a lead to view the timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
   </section>
 
   <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Callback requests</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
@@ -369,11 +369,11 @@
             <option value="dur_desc">Longest duration</option>
             <option value="dur_asc">Shortest duration</option>
           </optgroup>
-          <optgroup label="Confidence">
+          <optgroup label="Confidence" data-hide-in-reduced-view="true">
             <option value="conf_desc" data-hide-in-reduced-view="true">Highest confidence</option>
             <option value="low_conf" data-hide-in-reduced-view="true">Low confidence first</option>
           </optgroup>
-          <optgroup label="Reach">
+          <optgroup label="Reach" data-hide-in-reduced-view="true">
             <option value="intl_desc">International first</option>
           </optgroup>
         </select>
@@ -391,7 +391,7 @@
         <div class="ledger-chip-group">
           <span class="ledger-group-label">Signals</span>
           <div class="ledger-chip-row">
-            <button type="button" class="cbfilt" data-f="frustrated" onclick="toggleLedgerFilter('frustrated')">Attention</button>
+            <button type="button" class="cbfilt" data-f="frustrated" data-hide-in-reduced-view="true" onclick="toggleLedgerFilter('frustrated')">Attention</button>
             <button type="button" class="cbfilt" data-f="callback" onclick="toggleLedgerFilter('callback')">Callback requested</button>
             <button type="button" class="cbfilt" data-f="has_callback_window" onclick="toggleLedgerFilter('has_callback_window')">Callback window</button>
             <button type="button" class="cbfilt" data-f="serial" onclick="toggleLedgerFilter('serial')">Serial caller</button>
