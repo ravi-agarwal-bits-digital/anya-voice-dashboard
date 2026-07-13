@@ -99,7 +99,7 @@ for (const fn of [
   'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
-  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost'
+  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -164,6 +164,8 @@ assert.equal(context.sumBilledMinutes([
 ]), 2, 'Only connected calls should contribute billed minutes');
 assert.equal(context.ledgerCallCost({ status: 'completed', dur: 61 }), 10, 'Ledger cost must use billed-minute rounding');
 assert.equal(context.ledgerCallCost({ status: 'failed', dur: 120 }), 0, 'Unconnected calls must not contribute ledger cost');
+const leadCostRows=[{ from: '+91 99999 99999', status: 'completed', dur: 61 },{ from: '919999999999', status: 'completed', dur: 3 }];
+assert.equal(context.ledgerLeadCost(leadCostRows[0],leadCostRows), 15, 'Lead total cost must combine normalized phone-format variants');
 const normalizedLeadGroups = context.groupByPhone([
   { from: '+91 99999 99999', status: 'completed', dur: 60 },
   { from: '919999999999', status: 'completed', dur: 60 }
@@ -205,10 +207,13 @@ assert(scripts[1].includes("['hot','Advisory minutes','mins','minutes',()=>true]
 assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',()=>true]"), 'Management readout must retain operating cost');
 assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
 assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');
-assert(html.includes('<optgroup label="Estimated call cost">'), 'Ledger needs an estimated-cost sort group');
+assert(html.includes('<optgroup label="Cost exposure">'), 'Ledger needs a clear cost-exposure sort group');
 assert(scripts[1].includes('cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)'), 'Ledger must support highest-cost sorting');
 assert(scripts[1].includes('cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)'), 'Ledger must support lowest-cost sorting');
+assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highest lead-total-cost sorting');
+assert(scripts[1].includes('lead_cost_asc:(a,b)=>'), 'Ledger must support lowest lead-total-cost sorting');
 assert(scripts[1].includes('₹${billedCost} billed'), 'Ledger must show the billed cost behind cost sorting');
+assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumulative lead cost behind lead-total sorting');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');

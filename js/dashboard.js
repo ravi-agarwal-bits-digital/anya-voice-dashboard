@@ -2747,7 +2747,7 @@ const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:
 // so e.g. "Hot" + "India" narrows to hot leads in India, while "Has transcript" + "No transcript" (same
 // group) reads as either -- selecting a mutually-exclusive pair is equivalent to not filtering on it.
 const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo",has_transcript:"trans",no_transcript:"trans"};
-const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest estimated call cost",cost_asc:"Lowest estimated call cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
+const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest call cost",cost_asc:"Lowest call cost",lead_cost_desc:"Highest lead total cost",lead_cost_asc:"Lowest lead total cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
 
 function syncLedgerControls(){
   const s=$("explorerSearch"), sort=$("explorerSort");
@@ -2831,6 +2831,20 @@ function ledgerRepeatInfo(r){
 function ledgerIsSerialCaller(r){return ledgerRepeatInfo(r).count>=2;}
 function ledgerHasTranscript(r){return !!String(r?.trans||"").trim();}
 function ledgerCallCost(r){return normalizeDisposition(r)==='connected'?billedMinutes(r?.dur)*5:0;}
+const _ledgerLeadCostCache=new WeakMap();
+function ledgerLeadCostMap(records){
+  if(_ledgerLeadCostCache.has(records))return _ledgerLeadCostCache.get(records);
+  const costs=new Map();
+  records.forEach(r=>{
+    const key=ledgerPhoneKey(r);
+    if(key)costs.set(key,(costs.get(key)||0)+ledgerCallCost(r));
+  });
+  _ledgerLeadCostCache.set(records,costs);
+  return costs;
+}
+function ledgerLeadCost(r,records=LEDGER_SCOPE?.rows||RECORDS){
+  return ledgerLeadCostMap(records).get(ledgerPhoneKey(r))||ledgerCallCost(r);
+}
 function ledgerHasCallbackWindow(r){return !!(r?.cbPreferred && r.cbPreferred!=="Not specified");}
 function ledgerPriorityScore(r){
   const tier=r.leadTemp==="Hot"?300:r.leadTemp==="Warm"?150:0;
@@ -2882,7 +2896,9 @@ function ledgerMatchesActiveFilters(r){
 function getExplorerRows(){
   const q=String(LEDGER_STATE.search||"").trim().toLowerCase();
   const sort=LEDGER_STATE.sort||"time_desc";
-  let rows=(LEDGER_SCOPE?.rows||RECORDS).slice().filter(ledgerMatchesActiveFilters);
+  const costScopeRows=LEDGER_SCOPE?.rows||RECORDS;
+  const leadCosts=ledgerLeadCostMap(costScopeRows);
+  let rows=costScopeRows.slice().filter(ledgerMatchesActiveFilters);
   if(q){
     const terms=q.split(/\s+/).filter(Boolean);
     rows=rows.filter(r=>{
@@ -2899,6 +2915,8 @@ function getExplorerRows(){
     dur_asc:(a,b)=>(Number(a.dur||0)-Number(b.dur||0))||b.ts-a.ts,
     cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)||b.ts-a.ts,
     cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)||b.ts-a.ts,
+    lead_cost_desc:(a,b)=>(leadCosts.get(ledgerPhoneKey(b))||0)-(leadCosts.get(ledgerPhoneKey(a))||0)||b.ts-a.ts,
+    lead_cost_asc:(a,b)=>(leadCosts.get(ledgerPhoneKey(a))||0)-(leadCosts.get(ledgerPhoneKey(b))||0)||b.ts-a.ts,
     conf_desc:(a,b)=>(Number(b.conf||0)-Number(a.conf||0))||b.ts-a.ts,
     low_conf:(a,b)=>(Number(a.conf||0)-Number(b.conf||0))||b.ts-a.ts,
     need_desc:(a,b)=>(Number(b.need||0)-Number(a.need||0))||b.ts-a.ts,
@@ -2945,6 +2963,7 @@ function renderExplorer(resetLimit){
   $("explorerList").innerHTML=shown.map(r=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
     const billedCost=ledgerCallCost(r);
+    const leadCost=ledgerLeadCost(r);
     const tags=[];
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
     if(ledgerHasCallbackWindow(r))tags.push(`<span style="background:#fff7e8;color:var(--gold);padding:1px 6px;border-radius:3px;font-size:9px">Window</span>`);
@@ -2964,6 +2983,7 @@ function renderExplorer(resetLimit){
         <div style="color:${tempCol};font-weight:600;font-size:11px">${esc(r.leadTemp||"—")}</div>
         <div>${formatDuration(r.dur)}</div>
         <div style="color:var(--navy);font-weight:800">₹${billedCost} billed</div>
+        <div style="color:var(--gold);font-weight:850">Lead total ₹${leadCost}</div>
         <div>Conf ${Math.round(r.conf)}%</div>
         <div style="color:var(--faint)">${formatCallTime(r)}</div>
       </div>

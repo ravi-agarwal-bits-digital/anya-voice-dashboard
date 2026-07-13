@@ -18,8 +18,8 @@ This file records public-safe repository and application milestones. Detailed in
 - Moved metric definitions to the dashboard bottom and rendered the Management readout before lower-page charts and tables.
 - Made first-load header chips match filtered views and removed the non-actionable Source chip.
 - Normalized phone grouping in Follow-up queue and Repeat engagement so card minutes and cost match the lead drawer when phone formatting differs.
-- Added Ledger sorting by estimated per-call cost using the dashboard's billed-minute operating-cost assumption.
-- Displayed each Ledger row's billed cost so the estimated-cost sort is directly auditable.
+- Added clear Call cost and Lead total cost Ledger sorting using the dashboard's billed-minute operating-cost assumption.
+- Displayed each Ledger row's billed cost and cumulative lead cost so cost sorting is directly auditable.
 - Removed the redundant Hot/Warm/Cold lead-tier breakdown from profile drawers.
 - Added inbound/outbound call mix to profile-drawer call totals and collapsed long call histories behind an earlier-calls disclosure.
 - Removed redundant active-view count context from profile drawers.
