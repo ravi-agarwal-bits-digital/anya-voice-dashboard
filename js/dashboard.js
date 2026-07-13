@@ -2740,7 +2740,7 @@ const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:
 // so e.g. "Hot" + "India" narrows to hot leads in India, while "Has transcript" + "No transcript" (same
 // group) reads as either -- selecting a mutually-exclusive pair is equivalent to not filtering on it.
 const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo",has_transcript:"trans",no_transcript:"trans"};
-const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
+const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest estimated call cost",cost_asc:"Lowest estimated call cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
 
 function syncLedgerControls(){
   const s=$("explorerSearch"), sort=$("explorerSort");
@@ -2823,6 +2823,7 @@ function ledgerRepeatInfo(r){
 }
 function ledgerIsSerialCaller(r){return ledgerRepeatInfo(r).count>=2;}
 function ledgerHasTranscript(r){return !!String(r?.trans||"").trim();}
+function ledgerCallCost(r){return normalizeDisposition(r)==='connected'?billedMinutes(r?.dur)*5:0;}
 function ledgerHasCallbackWindow(r){return !!(r?.cbPreferred && r.cbPreferred!=="Not specified");}
 function ledgerPriorityScore(r){
   const tier=r.leadTemp==="Hot"?300:r.leadTemp==="Warm"?150:0;
@@ -2889,6 +2890,8 @@ function getExplorerRows(){
     time_asc:(a,b)=>a.ts-b.ts,
     dur_desc:(a,b)=>(Number(b.dur||0)-Number(a.dur||0))||b.ts-a.ts,
     dur_asc:(a,b)=>(Number(a.dur||0)-Number(b.dur||0))||b.ts-a.ts,
+    cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)||b.ts-a.ts,
+    cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)||b.ts-a.ts,
     conf_desc:(a,b)=>(Number(b.conf||0)-Number(a.conf||0))||b.ts-a.ts,
     low_conf:(a,b)=>(Number(a.conf||0)-Number(b.conf||0))||b.ts-a.ts,
     need_desc:(a,b)=>(Number(b.need||0)-Number(a.need||0))||b.ts-a.ts,
