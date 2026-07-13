@@ -1377,7 +1377,9 @@ function paintDialHeatmap(obRecs){
   const el=$('dialHeatmap');
   if(!el)return;
   const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const blockDefs=[[8,10],[10,12],[12,14],[14,16],[16,18],[18,20],[20,22]];
+  // These are the only vendor-approved campaign windows: 09:00 through 21:00 IST.
+  // Do not let pre-start or post-stop calls affect a recommendation the dialer cannot use.
+  const blockDefs=[[9,11],[11,13],[13,15],[15,17],[17,19],[19,21]];
   const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}-${String(b[1]).padStart(2,'0')}`);
   const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0,meaningful:0,recs:[]})));
   const timeBuckets=blockDefs.map(()=>({n:0,connected:0,meaningful:0,recs:[]}));

@@ -483,7 +483,7 @@ const timingProofRows=[
   ...Array.from({length:5},(_,index)=>({from:`9192000000${index}`,d:'2026-07-14',h:10,status:index===0?'completed':'failed',dur:index===0?75:0}))
 ];
 context.paintDialHeatmap(timingProofRows);
-assert(getElement('bestWindowNote').innerHTML.includes('Best retry time: 16-18 IST'), 'Timing recommendation must aggregate the best window across weekdays');
+assert(getElement('bestWindowNote').innerHTML.includes('Best retry time: 15-17 IST'), 'Timing recommendation must aggregate the best window across weekdays');
 assert(getElement('bestWindowNote').innerHTML.includes('10 dials · 3 conversations'), 'Timing recommendation must show concise meaningful-conversation proof');
 assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 answered'), 'Each timing cell must show its dial and answered-call proof');
 assert(getElement('dialHeatmap').innerHTML.includes('30% meaningful'), 'Timing cell must show meaningful conversation rate');
@@ -491,7 +491,8 @@ assert(getElement('dialPlaybookCards').innerHTML.includes('Campaign:</b>09:00–
 assert(getElement('dialPlaybookCards').innerHTML.includes('Retry:</b>3 max · ~5h apart'), 'Timing playbook must keep retry count and spacing visible by default');
 assert(getElement('dialPlaybookCards').innerHTML.includes('<summary>Vendor configuration</summary>'), 'Vendor detail must stay available without crowding the default playbook');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Start 09:00 · stop 21:00 IST'), 'Vendor policy must expose the daily campaign start and stop');
-assert(getElement('dialPlaybookCards').innerHTML.includes('16-18 IST'), 'Vendor policy must use the all-days preferred retry window');
+assert(getElement('dialPlaybookCards').innerHTML.includes('15-17 IST'), 'Vendor policy must use the all-days preferred retry window');
+assert(!context.paintDialHeatmap.toString().includes('[[8,10],[10,12]'), 'Timing windows must not extend outside the 09:00–21:00 campaign policy');
 assert(getElement('dialPlaybookCards').innerHTML.includes('queue a new lead for the next 09:00 start'), 'Vendor policy must explain the outside-hours lead handling');
 
 const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
