@@ -314,12 +314,14 @@ assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawe
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
 assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
-assert(scopedCSV.includes('Call Cost (Rs),Lead Total Cost (Rs)'), 'Standard CSV cost columns are missing');
-assert(scopedCSV.includes(',10,10,Hot,'), 'Standard CSV must include per-call and lead-total cost');
+assert(scopedCSV.includes('Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs)'), 'Standard CSV lead context columns are missing');
+assert(scopedCSV.includes(',10,1,1,0,0,10,Hot,'), 'Standard CSV must include per-call cost plus lead call and direction totals');
 const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
 assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
 assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
+assert(scripts[1].includes('Follow-up Rank,Phone,Lead Tier,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Follow-up export must use the standard lead count columns');
+assert(scripts[1].includes('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standard lead count columns');
 assert(context.callbackHasRequestedTime([{ cbPreferred: 'Tomorrow, 2:00 PM' }]), 'Requested-time follow-up classification changed');
 assert(!context.callbackHasRequestedTime([{ cbPreferred: 'Not specified' }]), 'Unscheduled follow-ups must remain identifiable');
 
@@ -341,7 +343,7 @@ assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes(
 context.__compactLeadRecords = compactLeadRecords;
 vm.runInContext('RECORDS=__compactLeadRecords;', context);
 context.exportSerialEngagers();
-assert(exportCapture.csv.startsWith('Phone,Direction Mix,Total Calls'), 'Repeat engagement export must use an action-ready summary schema');
+assert(exportCapture.csv.startsWith('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standardized action-ready summary schema');
 assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('General'), 'Repeat export must exclude hidden breakdown fields');
 
 vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'outbound',campaign:'Reset campaign'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Reset campaign';$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-10';resetAllFilters();", context);
