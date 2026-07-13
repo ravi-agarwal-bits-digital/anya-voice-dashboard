@@ -612,6 +612,10 @@ function searchUserByMobile(mobile, source="search"){
   const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
   const totalDur=sumBilledMinutes(userCalls);
   const totalCost=totalDur*5;
+  const inboundCalls=userCalls.filter(c=>normalizeDirection(c.direction)==='inbound').length;
+  const outboundCalls=userCalls.filter(c=>normalizeDirection(c.direction)==='outbound').length;
+  const otherCalls=userCalls.length-inboundCalls-outboundCalls;
+  const callMix=[inboundCalls?`<span class="profile-call-mix inbound">In ${inboundCalls}</span>`:'',outboundCalls?`<span class="profile-call-mix outbound">Out ${outboundCalls}</span>`:'',otherCalls?`<span class="profile-call-mix other">Other ${otherCalls}</span>`:''].filter(Boolean).join('');
 
   // Lead temperature breakdown
   const hot=userCalls.filter(c=>c.leadTemp==="Hot").length;
@@ -637,7 +641,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-      <div><b>Calls:</b> ${userCalls.length}</div><div><b>View:</b> Full history · ${activeCalls.length} (${percentOf(activeCalls.length,userCalls.length)}%) in active view</div>
+      <div class="profile-call-stat" style="grid-column:1/-1"><b>Calls:</b> ${userCalls.length}<span class="profile-call-mix-list">${callMix}</span></div>
       <div><b>Engagement:</b> ${engagement}</div>
       <div><b>Duration:</b> ${totalDur} mins</div>
       <div><b>Total cost:</b> ₹${totalCost}</div>
@@ -646,7 +650,7 @@ function searchUserByMobile(mobile, source="search"){
     </div>
   `;
 
-  $("userSearchTimeline").innerHTML=userCalls.map((c,i)=>{
+  const renderTimelineCall=(c,i)=>{
     const date=formatCallTime(c);
     return`<div class="profile-call-card" style="border-left:3px solid var(--line)">
       <div class="profile-call-head">
@@ -661,14 +665,18 @@ function searchUserByMobile(mobile, source="search"){
       </div>
       ${transcriptToggle(c,'prof'+i)}
     </div>`;
-  }).join("");
+  };
+  const timelineLimit=5;
+  const recentCalls=userCalls.slice(0,timelineLimit);
+  const olderCalls=userCalls.slice(timelineLimit);
+  $("userSearchTimeline").innerHTML=recentCalls.map(renderTimelineCall).join("")+(olderCalls.length?`<details class="profile-history-more"><summary>Show ${olderCalls.length} earlier call${olderCalls.length===1?'':'s'}</summary><div class="profile-history-more-body">${olderCalls.map((c,i)=>renderTimelineCall(c,i+timelineLimit)).join("")}</div></details>`:"");
 
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
     const label=source==="callback"?"Opened from the Follow-up queue":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from the Follow-up queue":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
     const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
-    note.textContent=label+`. Full call history is shown. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
+    note.textContent=label+`. Full call history is available below. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
   revealUserProfile(source);
 }

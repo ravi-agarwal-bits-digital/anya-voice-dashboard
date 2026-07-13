@@ -214,6 +214,10 @@ assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibi
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
 assert(!scripts[1].includes('<b style="color:var(--hot)">Attention</b>'), 'Profile timeline must not surface Attention labels in the reduced view');
 assert(!scripts[1].includes('<b>Lead tier:</b>'), 'Profile drawer must not repeat lead-tier breakdowns');
+assert(scripts[1].includes('profile-call-mix-list'), 'Profile drawer must show inbound/outbound call mix');
+assert(!scripts[1].includes('<b>View:</b> Full history'), 'Profile drawer must not show redundant active-view count context');
+assert(scripts[1].includes('const timelineLimit=5;'), 'Profile drawer timeline must limit its initial call history');
+assert(scripts[1].includes('profile-history-more'), 'Profile drawer must disclose earlier calls on demand');
 assert(!scripts[1].includes('if(r.frustrated)tags.push'), 'Ledger rows must not surface Attention tags in the reduced view');
 assert(scripts[1].includes("openProfileForPhone(${jsArg(l.phone)},'priority',this)"), 'Follow-up cards must use the profile drawer handler');
 assert(scripts[1].includes('csv+=[escCSV(r.callId),fullPhone(r.from)'), 'Record exports must include stable Call IDs');
