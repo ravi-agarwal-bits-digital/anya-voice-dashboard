@@ -162,6 +162,12 @@ assert.equal(context.sumBilledMinutes([
   { status: 'failed', dur: 120, msg: 0, trans: '' },
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
+const normalizedLeadGroups = context.groupByPhone([
+  { from: '+91 99999 99999', status: 'completed', dur: 60 },
+  { from: '919999999999', status: 'completed', dur: 60 }
+]);
+assert.equal(Object.keys(normalizedLeadGroups).length, 1, 'Queue cards must group phone-format variants into one lead');
+assert.equal(context.sumBilledMinutes(Object.values(normalizedLeadGroups)[0]), 2, 'Queue minutes must match the normalized lead profile');
 assert(scripts[1].includes('id="cbShowMore" role="button" tabindex="0" onkeydown='), 'Callback pagination must be keyboard accessible');
 assert(fs.existsSync('data/voice_analytics.xlsx'), 'Published workbook is missing');
 assert(fs.existsSync('data/voice_analytics.xlsx.meta.json'), 'Published workbook metadata is missing');

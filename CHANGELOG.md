@@ -17,6 +17,7 @@ This file records public-safe repository and application milestones. Detailed in
 - Restored advisory minutes and estimated operating cost to the consolidated Management readout.
 - Moved metric definitions to the dashboard bottom and rendered the Management readout before lower-page charts and tables.
 - Made first-load header chips match filtered views and removed the non-actionable Source chip.
+- Normalized phone grouping in Follow-up queue and Repeat engagement so card minutes and cost match the lead drawer when phone formatting differs.
 
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.

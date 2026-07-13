@@ -3011,7 +3011,9 @@ function groupByPhone(records){
   if(_byPhoneCache.has(records))return _byPhoneCache.get(records);
   const byPhone={};
   records.forEach(r=>{
-    const ph=r.from||"unknown";
+    // Use the same normalized lead key as the profile drawer. Raw formatting differences such as
+    // +91 99999… versus 9199999… must not split one lead's queue minutes/cost into separate cards.
+    const ph=ledgerPhoneKey(r)||r.from||"unknown";
     if(!byPhone[ph])byPhone[ph]=[];
     byPhone[ph].push(r);
   });
