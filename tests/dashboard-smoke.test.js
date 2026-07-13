@@ -309,10 +309,12 @@ assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawe
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
 assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
+assert(scopedCSV.includes('Call Cost (Rs),Lead Total Cost (Rs)'), 'Standard CSV cost columns are missing');
+assert(scopedCSV.includes(',10,10,Hot,'), 'Standard CSV must include per-call and lead-total cost');
 const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
 assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
-assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope)"), 'International export must use the standard CSV schema');
-assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope())"), 'Call ledger export must include its active filters and scope');
+assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
+assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
 assert(context.callbackHasRequestedTime([{ cbPreferred: 'Tomorrow, 2:00 PM' }]), 'Requested-time follow-up classification changed');
 assert(!context.callbackHasRequestedTime([{ cbPreferred: 'Not specified' }]), 'Unscheduled follow-ups must remain identifiable');
 

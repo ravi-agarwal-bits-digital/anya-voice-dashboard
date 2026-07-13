@@ -2402,12 +2402,14 @@ function drawerScopeHtml(label='Dashboard scope'){
 }
 // Standard record -> CSV used by every drawer/section export, so a downloaded file always has the
 // same columns wherever it came from. Phone is full (unmasked) for actioning the lead.
-function recordsToCSV(rows,scopeLabel=activeFilterScopeLabel()){
-  let csv='Call ID,Phone,Country,Direction,Call Time,Campaign,Status,Duration (mins),Lead Temp,Follow-up Requested,Requested Time,Intent,Failure Reason,Summary,Filter Scope\n';
+function recordsToCSV(rows,scopeLabel=activeFilterScopeLabel(),leadCostScopeRows=rows){
+  const costScope=leadCostScopeRows&&leadCostScopeRows.length?leadCostScopeRows:rows;
+  const leadCosts=ledgerLeadCostMap(costScope);
+  let csv='Call ID,Phone,Country,Direction,Call Time,Campaign,Status,Duration (mins),Call Cost (Rs),Lead Total Cost (Rs),Lead Temp,Follow-up Requested,Requested Time,Intent,Failure Reason,Summary,Filter Scope\n';
   rows.forEach(r=>{
     const c=classifyPhone(r.from);
     csv+=[escCSV(r.callId),fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
-      escCSV(r.campaign),escCSV(r.status),Math.round(r.dur/60*10)/10,escCSV(r.leadTemp),r.callback?'Yes':'No',
+      escCSV(r.campaign),escCSV(r.status),Math.round(r.dur/60*10)/10,ledgerCallCost(r),leadCosts.get(ledgerPhoneKey(r))||ledgerCallCost(r),escCSV(r.leadTemp),r.callback?'Yes':'No',
       escCSV(r.cbPreferred||'Not specified'),escCSV(r.intent),escCSV(r.failReason),escCSV(r.summary),escCSV(scopeLabel)].join(',')+'\n';
   });
   return csv;
@@ -2734,7 +2736,7 @@ function exportGeo(){
   const intl=RECORDS.filter(r=>classifyPhone(r.from).intl);
   if(!intl.length){alert("No international leads to export in this range.");return;}
   const scope=`${activeFilterScopeLabel()} · International leads only`;
-  downloadCSV('international_leads_'+csvDateStamp()+'.csv',recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope));
+  downloadCSV('international_leads_'+csvDateStamp()+'.csv',recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS));
 }
 
 // ===== CALL EXPLORER =====
@@ -3012,7 +3014,7 @@ function explorerOpen(phone){
 function exportExplorer(){
   const rows=getExplorerRows();
   if(!rows.length){alert("No calls to export in the current view.");return;}
-  downloadCSV('call_ledger_'+csvDateStamp()+'.csv',recordsToCSV(rows,ledgerExportScope()));
+  downloadCSV('call_ledger_'+csvDateStamp()+'.csv',recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS));
 }
 
 
@@ -3225,5 +3227,5 @@ function exportSerialEngagers(){
 function exportCallbacks(){
   const cbs=RECORDS.filter(r=>r.callback);
   if(!cbs.length){alert("No requested follow-ups to export for the current date and direction view.");return;}
-  downloadCSV('requested_follow_ups_'+csvDateStamp()+'.csv',recordsToCSV(cbs.sort((a,b)=>b.ts-a.ts),`${activeFilterScopeLabel()} · Requested follow-ups`));
+  downloadCSV('requested_follow_ups_'+csvDateStamp()+'.csv',recordsToCSV(cbs.sort((a,b)=>b.ts-a.ts),`${activeFilterScopeLabel()} · Requested follow-ups`,RECORDS));
 }
