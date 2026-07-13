@@ -483,8 +483,10 @@ context.paintDialHeatmap(timingProofRows);
 assert(getElement('bestWindowNote').innerHTML.includes('Best time of day: 16-18 IST across all days'), 'Timing recommendation must aggregate the best window across weekdays');
 assert(getElement('bestWindowNote').innerHTML.includes('10 dials across all days, 5 connected'), 'Timing recommendation must show the all-days dial and connection proof');
 assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 connected'), 'Each timing cell must show its dial and connection proof');
-assert(getElement('dialPlaybookCards').innerHTML.includes('Plan ~20 dials for 10 connects'), 'Timing playbook must convert the best window into a capacity guide');
-assert(getElement('dialPlaybookCards').innerHTML.includes('Fresh leads: call the first attempt immediately'), 'Timing playbook must not delay fresh leads for a preferred window');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Vendor calling rules'), 'Timing playbook must provide a compact vendor-ready policy');
+assert(getElement('dialPlaybookCards').innerHTML.includes('09:00–21:00 IST'), 'Vendor policy must expose the configured calling hours');
+assert(getElement('dialPlaybookCards').innerHTML.includes('3 max · ~5h apart'), 'Vendor policy must expose retry count and spacing');
+assert(getElement('dialPlaybookCards').innerHTML.includes('16-18 IST'), 'Vendor policy must use the all-days preferred retry window');
 
 const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
   from: `91${String(7000000000 + index)}`,

@@ -1414,20 +1414,10 @@ function paintDialHeatmap(obRecs){
   const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} connected · ${cell.pct}%`;
   const cardEl=$('dialPlaybookCards');
   if(cardEl){
-    const actionCard=(label,value,proof,kind,bucket)=>bucket
-      ?`<article class="opf-playbook-action ${kind}" onclick="openFilteredPanel(${jsArg(timeLabel(bucket)+' (all days outbound)')},()=>true,window.__timeBuckets[${bucket.bi}].recs)" title="Open the dial attempts behind this recommendation"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="proof">${esc(proof)} · Click for proof</div></article>`
-      :`<article class="opf-playbook-action watch"><div class="label">${esc(label)}</div><div class="value">Collect more data</div><div class="proof">At least ${minVol} dials are needed in one window before making a schedule recommendation.</div></article>`;
-    let istHour=new Date().getHours();
-    try{istHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',hourCycle:'h23'}).format(new Date()).replace(/\D/g,''));}catch(_){/* Browser-local hour is a safe fallback. */}
-    const inBest=bestTime&&istHour>=blockDefs[bestTime.bi][0]&&istHour<blockDefs[bestTime.bi][1];
-    const nextWindow=bestTime?(inBest?'Call batch now':istHour<blockDefs[bestTime.bi][0]?`Next batch: today ${timeLabel(bestTime)}`:`Next batch: tomorrow ${timeLabel(bestTime)}`):'';
-    const bestProof=bestTime?`${evidence(bestTime)} across all days · ${bestTime.pct>=overallPct?'+':''}${bestTime.pct-overallPct} pts vs ${overallPct}% overall`:'';
-    const capacity=bestTime?(bestTime.pct?`Plan ~${Math.ceil(10/(bestTime.pct/100))} dials for 10 connects`:'No connects in reliable windows'):'';
-    cardEl.innerHTML=[
-      actionCard('Best time of day',bestTime?timeLabel(bestTime):'',bestProof,'strong',bestTime),
-      actionCard('Batch timing',bestTime?nextWindow:'',bestTime?'Fresh leads: call the first attempt immediately; use this window for retries and batches.':'','watch',bestTime),
-      actionCard('Capacity guide',bestTime?capacity:'',bestTime?`Based on ${timeLabel(bestTime)}. ${evidence(bestTime)} across all days.`:'','strong',bestTime)
-    ].join('');
+    const retryRule=bestTime
+      ?`<button type="button" class="opf-policy-rule evidence" onclick="openFilteredPanel(${jsArg(timeLabel(bestTime)+' (all days outbound)')},()=>true,window.__timeBuckets[${bestTime.bi}].recs)" title="Open the dial attempts behind this recommendation"><span>Preferred retry window</span><b>${esc(timeLabel(bestTime))}</b><small>${esc(evidence(bestTime))} · proof</small></button>`
+      :`<div class="opf-policy-rule"><span>Preferred retry window</span><b>Collect more data</b><small>${minVol} dials needed per window</small></div>`;
+    cardEl.innerHTML=`<div class="opf-dialer-policy"><div class="opf-dialer-policy-head"><b>Vendor calling rules</b><span>Ready to configure</span></div><div class="opf-policy-rules"><div class="opf-policy-rule"><span>Calling hours</span><b>09:00–21:00 IST</b></div><div class="opf-policy-rule"><span>First attempt</span><b>Immediately</b></div><div class="opf-policy-rule"><span>Retries</span><b>3 max · ~5h apart</b></div>${retryRule}<div class="opf-policy-rule"><span>Stop when</span><b>Connect · callback · opt-out</b></div></div><div class="opf-policy-stop"><b>Rule:</b> do not wait for a preferred window before the first attempt; timing applies to retries and batch calling only.</div></div>`;
   }
   // The primary decision is the all-days time of day; weekday rows below are proof only.
   const bwEl=$('bestWindowNote');
