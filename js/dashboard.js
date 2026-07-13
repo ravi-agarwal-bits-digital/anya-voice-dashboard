@@ -2742,11 +2742,10 @@ const LEDGER_DEFAULT_STATE={search:"",sort:"time_desc",limit:50};
 let LEDGER_STATE={search:"",filters:new Set(),sort:"time_desc",limit:50};
 let LEDGER_SCOPE=null;
 let EXPLORER_LIMIT=LEDGER_STATE.limit;
-const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Follow-up requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_transcript:"Has transcript",no_transcript:"No transcript",has_callback_window:"Requested time",serial:"Serial caller"};
+const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:"Follow-up requested",intl:"International",india:"India",low_conf:"Low confidence",red_amber:"Red / Amber",has_callback_window:"Requested time",serial:"Serial caller"};
 // Chips within a group combine with OR; the groups themselves combine with AND (facet-search semantics),
-// so e.g. "Hot" + "India" narrows to hot leads in India, while "Has transcript" + "No transcript" (same
-// group) reads as either -- selecting a mutually-exclusive pair is equivalent to not filtering on it.
-const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo",has_transcript:"trans",no_transcript:"trans"};
+// so e.g. "Hot" + "India" narrows to hot leads in India, while same-group choices read as either.
+const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo"};
 const LEDGER_SORT_LABELS={time_desc:"Newest first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest call cost",cost_asc:"Lowest call cost",lead_cost_desc:"Highest lead total cost",lead_cost_asc:"Lowest lead total cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
 
 function syncLedgerControls(){
@@ -2829,7 +2828,6 @@ function ledgerRepeatInfo(r){
   return info||{count:1,latest:Number(r?.ts||0)};
 }
 function ledgerIsSerialCaller(r){return ledgerRepeatInfo(r).count>=2;}
-function ledgerHasTranscript(r){return !!String(r?.trans||"").trim();}
 function ledgerCallCost(r){return normalizeDisposition(r)==='connected'?billedMinutes(r?.dur)*5:0;}
 const _ledgerLeadCostCache=new WeakMap();
 function ledgerLeadCostMap(records){
@@ -2871,8 +2869,6 @@ function ledgerMatchesFilter(r, filt){
   if(filt==="india")return !c.intl;
   if(filt==="low_conf")return Number(r.conf||0)<50;
   if(filt==="red_amber")return /^(Red|Amber)$/i.test(String(r.band||""));
-  if(filt==="has_transcript")return ledgerHasTranscript(r);
-  if(filt==="no_transcript")return !ledgerHasTranscript(r);
   if(filt==="has_callback_window")return ledgerHasCallbackWindow(r);
   if(filt==="serial")return ledgerIsSerialCaller(r);
   return true;
@@ -2955,6 +2951,7 @@ function renderExplorer(resetLimit){
   $("explorerList").innerHTML=shown.map(r=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
     const billedCost=ledgerCallCost(r);
+    const billedMins=billedCost/5;
     const leadCost=ledgerLeadCost(r);
     const tags=[];
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
@@ -2974,7 +2971,7 @@ function renderExplorer(resetLimit){
       <div style="text-align:right;font-size:10px;color:var(--muted);white-space:nowrap">
         <div style="color:${tempCol};font-weight:600;font-size:11px">${esc(r.leadTemp||"—")}</div>
         <div>${formatDuration(r.dur)}</div>
-        <div style="color:var(--navy);font-weight:800">₹${billedCost} billed</div>
+        <div style="color:var(--navy);font-weight:800">Cost ₹${billedCost} · ${billedMins} billed min${billedMins===1?'':'s'}</div>
         <div style="color:var(--gold);font-weight:850">Lead total ₹${leadCost}</div>
         <div>Conf ${Math.round(r.conf)}%</div>
         <div style="color:var(--faint)">${formatCallTime(r)}</div>

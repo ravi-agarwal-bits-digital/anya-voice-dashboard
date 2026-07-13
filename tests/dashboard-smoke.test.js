@@ -215,8 +215,10 @@ assert(scripts[1].includes('cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)
 assert(scripts[1].includes('cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)'), 'Ledger must support lowest-cost sorting');
 assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highest lead-total-cost sorting');
 assert(scripts[1].includes('lead_cost_asc:(a,b)=>'), 'Ledger must support lowest lead-total-cost sorting');
-assert(scripts[1].includes('₹${billedCost} billed'), 'Ledger must show the billed cost behind cost sorting');
+assert(scripts[1].includes('Cost ₹${billedCost} · ${billedMins} billed min'), 'Ledger must explain the billed cost behind cost sorting');
 assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumulative lead cost behind lead-total sorting');
+assert(!html.includes('data-f="has_transcript"'), 'Ledger must not expose transcript-completeness filters');
+assert(!html.includes('data-f="no_transcript"'), 'Ledger must not expose transcript-completeness filters');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
