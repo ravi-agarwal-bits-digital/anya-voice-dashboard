@@ -194,7 +194,9 @@ assert(!scripts[1].includes('Outbound operational context'), 'Direction glance m
 assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
 assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing must be presented as an operating playbook');
 assert(html.includes('id="dialPlaybookCards"'), 'Outbound playbook action cards are missing');
-assert(html.includes('2-hour IST schedule'), 'Outbound playbook must explain the two-hour operating granularity');
+assert(html.includes('strongest 2-hour time of day across'), 'Outbound playbook must explain the two-hour operating granularity');
+assert(html.includes('Fresh lead? Make the first attempt immediately.'), 'Outbound playbook must preserve first-attempt lead freshness');
+assert(html.includes('Weekday evidence'), 'Weekday timing must be positioned as supporting proof');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
@@ -478,9 +480,11 @@ const timingProofRows=[
   ...Array.from({length:5},(_,index)=>({from:`9192000000${index}`,d:'2026-07-14',h:10,status:index===0?'completed':'failed',dur:index===0?30:0}))
 ];
 context.paintDialHeatmap(timingProofRows);
-assert(getElement('bestWindowNote').innerHTML.includes('10 dials placed, 5 connected'), 'Timing recommendation must show the dial and connection proof');
+assert(getElement('bestWindowNote').innerHTML.includes('Best time of day: 16-18 IST across all days'), 'Timing recommendation must aggregate the best window across weekdays');
+assert(getElement('bestWindowNote').innerHTML.includes('10 dials across all days, 5 connected'), 'Timing recommendation must show the all-days dial and connection proof');
 assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 connected'), 'Each timing cell must show its dial and connection proof');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Plan ~20 dials for 10 connects'), 'Timing playbook must convert the best window into a capacity guide');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Fresh leads: call the first attempt immediately'), 'Timing playbook must not delay fresh leads for a preferred window');
 
 const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
   from: `91${String(7000000000 + index)}`,

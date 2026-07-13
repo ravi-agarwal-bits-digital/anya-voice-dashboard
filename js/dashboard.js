@@ -1377,6 +1377,7 @@ function paintDialHeatmap(obRecs){
   const blockDefs=[[8,10],[10,12],[12,14],[14,16],[16,18],[18,20],[20,22]];
   const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}-${String(b[1]).padStart(2,'0')}`);
   const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0,recs:[]})));
+  const timeBuckets=blockDefs.map(()=>({n:0,connected:0,recs:[]}));
   obRecs.forEach(r=>{
     if(!r.d)return;
     const parts=r.d.split('-').map(Number);
@@ -1385,9 +1386,15 @@ function paintDialHeatmap(obRecs){
     if(bi<0)return;
     grid[wd][bi].n++;
     grid[wd][bi].recs.push(r);
-    if(normalizeDisposition(r)==='connected')grid[wd][bi].connected++;
+    timeBuckets[bi].n++;
+    timeBuckets[bi].recs.push(r);
+    if(normalizeDisposition(r)==='connected'){
+      grid[wd][bi].connected++;
+      timeBuckets[bi].connected++;
+    }
   });
   window.__heatmapCells=grid;
+  window.__timeBuckets=timeBuckets;
   if(el.style&&typeof el.style.setProperty==='function')el.style.setProperty('--timing-columns',blockDefs.length);
   else if(el.style)el.style['--timing-columns']=blockDefs.length;
   const totalDials=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.n,0),0);
@@ -1400,30 +1407,33 @@ function paintDialHeatmap(obRecs){
   grid.forEach((row,ri)=>row.forEach((c,bi)=>{
     if(c.n>=minVol)reliable.push({...c,ri,bi,pct:Math.round(c.connected/c.n*100)});
   }));
-  const best=reliable.slice().sort((a,b)=>b.pct-a.pct||b.n-a.n)[0];
-  const worst=reliable.slice().sort((a,b)=>a.pct-b.pct||b.n-a.n)[0];
+  const reliableTimes=timeBuckets.map((c,bi)=>({...c,bi,pct:c.n?Math.round(c.connected/c.n*100):0})).filter(c=>c.n>=minVol);
+  const bestTime=reliableTimes.slice().sort((a,b)=>b.pct-a.pct||b.n-a.n)[0];
   const slotLabel=cell=>`${dayNames[cell.ri]} ${blockLabels[cell.bi]} IST`;
+  const timeLabel=cell=>`${blockLabels[cell.bi]} IST`;
   const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} connected · ${cell.pct}%`;
   const cardEl=$('dialPlaybookCards');
   if(cardEl){
-    const actionCard=(label,value,proof,kind,cell)=>cell
-      ?`<article class="opf-playbook-action ${kind}" onclick="openFilteredPanel(${jsArg(slotLabel(cell)+' (outbound)')},()=>true,window.__heatmapCells[${cell.ri}][${cell.bi}].recs)" title="Open the dial attempts behind this recommendation"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="proof">${esc(proof)} · Click for proof</div></article>`
+    const actionCard=(label,value,proof,kind,bucket)=>bucket
+      ?`<article class="opf-playbook-action ${kind}" onclick="openFilteredPanel(${jsArg(timeLabel(bucket)+' (all days outbound)')},()=>true,window.__timeBuckets[${bucket.bi}].recs)" title="Open the dial attempts behind this recommendation"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="proof">${esc(proof)} · Click for proof</div></article>`
       :`<article class="opf-playbook-action watch"><div class="label">${esc(label)}</div><div class="value">Collect more data</div><div class="proof">At least ${minVol} dials are needed in one window before making a schedule recommendation.</div></article>`;
-    const bestProof=best?`${evidence(best)} · ${best.pct>=overallPct?'+':''}${best.pct-overallPct} pts vs ${overallPct}% overall`:'';
-    const capacity=best?(best.pct?`Plan ~${Math.ceil(10/(best.pct/100))} dials for 10 connects`:'No connects in reliable windows'):'';
-    const avoidCell=worst&&worst.pct<=overallPct-4?worst:null;
-    const avoidProof=avoidCell?`${evidence(avoidCell)} · ${avoidCell.pct-overallPct} pts vs ${overallPct}% overall`:`No reliable window is at least 4 points below the ${overallPct}% overall rate.`;
+    let istHour=new Date().getHours();
+    try{istHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',hourCycle:'h23'}).format(new Date()).replace(/\D/g,''));}catch(_){/* Browser-local hour is a safe fallback. */}
+    const inBest=bestTime&&istHour>=blockDefs[bestTime.bi][0]&&istHour<blockDefs[bestTime.bi][1];
+    const nextWindow=bestTime?(inBest?'Call batch now':istHour<blockDefs[bestTime.bi][0]?`Next batch: today ${timeLabel(bestTime)}`:`Next batch: tomorrow ${timeLabel(bestTime)}`):'';
+    const bestProof=bestTime?`${evidence(bestTime)} across all days · ${bestTime.pct>=overallPct?'+':''}${bestTime.pct-overallPct} pts vs ${overallPct}% overall`:'';
+    const capacity=bestTime?(bestTime.pct?`Plan ~${Math.ceil(10/(bestTime.pct/100))} dials for 10 connects`:'No connects in reliable windows'):'';
     cardEl.innerHTML=[
-      actionCard('Place more calls here',best?slotLabel(best):'',bestProof,'strong',best),
-      actionCard('Capacity guide',best?capacity:'',best?`Based on ${slotLabel(best)}. ${evidence(best)}.`:'','watch',best),
-      actionCard('Use sparingly',avoidCell?slotLabel(avoidCell):'No clear avoid window',avoidProof,'avoid',avoidCell)
+      actionCard('Best time of day',bestTime?timeLabel(bestTime):'',bestProof,'strong',bestTime),
+      actionCard('Batch timing',bestTime?nextWindow:'',bestTime?'Fresh leads: call the first attempt immediately; use this window for retries and batches.':'','watch',bestTime),
+      actionCard('Capacity guide',bestTime?capacity:'',bestTime?`Based on ${timeLabel(bestTime)}. ${evidence(bestTime)} across all days.`:'','strong',bestTime)
     ].join('');
   }
-  // Put the recommendation and its evidence directly above the schedule.
+  // The primary decision is the all-days time of day; weekday rows below are proof only.
   const bwEl=$('bestWindowNote');
   if(bwEl){
-    bwEl.innerHTML=best
-      ?`<span class="opf-bestwin-dot"></span><span><b>Top reliable window: ${esc(slotLabel(best))}</b> — ${best.pct}% versus ${overallPct}% across scheduled windows. <b>Proof:</b> ${best.n.toLocaleString()} dials placed, ${best.connected.toLocaleString()} connected; about ${Math.round(best.pct/10)} connects per 10 dials. Windows need at least ${minVol} dials to qualify.</span>`
+    bwEl.innerHTML=bestTime
+      ?`<span class="opf-bestwin-dot"></span><span><b>Best time of day: ${esc(timeLabel(bestTime))} across all days</b> — ${bestTime.pct}% versus ${overallPct}% across scheduled windows. <b>Proof:</b> ${bestTime.n.toLocaleString()} dials across all days, ${bestTime.connected.toLocaleString()} connected; about ${Math.round(bestTime.pct/10)} connects per 10 dials. Windows need at least ${minVol} dials to qualify.</span>`
       :`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>Collect a little more timing data.</b> No 2-hour window has the ${minVol}-dial minimum yet, so the dashboard will not recommend a time prematurely.</span>`;
     bwEl.style.display='flex';
   }
