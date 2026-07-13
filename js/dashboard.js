@@ -523,7 +523,7 @@ function applyFilters(){
   }
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
-  paintHealth(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintManagementBrief();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
 
   // Trigger KPI and verdict animations
   document.querySelectorAll('.kpi').forEach(kpi=>{
@@ -544,8 +544,7 @@ function applyFilters(){
     ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),
     ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
-    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
-    ()=>{try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);}}
+    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}}
   ],()=>setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120));
   closeUserSearch();
 }
@@ -2314,7 +2313,7 @@ function boot(){
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
-  paintHealth(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintManagementBrief();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50;
   runPaintChunks(generation,[
@@ -2324,7 +2323,6 @@ function boot(){
     ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
     ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
-    ()=>{try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);}},
     ()=>{$("foot").innerHTML=reducedAiViewEnabled()
       ?`<b>Methodology.</b> Computed from Voice Export (${o.n} final unique Call-ID records). Operational totals and percentages are computed live from this session's data.`
       :`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;}
