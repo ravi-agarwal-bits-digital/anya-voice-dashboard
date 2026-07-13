@@ -9,6 +9,7 @@ This file records public-safe repository and application milestones. Detailed in
 - Renamed the visible priority area to Follow-up queue and removed heuristic Attention/General labels from Ledger rows and profile details while retaining the underlying source fields and exports.
 - Added CEO-facing naming and card polish, repaired Follow-up queue and Repeat engagement profile-drawer navigation, and standardized operational CSV exports with stable Call IDs and active filter scope.
 - Reduced duplicate dashboard information by making the header contextual, keeping Call flow focused on direction comparison, assigning dial mechanics to Outbound results, and making Executive summary narrative-led.
+- Added clear spacing between the Follow-up queue and Repeat engagement panels.
 
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.

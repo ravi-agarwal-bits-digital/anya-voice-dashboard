@@ -197,6 +197,7 @@ assert(scripts[1].includes("openProfileForPhone(${jsArg(l.phone)},'priority',thi
 assert(scripts[1].includes('csv+=[escCSV(r.callId),fullPhone(r.from)'), 'Record exports must include stable Call IDs');
 assert(!scripts[1].includes('Avg Confidence %,Avg Need Score'), 'Visible operational exports must not use AI score columns');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('.repeat-engagement-panel{margin-top:24px!important;}'), 'Follow-up and repeat engagement panels need clear visual separation');
 assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
 assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
 assert(html.includes('label="Confidence" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence group marker is missing');
