@@ -208,6 +208,9 @@ assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',
 assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
 assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');
 assert(html.includes('<optgroup label="Cost exposure">'), 'Ledger needs a clear cost-exposure sort group');
+assert(html.includes('<optgroup label="Follow-up &amp; repeat">'), 'Ledger follow-up sort group needs a factual label');
+assert(!html.includes('value="priority_desc"'), 'Ledger must not expose the heuristic priority sort');
+assert(!scripts[1].includes('ledgerPriorityScore'), 'Ledger must not retain the heuristic priority score');
 assert(scripts[1].includes('cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)'), 'Ledger must support highest-cost sorting');
 assert(scripts[1].includes('cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)'), 'Ledger must support lowest-cost sorting');
 assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highest lead-total-cost sorting');

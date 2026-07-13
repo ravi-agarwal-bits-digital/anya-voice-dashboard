@@ -2747,7 +2747,7 @@ const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:
 // so e.g. "Hot" + "India" narrows to hot leads in India, while "Has transcript" + "No transcript" (same
 // group) reads as either -- selecting a mutually-exclusive pair is equivalent to not filtering on it.
 const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo",has_transcript:"trans",no_transcript:"trans"};
-const LEDGER_SORT_LABELS={time_desc:"Newest first",priority_desc:"Priority first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest call cost",cost_asc:"Lowest call cost",lead_cost_desc:"Highest lead total cost",lead_cost_asc:"Lowest lead total cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
+const LEDGER_SORT_LABELS={time_desc:"Newest first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest call cost",cost_asc:"Lowest call cost",lead_cost_desc:"Highest lead total cost",lead_cost_asc:"Lowest lead total cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
 
 function syncLedgerControls(){
   const s=$("explorerSearch"), sort=$("explorerSort");
@@ -2846,13 +2846,6 @@ function ledgerLeadCost(r,records=LEDGER_SCOPE?.rows||RECORDS){
   return ledgerLeadCostMap(records).get(ledgerPhoneKey(r))||ledgerCallCost(r);
 }
 function ledgerHasCallbackWindow(r){return !!(r?.cbPreferred && r.cbPreferred!=="Not specified");}
-function ledgerPriorityScore(r){
-  const tier=r.leadTemp==="Hot"?300:r.leadTemp==="Warm"?150:0;
-  const attention=r.frustrated?70:0;
-  const callback=r.callback?90:0;
-  const intl=classifyPhone(r.from).intl?30:0;
-  return tier+callback+attention+intl+Number(r.need||0)+(Number(r.conf||0)/10);
-}
 function ledgerSearchBlob(r){
   const c=classifyPhone(r.from);
   const rawPhone=String(r.from||"");
@@ -2908,7 +2901,6 @@ function getExplorerRows(){
   }
   const sorters={
     time_desc:(a,b)=>b.ts-a.ts,
-    priority_desc:(a,b)=>ledgerPriorityScore(b)-ledgerPriorityScore(a)||b.ts-a.ts,
     callback_desc:(a,b)=>(Number(!!b.callback)-Number(!!a.callback))||b.ts-a.ts,
     time_asc:(a,b)=>a.ts-b.ts,
     dur_desc:(a,b)=>(Number(b.dur||0)-Number(a.dur||0))||b.ts-a.ts,
