@@ -614,8 +614,6 @@ function searchUserByMobile(mobile, source="search"){
   }
 
   // Calculate stats
-  const frustrated=userCalls.filter(c=>c.frustrated).length;
-  const general=userCalls.length-frustrated;
   const avgConf=Math.round(userCalls.reduce((a,c)=>a+c.conf,0)/userCalls.length);
   const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
   const totalDur=sumBilledMinutes(userCalls);
@@ -645,7 +643,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-      <div><b>Calls:</b> ${userCalls.length} (${frustrated} attention · ${percentOf(frustrated,userCalls.length)}% • ${general} general · ${percentOf(general,userCalls.length)}%)</div><div><b>View:</b> Full history · ${activeCalls.length} (${percentOf(activeCalls.length,userCalls.length)}%) in active view</div>
+      <div><b>Calls:</b> ${userCalls.length}</div><div><b>View:</b> Full history · ${activeCalls.length} (${percentOf(activeCalls.length,userCalls.length)}%) in active view</div>
       <div><b>Engagement:</b> ${engagement}</div>
       <div><b>Duration:</b> ${totalDur} mins</div>
       <div><b>Total cost:</b> ₹${totalCost}</div>
@@ -657,10 +655,9 @@ function searchUserByMobile(mobile, source="search"){
 
   $("userSearchTimeline").innerHTML=userCalls.map((c,i)=>{
     const date=formatCallTime(c);
-    const tag=c.frustrated?`<b style="color:var(--hot)">Attention</b>`:` <b style="color:var(--green)">General</b>`;
-    return`<div class="profile-call-card" style="border-left:3px solid ${c.frustrated?'var(--hot)':'var(--green)'}">
+    return`<div class="profile-call-card" style="border-left:3px solid var(--line)">
       <div class="profile-call-head">
-        <b>Call ${i+1} ${tag} ${directionPill(c.direction)}</b>
+        <b>Call ${i+1} ${directionPill(c.direction)}</b>
         <span style="color:var(--muted)">${date}</span>
       </div>
       <div class="profile-call-meta">
@@ -676,7 +673,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
-    const label=source==="callback"?"Opened from the Priority follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from Priority prospects":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
+    const label=source==="callback"?"Opened from the Follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from the Follow-up queue":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
     const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
     note.textContent=label+`. Full call history is shown. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
@@ -2297,7 +2294,7 @@ function paintManagementBrief(){
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
   if(summary){
     summary.innerHTML=reducedAiViewEnabled()
-      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>.`
+      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), the follow-up queue contains <b>${cur.hot}</b> leads (${hotPct}%), and the period showed <b>${serialPhrase}</b>.`
       :`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
   }
   const hasPrev=prev.length>0;
@@ -2394,7 +2391,7 @@ function paintKPIs(o){
   const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
   // 4th field = drill-down key -- every KPI here is now a count/set over the same "all" record set,
   // even the averages (minutes, cost, duration), so clicking any of them shows what it was computed from.
-  // Operational headline row. Priority prospects & AI confidence intentionally live in the Management
+  // Operational headline row. The follow-up queue and AI confidence intentionally live in the Management
   // Summary just below (with period-over-period trend + inbound/outbound split), so they're not repeated
   // here -- this row stays volume/cost/quality to avoid the top of the dashboard saying the same thing twice.
   const cards=[
@@ -2521,7 +2518,7 @@ function openKpiPanel(key){
   // Build the record set + title for each drill-down key
   let title="",rows=[],stats=[];
   if(key==="all"){title="All Calls";rows=RECORDS.slice();}
-  else if(key==="hot"){title="Priority prospects";rows=RECORDS.filter(r=>r.leadTemp==="Hot");}
+  else if(key==="hot"){title="Follow-up queue";rows=RECORDS.filter(r=>r.leadTemp==="Hot");}
   else if(key==="green"){title="Quality-pass calls (Green)";rows=RECORDS.filter(r=>r.band==="Green");}
   else if(key==="geo"){title="Lead geography";rows=RECORDS.filter(r=>classifyPhone(r.from).intl);} // intl records listed; india summarized in stats
   else if(key==="conf"){title="Assistant confidence";rows=RECORDS.slice();}
@@ -2979,7 +2976,6 @@ function renderExplorer(resetLimit){
   $("explorerList").innerHTML=shown.map(r=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
     const tags=[];
-    if(r.frustrated)tags.push(`<span style="background:rgba(231,76,60,.15);color:${C.hot};padding:1px 6px;border-radius:3px;font-size:9px">Attention</span>`);
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
     if(ledgerHasCallbackWindow(r))tags.push(`<span style="background:#fff7e8;color:var(--gold);padding:1px 6px;border-radius:3px;font-size:9px">Window</span>`);
     const repeat=ledgerRepeatInfo(r);
@@ -3215,7 +3211,7 @@ function exportHottestLeads(){
 
   let csv='Phone,Direction Mix,Total Calls,Hot,Warm,Cold,Frustrated,Avg Confidence %,Avg Need Score,Total Duration (mins),Lead Score,Top Intent,Last Call Time,Last Summary\n';
   leads.forEach(l=>{csv+=`${fullPhone(l.ph)},${escCSV(directionMixText(groupByPhone(RECORDS)[l.ph]||[]))},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
-  downloadCSV('hottest_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  downloadCSV('follow_up_queue_'+new Date().toISOString().slice(0,10)+'.csv',csv);
 }
 
 function exportSerialEngagers(){

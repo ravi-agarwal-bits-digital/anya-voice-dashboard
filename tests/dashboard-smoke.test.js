@@ -178,7 +178,13 @@ assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Manage
 assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
 assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
+assert(html.includes('Follow-up queue &amp; repeat callers'), 'Follow-up queue heading is missing');
+assert(html.includes('Follow-up queue (Top 50)'), 'Follow-up queue panel title is missing');
+assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
+assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
+assert(!scripts[1].includes('<b style="color:var(--hot)">Attention</b>'), 'Profile timeline must not surface Attention labels in the reduced view');
+assert(!scripts[1].includes('if(r.frustrated)tags.push'), 'Ledger rows must not surface Attention tags in the reduced view');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
 assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
 assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
