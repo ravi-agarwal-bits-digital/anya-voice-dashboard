@@ -97,7 +97,7 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
   'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV'
+  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -176,6 +176,19 @@ assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data fr
 assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
 assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
 assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
+assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
+assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
+assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
+assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
+for (const marker of [
+  'id="sec-overview" data-hide-in-reduced-view="true"',
+  'id="sec-anomaly" data-hide-in-reduced-view="true"',
+  'id="sec-perf" data-hide-in-reduced-view="true"',
+  'id="sec-themes" data-hide-in-reduced-view="true"',
+  'id="sec-outbound-cadence" data-hide-in-reduced-view="true"',
+  'id="sec-friction" data-hide-in-reduced-view="true"'
+]) assert(html.includes(marker), `Reduced-view marker missing: ${marker}`);
 
 const searchRows = [
   { from: '+91 99999 99999', ts: 2, d: '2026-07-10', direction: 'inbound', campaign: '' },
@@ -192,6 +205,19 @@ const scopeRecord = {
   leadTemp: 'Hot', band: 'Green', intent: 'Eligibility', conf: 90, need: 80,
   frustrated: false, callback: true, status: 'completed', summary: 'Synthetic export'
 };
+context.document.body.classList.contains = className => className === 'dashboard-reduced-ai-view';
+assert.equal(context.reducedAiViewEnabled(), true, 'Reduced dashboard view should be enabled');
+const reducedStats = context.defaultDrillStats([scopeRecord]).map(item => item[0]).join('|');
+assert(!reducedStats.includes('confidence') && !reducedStats.includes('need'), 'Reduced drawer stats must hide AI/need fields');
+assert(!context.recordListHtml([scopeRecord]).includes('Conf '), 'Reduced drawer rows must hide confidence');
+vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'inbound',campaign:'',status:'completed',dur:30,msg:2,from:'919111111111'},{d:'2026-07-10',direction:'outbound',campaign:'',status:'completed',dur:30,msg:2,from:'919222222222'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
+context.paintDirectionCompare();
+assert(!getElement('dirCompareTable').innerHTML.includes('Avg AI confidence'), 'Reduced direction comparison must hide AI confidence');
+assert(!getElement('dirCompareTable').innerHTML.includes('Quality pass rate (Green)'), 'Reduced direction comparison must hide quality pass rate');
+context.RECORDS = [scopeRecord];
+context.paintKPIs(context.aggregate(context.RECORDS));
+assert(!getElement('kpis').innerHTML.includes('Quality pass rate'), 'Reduced overview must hide quality pass rate');
+vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];", context);
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
 assert(scopedCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');

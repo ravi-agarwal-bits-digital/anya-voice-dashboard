@@ -4,6 +4,8 @@ This file records public-safe repository and application milestones. Detailed in
 
 ## Unreleased
 
+- Added a reversible reduced dashboard view that hides AI/quality-heavy sections, metrics, navigation links, anomaly messaging, and detail fields while preserving operational filters, follow-up workflows, encrypted data, exports, and the existing layout.
+
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.
 

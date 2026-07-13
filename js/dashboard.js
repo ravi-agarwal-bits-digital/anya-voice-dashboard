@@ -65,6 +65,7 @@ function syncSidebarActive(forceId){
   setActive(best);
 }
 window.addEventListener('DOMContentLoaded',()=>{
+  applyReducedAiControlVisibility();
   const links=[...document.querySelectorAll('.side-link')];
   links.forEach(a=>a.addEventListener('click',e=>{
     const el=document.querySelector(a.getAttribute('href'));
@@ -102,6 +103,15 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",indigo:"#5b47d6",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
+// Keep this view switch aligned with the body class in index.html. The hidden sections and
+// dynamic fields remain in the source so the reduced view can be restored without rebuilding logic.
+function reducedAiViewEnabled(){
+  return !!(document.body&&document.body.classList&&document.body.classList.contains('dashboard-reduced-ai-view'));
+}
+function applyReducedAiControlVisibility(){
+  if(!reducedAiViewEnabled()||!document.querySelectorAll)return;
+  document.querySelectorAll('option[data-hide-in-reduced-view="true"]').forEach(option=>option.remove());
+}
 const METRIC_DEFINITIONS=Object.freeze({
   'Enquiries':'Final unique Call-ID conversation records in the active dashboard scope.',
   'Unique leads':'Distinct normalized lead phone numbers represented by those final records.',
@@ -630,6 +640,7 @@ function searchUserByMobile(mobile, source="search"){
   // Engagement score
   const engagementScore=userCalls.length*2+frustrated*3+avgNeed*0.5;
   const engagement=engagementScore>20?"Very high":engagementScore>12?"High":"Normal";
+  const reducedView=reducedAiViewEnabled();
 
   $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
@@ -638,10 +649,9 @@ function searchUserByMobile(mobile, source="search"){
       <div><b>Engagement:</b> ${engagement}</div>
       <div><b>Duration:</b> ${totalDur} mins</div>
       <div><b>Total cost:</b> ₹${totalCost}</div>
-      <div><b>Avg Confidence:</b> ${avgConf}%</div>
-      <div><b>Avg Need Score:</b> ${avgNeed}</div>
+      ${reducedView?'':`<div><b>Avg Confidence:</b> ${avgConf}%</div><div><b>Avg Need Score:</b> ${avgNeed}</div>`}
       <div style="grid-column:1/-1"><b>Lead tier:</b> Hot ${hot} (${percentOf(hot,userCalls.length)}%) | Warm ${warm} (${percentOf(warm,userCalls.length)}%) | Cold ${cold} (${percentOf(cold,userCalls.length)}%)</div>
-      <div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>
+      ${reducedView?'':`<div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>`}
     </div>
   `;
 
@@ -654,7 +664,7 @@ function searchUserByMobile(mobile, source="search"){
         <span style="color:var(--muted)">${date}</span>
       </div>
       <div class="profile-call-meta">
-        <b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}<br>
+        ${reducedView?`<b>Temp:</b> ${esc(c.leadTemp)}`:`<b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}`}<br>
         <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${esc(c.cbReason)}<br>
         <b>Detected callback window:</b> ${esc(c.cbPreferred||"Not specified")}<br>
         <span class="profile-call-summary">${esc(c.summary)}</span>
@@ -1267,6 +1277,9 @@ function paintDirectionCompare(){
     ['Avg AI confidence',ib.avgConf+'%',ob.avgConf+'%','()=>true'],
     ['Quality pass rate (Green)',ib.greenPct+'%',ob.greenPct+'%',"r=>r.band==='Green'"]
   ];
+  const visibleRows=reducedAiViewEnabled()
+    ?rows.filter(r=>!['Avg AI confidence','Quality pass rate (Green)'].includes(r[0]))
+    :rows;
   const operationalRows=[
     ['Dials placed','Not applicable',ops.n.toLocaleString(),'window.__dirOutDials'],
     ['Connected dials','Inbound calls arrive connected',`${ops.connected.length.toLocaleString()} (${ops.connectPct}%)`,'window.__dirOutConnected'],
@@ -1279,7 +1292,7 @@ function paintDirectionCompare(){
   el.innerHTML=`<table class="opf-cmp-table direction-glance-table"><thead><tr><th>Metric</th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
-    `<tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td>`+
+    `<tbody>${visibleRows.map(r=>`<tr><td>${esc(r[0])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}`+
     `<tr class="direction-glance-group"><td colspan="3">Outbound operational context</td></tr>`+
@@ -2164,7 +2177,7 @@ function paintCallbacks(recs){
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:var(--teal)">${formatCallTime(c)}</b>${directionPill(c.direction)}</div>
           <span style="color:var(--muted)">${formatDuration(c.dur)}</span>
         </div>
-        <div style="color:var(--muted);margin-bottom:4px">Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | ${esc(c.cbReason)}</div>
+        <div style="color:var(--muted);margin-bottom:4px">${reducedAiViewEnabled()?'':`Conf ${Math.round(c.conf)}% | Need ${Math.round(c.need)} | `}${esc(c.cbReason)}</div>
         <div class="callback-preferred ${(!c.cbPreferred || c.cbPreferred==='Not specified')?'unspecified':''}"><span>Detected callback window</span><b>${esc(c.cbPreferred||'Not specified')}</b></div>
         ${c.summary?`<div style="color:#344054;line-height:1.6;border-top:1px solid var(--line2);padding-top:7px;margin-top:6px;font-size:12px">${esc(c.summary)}</div>`:""}
       </div>`;
@@ -2277,7 +2290,11 @@ function paintManagementBrief(){
   }
   const cbPct=pctBrief(cur.callbacks,cur.n),hotPct=pctBrief(cur.hot,cur.n);
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
-  if(summary)summary.innerHTML=`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
+  if(summary){
+    summary.innerHTML=reducedAiViewEnabled()
+      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>.`
+      :`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
+  }
   const hasPrev=prev.length>0;
   // Bifurcate by direction so a leader can see the inbound/outbound mix behind each headline number
   // without having to flip the All/Inbound/Outbound toggle -- only meaningful in the "All calls" view,
@@ -2289,10 +2306,9 @@ function paintManagementBrief(){
     ['good','Enquiries','n','count',()=>true],
     ['good','Unique leads','unique','ratio',()=>true],
     ['hot','Callbacks','callbacks','ratio',r=>r.callback],
-    ['hot','Hot leads','hot','ratio',r=>r.leadTemp==='Hot'],
-    ['good','AI confidence','avgConf','percent',()=>true],
-    ['neut','Attention signals','friction','ratio',r=>r.frustrated]
+    ['hot','Hot leads','hot','ratio',r=>r.leadTemp==='Hot']
   ];
+  if(!reducedAiViewEnabled())kpiDefs.push(['good','AI confidence','avgConf','percent',()=>true],['neut','Attention signals','friction','ratio',r=>r.frustrated]);
   if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,format,pred])=>{
     const val=cur[key],prevVal=old[key];
     const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
@@ -2347,7 +2363,9 @@ function boot(){
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
     ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
     ()=>{try{paintManagementBrief();}catch(e){console.warn("paintManagementBrief error:",e);}},
-    ()=>{$("foot").innerHTML=`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;}
+    ()=>{$("foot").innerHTML=reducedAiViewEnabled()
+      ?`<b>Methodology.</b> Computed from Voice Export (${o.n} final unique Call-ID records). Operational totals and percentages are computed live from this session's data.`
+      :`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;}
   ],()=>setTimeout(()=>syncSidebarActive(),120));
 }
 
@@ -2379,9 +2397,9 @@ function paintKPIs(o){
     ["hot",totalMins+" mins","Advisory minutes","all"],
     ["hot","₹"+totalCost,"Estimated operating cost","all"],
     ["good",o.india+" India · "+o.intl+" International","India / International","geo"],
-    ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration","all"],
-    ["good",pct(o.green)+"%","Quality pass rate","green"]
+    ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration","all"]
   ];
+  if(!reducedAiViewEnabled())cards.push(["good",pct(o.green)+"%","Quality pass rate","green"]);
   $("kpis").innerHTML=cards.map(c=>{
     const definition=metricDefinition(c[2]);
     const clickable=c[3]?`onclick="openKpiPanel('${c[3]}')" style="cursor:pointer" title="${esc(definition)} Click for details" aria-label="${esc(c[2])}: ${esc(definition)}"`: `title="${esc(definition)}" aria-label="${esc(c[2])}: ${esc(definition)}"`;
@@ -2472,7 +2490,7 @@ function recordListHtml(rows){
       const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
       return `<div onclick="closeKpiPanel();explorerOpen(${jsArg(r.from)})" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
         <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'Inter',monospace;color:var(--cream)">${esc(maskPhone(r.from))}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
-        <div style="color:var(--muted);font-size:10px">${esc(r.intent)} · ${formatDuration(r.dur)} · Conf ${Math.round(r.conf)}% · ${formatCallTime(r)}</div>
+        <div style="color:var(--muted);font-size:10px">${reducedAiViewEnabled()?'':esc(r.intent)+' · '}${formatDuration(r.dur)}${reducedAiViewEnabled()?'':' · Conf '+Math.round(r.conf)+'%'} · ${formatCallTime(r)}</div>
         ${r.summary?`<div style="color:var(--faint);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.summary)}</div>`:""}
       </div>`;
     }).join("");
@@ -2483,7 +2501,9 @@ function defaultDrillStats(rows){
   const avgConf=Math.round(rows.reduce((a,r)=>a+r.conf,0)/n);
   const avgNeed=Math.round(rows.reduce((a,r)=>a+r.need,0)/n);
   const ratio=v=>`${v} (${percentOf(v,n)}%)`,hot=rows.filter(r=>r.leadTemp==="Hot").length,callbacks=rows.filter(r=>r.callback).length,intl=rows.filter(r=>classifyPhone(r.from).intl).length;
-  return[["Matching calls",n],["Avg confidence",avgConf+"%"],["Avg need",avgNeed],["Hot leads",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
+  const stats=[["Matching calls",n],["Hot leads",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
+  if(!reducedAiViewEnabled())stats.splice(1,0,["Avg confidence",avgConf+"%"],["Avg need",avgNeed]);
+  return stats;
 }
 // The one function nearly every chart/bar/KPI across the dashboard calls on click: filter down to the
 // exact calls behind a number and show them. baseRows defaults to the current filtered view (RECORDS);
@@ -3084,6 +3104,10 @@ function paintHottestLeads(records){
     let typeEmoji="Cold",typeCol="var(--cold)";
     if(l.hot>=Math.ceil(l.total*0.6)){typeEmoji="Hot";typeCol="var(--hot)";}
     else if(l.hot>=Math.ceil(l.total*0.3)){typeEmoji="Warm";typeCol="var(--warm)";}
+    const advancedLeadDetails=reducedAiViewEnabled()?'':`
+        <div><b>Avg Conf:</b> ${l.avgConf}%</div>
+        <div><b>Avg Need:</b> ${l.avgNeed}</div>
+        <div style="grid-column:1/-1"><b>Top Intent:</b> ${esc(l.topIntent)}</div>`;
 
     return`<div style="padding:14px;background:#f8fafc;border-radius:8px;border:1px solid var(--line);cursor:pointer;transition:.2s" onclick="markProfileSource(this);openLeadProfile(${i})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
@@ -3094,10 +3118,8 @@ function paintHottestLeads(records){
         <div><b>Lead:</b> ${typeEmoji} ${l.hot}H (${percentOf(l.hot,l.total)}%) | ${l.warm}W (${percentOf(l.warm,l.total)}%) | ${l.cold}C (${percentOf(l.cold,l.total)}%)</div>
         <div><b>Calls:</b> ${l.total} (${l.frustrated} attention · ${percentOf(l.frustrated,l.total)}%)</div>
         <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
-        <div><b>Avg Conf:</b> ${l.avgConf}%</div>
-        <div><b>Avg Need:</b> ${l.avgNeed}</div>
-        <div style="grid-column:1/-1"><b>Top Intent:</b> ${esc(l.topIntent)}</div>
-        <div style="grid-column:1/-1"><b>Score:</b> <span style="color:var(--teal)">${Math.round(l.leadScore)}</span> | <b>Cost:</b> <span style="color:var(--hot)">₹${l.totalDur*5}</span></div>
+        ${advancedLeadDetails}
+        <div style="grid-column:1/-1"><b>Cost:</b> <span style="color:var(--hot)">₹${l.totalDur*5}</span></div>
       </div>
       ${directionMix(l.calls)}
       <div style="font-size:9px;color:var(--faint);margin-top:6px">Click to view full profile →</div>

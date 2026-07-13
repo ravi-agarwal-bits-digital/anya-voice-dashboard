@@ -3,6 +3,8 @@
 body{background:var(--ink);color:var(--cream);font-family:'Inter',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;
   background-image:radial-gradient(circle at 12% -5%,#16202e 0%,transparent 42%),radial-gradient(circle at 88% 0%,#1c1626 0%,transparent 38%),radial-gradient(circle at 50% 120%,#101b1a 0%,transparent 50%)}
 body::before{content:"";position:fixed;inset:-25%;z-index:-1;pointer-events:none;background:radial-gradient(38% 32% at 18% 12%,#1c3a4f4d,transparent 70%),radial-gradient(34% 28% at 86% 8%,#2a1f4a4d,transparent 70%),radial-gradient(44% 38% at 62% 92%,#10322c4d,transparent 70%);filter:blur(46px);animation:drift 26s ease-in-out infinite alternate}
+/* Temporary reduced dashboard view: remove marked AI/quality surfaces without deleting their markup. */
+body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]{display:none!important}
 @keyframes drift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-3%,2%) scale(1.07)}}
 @keyframes kpiPulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:0.8}100%{transform:scale(1);opacity:1}}
 @keyframes spin{to{transform:rotate(360deg)}}
