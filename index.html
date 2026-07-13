@@ -14,7 +14,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/dashboard.css">
 </head>
-<body>
+<!-- Toggle this class off when the temporarily reduced AI/quality view should be restored. -->
+<body class="dashboard-reduced-ai-view">
 
 <!-- ===== LOGIN GATE ===== -->
 <div id="loginGate">
@@ -80,47 +81,41 @@
       <button type="button" class="side-group-label"><span>Overview</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link active" href="#sec-overview"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg></span><span>Overview</span></a>
-        <a class="side-link" href="#sec-anomaly"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg></span><span>What moved</span></a>
+        <a class="side-link" href="#sec-anomaly" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg></span><span>What moved</span></a>
         <a class="side-link" href="#sec-direction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M21 7H8"></path><path d="M7 21l-4-4 4-4"></path><path d="M3 17h13"></path></svg></span><span>Call flow</span></a>
       </div>
     </div>
 
     <div class="side-group open" data-group="demand">
-      <button type="button" class="side-group-label"><span>Demand &amp; quality</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <button type="button" class="side-group-label"><span>Demand</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Conversion</span></a>
-        <a class="side-link" href="#sec-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI &amp; quality</span></a>
-        <a class="side-link" href="#sec-themes"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
+        <a class="side-link" href="#sec-perf" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI &amp; quality</span></a>
+        <a class="side-link" href="#sec-themes" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
         <a class="side-link" href="#sec-volume"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m7 14 3-3 4 4 5-8"></path></svg></span><span>Trends</span></a>
         <a class="side-link" href="#sec-geo"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"></path></svg></span><span>Geography</span></a>
       </div>
     </div>
 
-    <div class="side-group" data-group="outbound">
+    <div class="side-group open" data-group="outbound">
       <button type="button" class="side-group-label side-group-outbound"><span>Outbound</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link side-link-outbound" href="#sec-outbound-perf"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.4"></circle></svg></span><span>Performance</span></a>
-        <a class="side-link side-link-outbound" href="#sec-outbound-cadence"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 12l4.5-3"></path><path d="M12 3v2"></path><path d="M21 12h-2"></path></svg></span><span>Cadence</span></a>
+        <a class="side-link side-link-outbound" href="#sec-outbound-cadence" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 12l4.5-3"></path><path d="M12 3v2"></path><path d="M21 12h-2"></path></svg></span><span>Cadence</span></a>
         <a class="side-link side-link-outbound" href="#sec-campaigns"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"></path><path d="M15.5 8.5a4 4 0 0 1 0 7"></path></svg></span><span>Campaigns</span></a>
       </div>
     </div>
 
-    <div class="side-group" data-group="leads">
+    <div class="side-group open" data-group="leads">
       <button type="button" class="side-group-label"><span>Leads &amp; follow-up</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
-        <a class="side-link" href="#sec-hottest"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><span>Prospects</span></a>
-        <a class="side-link" href="#sec-callbacks"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path></svg></span><span>Follow-up</span></a>
-        <a class="side-link" href="#sec-friction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M10.3 4.3 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span><span>Friction</span></a>
+        <a class="side-link" href="#sec-hottest"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path><path d="M16 3.1a4 4 0 0 1 0 7.8"></path></svg></span><span>Follow-up queue</span></a>
+        <a class="side-link" href="#sec-callbacks"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.4 19.4 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7l.5 3a2 2 0 0 1-.6 1.8L7.2 10.3a16 16 0 0 0 6.5 6.5l1.8-1.8a2 2 0 0 1 1.8-.6l3 .5A2 2 0 0 1 22 16.9z"></path></svg></span><span>Requested follow-ups</span></a>
+        <a class="side-link" href="#sec-friction" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M10.3 4.3 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg></span><span>Friction</span></a>
         <a class="side-link" href="#sec-explorer"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path></svg></span><span>Ledger</span></a>
       </div>
     </div>
 
-    <div class="side-group" data-group="leadership">
-      <button type="button" class="side-group-label"><span>Leadership</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
-      <div class="side-group-links">
-        <a class="side-link" href="#sec-brief" title="Management Summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Mgmt Summary</span></a>
-      </div>
-    </div>
   </nav>
   <div class="side-punch"><span>BITS PILANI'S LEGACY</span><strong>DIGITAL INTELLIGENCE</strong></div>
 </aside>
@@ -129,7 +124,7 @@
 <div id="uploadView" style="display:none !important;visibility:hidden !important;pointer-events:none !important">
   <div class="tag">BITS Pilani Digital · Anya Voice Dashboard</div>
   <h1>Anya Voice <em>Dashboard</em></h1>
-  <p class="lead">Review voice performance, lead quality, caller intent, operating cost, and follow-up priorities from a single management view. Everything runs in your browser; nothing is uploaded.</p>
+  <p class="lead">Review call demand, outcomes, operating cost, and follow-up priorities from a single executive view. Everything runs in your browser; nothing is uploaded.</p>
   <div class="drop" id="dropZone">
     <div style="font-size:42px;margin-bottom:14px"></div>
     <b>Add voice export</b>
@@ -146,7 +141,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div class="top-brand">
         <img class="top-logo-img" src="assets/logo.jpg" alt="BITS Pilani Digital logo">
-        <div class="top-title-wrap"><div class="top-title">Anya Voice Dashboard</div><div class="top-subtitle">Call quality, lead intelligence and follow-up priorities</div></div>
+        <div class="top-title-wrap"><div class="top-title">Anya Voice Dashboard</div><div class="top-subtitle">Call demand, outcomes and follow-up priorities</div></div>
       </div>
       <div id="meta" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
@@ -182,7 +177,6 @@
         </div>
           <select id="campaignFilter" onchange="setCampaignFilter(this.value)" title="Filter the whole dashboard to one outbound campaign" style="display:none"></select>
           <span id="directionCurrent" class="direction-current all" aria-live="polite">All calls</span>
-          <button type="button" id="openMgmtSummaryBtn" class="summary-jump-btn" onclick="openManagementSummary()" title="Open management summary for the selected view">Mgmt Summary</button>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>
           </div>
@@ -193,22 +187,27 @@
   </div>
 
   <!-- Hero: Call Quality Score + Gauge -->
-  <div class="hero" id="sec-overview">
+  <div class="hero" id="sec-quality" data-hide-in-reduced-view="true">
     <div id="gauge"></div>
     <div class="hx" id="heroText"></div>
   </div>
 
-  <!-- KPI Strip -->
-  <div class="strip" id="kpis"></div>
+  <section id="sec-overview" class="management-brief">
+    <div class="overview-readout-head"><div><div class="brief-eyebrow">Management readout</div><h2>Overview</h2></div><button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button></div>
+    <div class="brief-cover">
+      <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
+      <div class="strip" id="briefKpis"></div>
+    </div>
+  </section>
 
-  <section id="sec-anomaly">
+  <section id="sec-anomaly" data-hide-in-reduced-view="true">
     <div class="shead"><span class="n">01</span><h2>What moved, and why</h2></div>
     <div class="cap" style="margin:-10px 0 16px">Auto-detected shifts versus the prior period, each with a data-derived cause &mdash; including when a change is <b>not</b> what it looks like. Reflects the current date &amp; direction view.</div>
     <div class="anom-grid" id="anomalyCards"></div>
   </section>
 
   <section id="sec-direction" class="direction-overview">
-    <div class="shead"><span class="n">02</span><h2>Call Flow Overview</h2></div>
+    <div class="shead"><span class="n">02</span><h2>Call flow</h2></div>
     <div class="direction-summary" id="directionSummary"></div>
     <div class="panel" style="margin-top:16px">
       <div class="shead" style="margin-bottom:14px"><h4 style="font-family:'Source Serif 4',serif;font-size:15px;font-weight:600">Inbound vs Outbound at a glance</h4></div>
@@ -246,16 +245,16 @@
     </div>
   </aside>
 
-  <section id="sec-conversion"><div class="shead"><span class="n">03</span><h2>Demand conversion</h2></div>
+  <section id="sec-conversion"><div class="shead"><span class="n">03</span><h2>Outcomes &amp; follow-up</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Demand outcomes</h4><div class="cap">Callback demand and lead tiers across the selected period. Callback is an intent signal and can overlap with any lead tier.</div><div class="funnel" id="funnel"></div></div>
       <div class="conversion-support">
-        <div class="panel"><h4>Quality by lead tier</h4><div class="cap">Average confidence and need score for each lead tier.</div><div id="tempQual"></div></div>
+        <div class="panel" data-hide-in-reduced-view="true"><h4>Quality by lead tier</h4><div class="cap">Average confidence and need score for each lead tier.</div><div id="tempQual"></div></div>
         <div class="panel"><h4>Conversation duration mix</h4><div class="cap">Completed conversations grouped into practical duration bands.</div><div id="durBands"></div></div>
       </div>
     </div></section>
 
-  <section id="sec-perf"><div class="shead"><span class="n">04</span><h2>AI advisor &amp; quality</h2></div>
+  <section id="sec-perf" data-hide-in-reduced-view="true"><div class="shead"><span class="n">04</span><h2>AI advisor &amp; quality</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Confidence distribution</h4><div class="cap">Calls grouped by assistant confidence level.</div><div id="confDist"></div></div>
       <div class="panel"><h4>Call outcomes by confidence</h4><div class="cap">Conversion rate by confidence band.</div><div id="confImpact"></div></div>
@@ -265,18 +264,18 @@
       <div class="panel"><h4>Quality by messages exchanged</h4><div class="cap">Lead conversion by conversation length.</div><div id="msgImpact"></div></div>
     </div></section>
 
-  <section id="sec-themes"><div class="shead"><span class="n">05</span><h2>Demand themes</h2></div>
+  <section id="sec-themes" data-hide-in-reduced-view="true"><div class="shead"><span class="n">05</span><h2>Demand themes</h2></div>
     <div class="panel"><h4>Intent distribution</h4><div class="cap" style="margin-bottom:14px">Transcript-derived themes across the selected calls.</div><div class="intlist" id="intents"></div></div>
     <div class="panel" style="margin-top:24px"><h4>Conversion quality by intent</h4><div class="cap">Not every reached call is worth the same. For each thing people call about, how often it turns into a <b>hot lead</b> vs. a frustrated dead-end — so effort and scripting go where demand actually converts. Counted <b>once per lead</b> (a number dialled repeatedly isn't double-counted). Reflects the current date &amp; direction view.</div><div id="intentQualityControls" class="iq-toggle"></div><div id="intentQuality"></div></div>
   </section>
 
-  <section id="sec-volume"><div class="shead"><span class="n">06</span><h2>Demand trends</h2></div>
+  <section id="sec-volume"><div class="shead"><span class="n">06</span><h2>Demand over time</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Daily volume</h4><div class="cap">Daily call volume across the selected period.</div><div id="dayChart"></div></div>
       <div class="panel"><h4>Hourly patterns</h4><div class="cap">Hourly call patterns and service demand.</div><div id="hourChart"></div></div>
     </div></section>
 
-  <section id="sec-geo"><div class="shead"><span class="n">07</span><h2>Lead geography</h2><button onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export international</button></div>
+  <section id="sec-geo"><div class="shead"><span class="n">07</span><h2>Reach by geography</h2><button onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export international</button></div>
     <div class="panel">
       <div class="cap">Domestic vs international split, and the international country breakdown, for the selected period.</div>
       <div class="grid2" style="margin-top:10px">
@@ -291,24 +290,24 @@
       <div class="od-title">Outbound</div>
       <div class="od-sub">Everything about the calls <b>you place</b> — conversion &amp; reach, dialing cadence &amp; capacity, and campaign performance. Jump to any of the three from the <b>Outbound</b> group in the sidebar. Hidden under the Inbound view.</div>
     </div>
-    <div class="shead"><span class="n">08</span><h2>Outbound Performance &amp; Conversion</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="shead"><span class="n">08</span><h2>Outbound results</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Every outbound dial — connected, failed and initiated — deduplicated by Call ID. Reach and connectivity come from all dials; lead quality comes from the calls that connected.</div>
     <div class="strip" id="outboundPerfKpis"></div>
     <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Dials placed &rarr; connected &rarr; hot leads. The red row is the failed-call leakage &mdash; dials that never connected. Click any bar (or the leakage) for the calls behind it.</div><div id="outboundFunnel"></div></div>
     <div class="grid2" style="margin-top:24px">
       <div class="panel"><h4>Reach &amp; disposition</h4><div class="cap">Every outbound dial by outcome. <b>Initiated</b> = a dial logged with no terminal status (didn't connect).</div><div id="dispositionBreak"></div></div>
-      <div class="panel"><h4>Wasted-effort hit-list</h4><div class="cap">Numbers dialed 3+ times that never once connected — stop-calling or switch-to-SMS candidates.</div><div id="unreachableList"></div></div>
+      <div class="panel" data-hide-in-reduced-view="true"><h4>Wasted-effort hit-list</h4><div class="cap">Numbers dialed 3+ times that never once connected — stop-calling or switch-to-SMS candidates.</div><div id="unreachableList"></div></div>
     </div>
     <div class="panel" style="margin-top:24px"><h4>Redial effectiveness by attempt #</h4><div class="cap">Connect rate, share of eventual connects, and call length for the 1st, 2nd, 3rd+ dial to the same lead. Tells you when redialing stops paying off.</div><div id="redialCurve"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Best time to dial</h4><div class="cap">Connect rate by weekday and 4-hour block (IST). Darker = higher connect rate. Dial into the dark cells.</div><div id="bestWindowNote" class="opf-bestwin"></div><div class="opf-heatmap" id="dialHeatmap"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Dial timing vs yield</h4><div class="cap">Are dials going into the windows that actually connect and convert? Volume, connect rate, and hot-lead rate side by side — by hour block or weekday.</div><div id="dialTimingControls" class="iq-toggle"></div><div id="dialTimingNote" class="opf-bestwin" style="display:none"></div><div id="dialTiming"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Outbound calling playbook</h4><div class="cap">Fresh lead: call immediately. Retries: use the best all-days 2-hour window. Meaningful = 60+ seconds.</div><div id="bestWindowNote" class="opf-bestwin"></div><div id="timingMetricControls" class="iq-toggle" aria-label="Timing recommendation metric"></div><div id="dialPlaybookCards" class="opf-playbook-actions"></div><details class="opf-weekday-proof"><summary>View day &amp; time detail</summary><div class="cap">Supporting evidence only — do not delay a fresh lead to wait for a specific day.</div><div class="opf-timing-wrap"><div class="opf-heatmap" id="dialHeatmap"></div></div></details></div>
+    <div class="panel" style="margin-top:24px" data-hide-in-reduced-view="true"><h4>Dial timing vs yield</h4><div class="cap">Are dials going into the windows that actually connect and convert? Volume, connect rate, and hot-lead rate side by side — by hour block or weekday.</div><div id="dialTimingControls" class="iq-toggle"></div><div id="dialTimingNote" class="opf-bestwin" style="display:none"></div><div id="dialTiming"></div></div>
   </section>
 
   <section id="sec-outbound-perf-hidden" style="display:none">
     <div class="opf-hidden-note">Outbound Performance &amp; Conversion is hidden in Inbound view &mdash; connect rate, reach, and redial economics aren't meaningful for calls the lead initiated themselves. It reappears under Outbound or All calls.</div>
   </section>
 
-  <section id="sec-outbound-cadence">
+  <section id="sec-outbound-cadence" data-hide-in-reduced-view="true">
     <div class="shead"><span class="n">09</span><h2>Outbound Cadence &amp; Capacity</h2><span id="cadenceScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">How many lines you need, whether the dialer is honouring your calling policy, and the retry cadence that actually gets a connection without over-calling.</div>
     <div class="panel"><h4>Concurrency &amp; capacity</h4><div class="cap">Simultaneous live conversations across the selected range &mdash; peak overlap sets your minimum channel/licence count. Talk time only; a ringing line is also occupied, so treat the peak as a floor.</div><div class="strip" id="concKpis"></div><div class="subh" style="margin-top:18px">Peak concurrent calls by hour of day (IST)</div><div class="conc-chart" id="concChart"></div><div class="conc-axis" id="concAxis"></div></div>
@@ -321,58 +320,63 @@
   </section>
 
   <section id="sec-campaigns">
-    <div class="shead"><span class="n">10</span><h2>Campaign Performance</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="shead"><span class="n">10</span><h2>Campaign results</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Every outbound campaign side by side. Fresh, targeted lists usually convert far better than bulk batches &mdash; this makes that visible. Use the campaign selector in the header to scope the whole dashboard to one campaign.</div>
     <div class="panel"><h4>Campaign leaderboard</h4><div class="cap">Dials, connect rate, unique-number reach, and hot-lead rate per campaign. Click a row for its calls; click a header to sort.</div><div id="campaignLeaderboard"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Why dials fail</h4><div class="cap">Diagnosed failure reasons (SIP / hangup codes) for outbound dials that never connected.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
+    <div class="panel" style="margin-top:24px"><h4>Why we never reached them</h4><div class="cap">Top reasons outbound numbers were not reached. Smaller categories are grouped for a compact operating view.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
   </section>
 
   <section id="sec-campaigns-hidden" style="display:none">
-    <div class="opf-hidden-note">Campaign Performance is hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. It reappears under Outbound or All calls.</div>
+    <div class="opf-hidden-note">Campaign results are hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. They reappear under Outbound or All calls.</div>
   </section>
 
-  <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Priority prospects &amp; repeat callers</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export prospects CSV</button></div>
-    <div class="panel"><h4>Priority prospects (Top 50)</h4><div class="cap">Highest-priority leads ranked by tier, frequency, need score, and confidence. Select a lead to open the profile drawer.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
-    <div class="panel" style="margin-top:24px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><h4 style="margin:0">Repeat callers (3+ calls)</h4><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div><div class="cap">Phone numbers with 3+ calls, including attention and general-call breakdown. Select a lead to view the timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
+  <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Follow-up &amp; repeat engagement</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-up CSV</button></div>
+    <div class="panel follow-up-panel"><h4>Follow-up queue</h4><div class="cap">Leads ranked for follow-up. Select a card to open the profile drawer.</div><div id="hottestLeads" class="follow-up-grid"></div></div>
+    <div class="panel repeat-engagement-panel"><div class="repeat-engagement-heading"><div><h4 style="margin:0">Repeat engagement</h4><div class="cap">Phone numbers with 3+ calls. Select a card to view the full timeline.</div></div><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export repeat CSV</button></div><div id="serialCallers" class="repeat-engagement-grid"></div></div>
   </section>
 
-  <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Callback requests</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
-    <div class="panel"><div class="cap" style="margin-bottom:16px">Every callback request with mobile number, reason, and detected callback window where available. <b id="cbCount" style="color:var(--hot)"></b> calls requiring follow-up.</div>
-    <div id="cbSla" style="margin-bottom:16px"></div>
-    <div class="queue-filter-label">Callback queue filter</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+  <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Requested follow-ups</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-ups CSV</button></div>
+    <div class="panel"><div class="cap" style="margin-bottom:16px">Leads whose conversation indicates a follow-up request. Requested time is shown only when it was detected in the conversation. <b id="cbCount" style="color:var(--hot)"></b></div>
+    <div id="cbReadiness" style="margin-bottom:16px"></div>
+    <div class="queue-filter-label">Filter by topic</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
     <div id="cbList" style="max-height:600px;overflow-y:auto"></div></div></section>
 
-  <section id="sec-friction"><div class="shead"><span class="n">13</span><h2>Friction analysis</h2></div>
+  <section id="sec-friction" data-hide-in-reduced-view="true"><div class="shead"><span class="n">13</span><h2>Friction analysis</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Friction breakdown</h4><div class="cap">Common reasons callers need attention.</div><div id="frustBreak"></div></div>
       <div class="panel"><h4>Cost impact</h4><div class="cap">Estimated cost of attention-required calls at ₹5/min</div><div id="frustCost"></div></div>
     </div></section>
 
-  <section id="sec-explorer"><div class="shead"><span class="n">14</span><h2>Enquiry ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export current ledger view</button></div>
+  <section id="sec-explorer"><div class="shead"><span class="n">14</span><h2>Call ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export current ledger view</button></div>
     <div class="panel">
       <div class="cap">Every call in the selected date and direction view. Search, sort, and select a row to open the profile drawer.</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 10px">
-        <input type="text" id="explorerSearch" placeholder="Search ledger: phone, theme, transcript, callback..." style="flex:1;min-width:240px;padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="updateLedgerState({search:this.value})">
+        <input type="text" id="explorerSearch" placeholder="Search ledger: phone, transcript, callback..." style="flex:1;min-width:240px;padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px" oninput="updateLedgerState({search:this.value})">
         <select id="explorerSort" onchange="updateLedgerState({sort:this.value})" style="padding:8px 12px;background:#ffffff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;cursor:pointer">
           <optgroup label="Recency">
             <option value="time_desc">Newest first</option>
             <option value="time_asc">Oldest first</option>
           </optgroup>
-          <optgroup label="Priority">
-            <option value="priority_desc">Priority first</option>
+          <optgroup label="Follow-up &amp; repeat">
             <option value="callback_desc">Callback first</option>
-            <option value="need_desc">Highest need</option>
+            <option value="need_desc" data-hide-in-reduced-view="true">Highest need</option>
             <option value="repeat_desc">Most repeated first</option>
           </optgroup>
           <optgroup label="Duration">
             <option value="dur_desc">Longest duration</option>
             <option value="dur_asc">Shortest duration</option>
           </optgroup>
-          <optgroup label="Confidence">
-            <option value="conf_desc">Highest confidence</option>
-            <option value="low_conf">Low confidence first</option>
+          <optgroup label="Cost exposure">
+            <option value="cost_desc">Call cost — highest first</option>
+            <option value="cost_asc">Call cost — lowest first</option>
+            <option value="lead_cost_desc">Lead total cost — highest first</option>
+            <option value="lead_cost_asc">Lead total cost — lowest first</option>
           </optgroup>
-          <optgroup label="Reach">
+          <optgroup label="Confidence" data-hide-in-reduced-view="true">
+            <option value="conf_desc" data-hide-in-reduced-view="true">Highest confidence</option>
+            <option value="low_conf" data-hide-in-reduced-view="true">Low confidence first</option>
+          </optgroup>
+          <optgroup label="Reach" data-hide-in-reduced-view="true">
             <option value="intl_desc">International first</option>
           </optgroup>
         </select>
@@ -383,15 +387,15 @@
           <span class="ledger-group-label">Lead quality</span>
           <div class="ledger-chip-row">
             <button type="button" class="cbfilt" data-f="hot" onclick="toggleLedgerFilter('hot')">Hot only</button>
-            <button type="button" class="cbfilt" data-f="low_conf" onclick="toggleLedgerFilter('low_conf')">Low confidence</button>
-            <button type="button" class="cbfilt" data-f="red_amber" onclick="toggleLedgerFilter('red_amber')">Red / Amber</button>
+            <button type="button" class="cbfilt" data-f="low_conf" data-hide-in-reduced-view="true" onclick="toggleLedgerFilter('low_conf')">Low confidence</button>
+            <button type="button" class="cbfilt" data-f="red_amber" data-hide-in-reduced-view="true" onclick="toggleLedgerFilter('red_amber')">Red / Amber</button>
           </div>
         </div>
         <div class="ledger-chip-group">
           <span class="ledger-group-label">Signals</span>
           <div class="ledger-chip-row">
-            <button type="button" class="cbfilt" data-f="frustrated" onclick="toggleLedgerFilter('frustrated')">Attention</button>
-            <button type="button" class="cbfilt" data-f="callback" onclick="toggleLedgerFilter('callback')">Callback requested</button>
+            <button type="button" class="cbfilt" data-f="frustrated" data-hide-in-reduced-view="true" onclick="toggleLedgerFilter('frustrated')">Attention</button>
+            <button type="button" class="cbfilt" data-f="callback" onclick="toggleLedgerFilter('callback')">Follow-up requested</button>
             <button type="button" class="cbfilt" data-f="has_callback_window" onclick="toggleLedgerFilter('has_callback_window')">Callback window</button>
             <button type="button" class="cbfilt" data-f="serial" onclick="toggleLedgerFilter('serial')">Serial caller</button>
           </div>
@@ -403,13 +407,6 @@
             <button type="button" class="cbfilt" data-f="intl" onclick="toggleLedgerFilter('intl')">International</button>
           </div>
         </div>
-        <div class="ledger-chip-group">
-          <span class="ledger-group-label">Transcript</span>
-          <div class="ledger-chip-row">
-            <button type="button" class="cbfilt" data-f="has_transcript" onclick="toggleLedgerFilter('has_transcript')">Has transcript</button>
-            <button type="button" class="cbfilt" data-f="no_transcript" onclick="toggleLedgerFilter('no_transcript')">No transcript</button>
-          </div>
-        </div>
       </div>
       <div id="ledgerActiveChips" style="display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px"></div>
       <div id="explorerCount" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
@@ -417,28 +414,18 @@
       <div id="explorerMore" style="text-align:center;margin-top:12px"></div>
     </div></section>
 
-  <section id="sec-brief" class="management-brief">
-    <div class="shead"><span class="n">15</span><h2>Management Summary</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button></div>
-    <div class="cap" style="margin:-10px 0 16px">A leadership-ready snapshot of the current date &amp; direction view. Open it any time from the <b>Mgmt Summary</b> button in the header or the sidebar.</div>
-    <div class="brief-cover">
-      <div class="brief-eyebrow">Leadership snapshot</div>
-      <h3>Management Summary</h3>
-      <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
-      <div class="strip" id="briefKpis"></div>
-    </div>
+
     <details id="metricDefinitions" class="metric-definitions">
       <summary>Metric definitions</summary>
       <div class="metric-definition-grid">
         <div><b>Enquiries</b><span>Final unique Call-ID conversation records in the active dashboard scope.</span></div>
         <div><b>Unique leads</b><span>Distinct normalized lead phone numbers represented by those final records.</span></div>
-        <div><b>Callbacks / Hot leads</b><span>Final records carrying the callback signal or the Hot lead classification.</span></div>
-        <div><b>Attention signals</b><span>Final records flagged as frustrated or requiring review.</span></div>
-        <div><b>AI confidence</b><span>Average model confidence across final conversation records.</span></div>
+        <div><b>Follow-up requests / Hot leads</b><span>Final records carrying the follow-up signal or the Hot lead classification.</span></div>
+        <div data-hide-in-reduced-view="true"><b>Attention signals</b><span>Final records flagged as frustrated or requiring review.</span></div>
+        <div data-hide-in-reduced-view="true"><b>AI confidence</b><span>Average model confidence across final conversation records.</span></div>
         <div><b>Dials, connect and reach</b><span>Dial-level metrics include final unique dials, including failed and initiated attempts.</span></div>
       </div>
     </details>
-  </section>
-
     <footer id="foot"></footer>
 </div>
 

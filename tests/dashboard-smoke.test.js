@@ -37,7 +37,7 @@ for (const path of [
 
 for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
-  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief',
+  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-overview',
   'resetAllFilters', 'metricDefinitions',
   'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
 ]) {
@@ -92,12 +92,14 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
-  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
+  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
-  'resolveLeadSearch', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
-  'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV'
+  'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
+  'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
+  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
+  'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
+  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -130,6 +132,9 @@ assert.equal(context.normalizeDisposition({ status: 'completed', dur: 30, msg: 2
 assert.equal(context.normalizeDisposition({ status: 'failed', dur: 30, msg: 0 }), 'failed');
 assert.equal(context.normalizeDisposition({ status: '', dur: 20, msg: 2, trans: 'hello' }), 'connected');
 assert.equal(context.normalizeDisposition({ status: '', dur: 0, msg: 0, trans: '' }), 'no_answer');
+assert(context.isMeaningfulConversation({ status: 'completed', dur: 60 }), 'A completed 60-second call must count as meaningful');
+assert(!context.isMeaningfulConversation({ status: 'completed', dur: 59 }), 'Brief completed calls must not count as meaningful');
+assert(!context.isMeaningfulConversation({ status: 'failed', dur: 120 }), 'Failed dials must not count as meaningful');
 
 assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
 assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
@@ -160,6 +165,18 @@ assert.equal(context.sumBilledMinutes([
   { status: 'failed', dur: 120, msg: 0, trans: '' },
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
+assert.equal(context.ledgerCallCost({ status: 'completed', dur: 61 }), 10, 'Ledger cost must use billed-minute rounding');
+assert.equal(context.ledgerCallCost({ status: 'failed', dur: 120 }), 0, 'Unconnected calls must not contribute ledger cost');
+const leadCostRows=[{ from: '+91 99999 99999', status: 'completed', dur: 61 },{ from: '919999999999', status: 'completed', dur: 3 }];
+assert.equal(context.ledgerLeadCost(leadCostRows[0],leadCostRows), 15, 'Lead total cost must combine normalized phone-format variants');
+const leadMixRows=[{ from: '919999999999', direction: 'inbound' },{ from: '+91 99999 99999', direction: 'outbound' }];
+assert.deepEqual(JSON.parse(JSON.stringify(context.ledgerLeadDirectionMix(leadMixRows[0],leadMixRows))), { inbound: 1, outbound: 1, unknown: 0 }, 'Lead direction mix must combine inbound and outbound history');
+const normalizedLeadGroups = context.groupByPhone([
+  { from: '+91 99999 99999', status: 'completed', dur: 60 },
+  { from: '919999999999', status: 'completed', dur: 60 }
+]);
+assert.equal(Object.keys(normalizedLeadGroups).length, 1, 'Queue cards must group phone-format variants into one lead');
+assert.equal(context.sumBilledMinutes(Object.values(normalizedLeadGroups)[0]), 2, 'Queue minutes must match the normalized lead profile');
 assert(scripts[1].includes('id="cbShowMore" role="button" tabindex="0" onkeydown='), 'Callback pagination must be keyboard accessible');
 assert(fs.existsSync('data/voice_analytics.xlsx'), 'Published workbook is missing');
 assert(fs.existsSync('data/voice_analytics.xlsx.meta.json'), 'Published workbook metadata is missing');
@@ -174,8 +191,78 @@ assert(!html.includes('id="timelinePanel"'), 'Superseded inline timeline panel m
 assert(!scripts[1].includes('timelinePanel'), 'Dashboard logic must use the profile drawer timeline');
 assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data freshness metadata is missing');
 assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
-assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
-assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
+assert(!scripts[1].includes("['Connected dials'"), 'Direction glance must not duplicate outbound connect performance');
+assert(!scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must not duplicate outbound reach diagnostics');
+assert(!scripts[1].includes('Outbound operational context'), 'Direction glance must remain limited to inbound/outbound comparison');
+assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
+assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing must be presented as an operating playbook');
+assert(html.includes('id="dialPlaybookCards"'), 'Outbound playbook action cards are missing');
+assert(html.includes('best all-days 2-hour window'), 'Outbound playbook must explain the two-hour operating granularity');
+assert(html.includes('Fresh lead: call immediately.'), 'Outbound playbook must preserve first-attempt lead freshness');
+assert(html.includes('<summary>View day &amp; time detail</summary>'), 'Day and time timing detail must be positioned as supporting proof');
+assert(html.includes('id="timingMetricControls"'), 'Outbound timing metric toggle is missing');
+assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
+assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
+assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
+assert(html.includes('<h4>Follow-up queue</h4>'), 'Follow-up queue panel title is missing');
+assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
+assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
+assert(html.includes('Management readout'), 'Management readout must sit in the overview');
+assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be merged into overview');
+assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
+assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard render must not target the removed KPI strip');
+assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintFunnel(o);'), 'Management readout must render with the top essentials');
+assert(!scripts[1].includes('["Source",SRC]'), 'Header source chip must remain removed');
+assert(scripts[1].includes('function renderHeaderMeta(records)'), 'First-load and filtered header chips must share one renderer');
+assert(scripts[1].includes("['hot','Advisory minutes','mins','minutes',()=>true]"), 'Management readout must retain advisory minutes');
+assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',()=>true]"), 'Management readout must retain operating cost');
+assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
+assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');
+assert(html.includes('<optgroup label="Cost exposure">'), 'Ledger needs a clear cost-exposure sort group');
+assert(html.includes('<optgroup label="Follow-up &amp; repeat">'), 'Ledger follow-up sort group needs a factual label');
+assert(!html.includes('value="priority_desc"'), 'Ledger must not expose the heuristic priority sort');
+assert(!scripts[1].includes('ledgerPriorityScore'), 'Ledger must not retain the heuristic priority score');
+assert(scripts[1].includes('cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)'), 'Ledger must support highest-cost sorting');
+assert(scripts[1].includes('cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)'), 'Ledger must support lowest-cost sorting');
+assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highest lead-total-cost sorting');
+assert(scripts[1].includes('lead_cost_asc:(a,b)=>'), 'Ledger must support lowest lead-total-cost sorting');
+assert(scripts[1].includes('Cost ₹${billedCost} · ${billedMins} billed min'), 'Ledger must explain the billed cost behind cost sorting');
+assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumulative lead cost behind lead-total sorting');
+assert(scripts[1].includes('Lead mix: ${esc(leadMixLabel)}'), 'Ledger must show the inbound/outbound mix behind cumulative lead cost');
+assert(!html.includes('data-f="has_transcript"'), 'Ledger must not expose transcript-completeness filters');
+assert(!html.includes('data-f="no_transcript"'), 'Ledger must not expose transcript-completeness filters');
+assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
+assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
+assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
+assert(!scripts[1].includes('<b style="color:var(--hot)">Attention</b>'), 'Profile timeline must not surface Attention labels in the reduced view');
+assert(!scripts[1].includes('<b>Lead tier:</b>'), 'Profile drawer must not repeat lead-tier breakdowns');
+assert(scripts[1].includes('profile-call-mix-list'), 'Profile drawer must show inbound/outbound call mix');
+assert(!scripts[1].includes('<b>View:</b> Full history'), 'Profile drawer must not show redundant active-view count context');
+assert(scripts[1].includes('const timelineLimit=5;'), 'Profile drawer timeline must limit its initial call history');
+assert(scripts[1].includes('profile-history-more'), 'Profile drawer must disclose earlier calls on demand');
+assert(!scripts[1].includes('if(r.frustrated)tags.push'), 'Ledger rows must not surface Attention tags in the reduced view');
+assert(scripts[1].includes("openProfileForPhone(${jsArg(l.phone)},'priority',this)"), 'Follow-up cards must use the profile drawer handler');
+assert(scripts[1].includes('csv+=[escCSV(r.callId),fullPhone(r.from)'), 'Record exports must include stable Call IDs');
+assert(!scripts[1].includes('Avg Confidence %,Avg Need Score'), 'Visible operational exports must not use AI score columns');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('.repeat-engagement-panel{margin-top:24px!important;}'), 'Follow-up and repeat engagement panels need clear visual separation');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('#cbReadiness .follow-up-readiness-chip[aria-pressed="true"]'), 'Requested follow-up filter needs an obvious active state');
+assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
+assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
+assert(html.includes('label="Confidence" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence group marker is missing');
+assert(html.includes('label="Reach" data-hide-in-reduced-view="true"'), 'Reduced Ledger reach group marker is missing');
+assert(html.includes('data-f="frustrated" data-hide-in-reduced-view="true"'), 'Reduced Ledger attention filter marker is missing');
+assert(html.includes('<h4>Why we never reached them</h4>'), 'Failure section should use the concise lost-reach title');
+assert(scripts[1].includes('entries.slice(0,7)'), 'Failure reasons should be capped at the top seven');
+assert(scripts[1].includes("Other reasons"), 'Failure reasons should group the long tail');
+for (const marker of [
+  'id="sec-quality" data-hide-in-reduced-view="true"',
+  'id="sec-anomaly" data-hide-in-reduced-view="true"',
+  'id="sec-perf" data-hide-in-reduced-view="true"',
+  'id="sec-themes" data-hide-in-reduced-view="true"',
+  'id="sec-outbound-cadence" data-hide-in-reduced-view="true"',
+  'id="sec-friction" data-hide-in-reduced-view="true"'
+]) assert(html.includes(marker), `Reduced-view marker missing: ${marker}`);
 
 const searchRows = [
   { from: '+91 99999 99999', ts: 2, d: '2026-07-10', direction: 'inbound', campaign: '' },
@@ -192,10 +279,81 @@ const scopeRecord = {
   leadTemp: 'Hot', band: 'Green', intent: 'Eligibility', conf: 90, need: 80,
   frustrated: false, callback: true, status: 'completed', summary: 'Synthetic export'
 };
+context.document.body.classList.contains = className => className === 'dashboard-reduced-ai-view';
+assert.equal(context.reducedAiViewEnabled(), true, 'Reduced dashboard view should be enabled');
+const reducedStats = context.defaultDrillStats([scopeRecord]).map(item => item[0]).join('|');
+assert(!reducedStats.includes('confidence') && !reducedStats.includes('need'), 'Reduced drawer stats must hide AI/need fields');
+assert(!context.recordListHtml([scopeRecord]).includes('Conf '), 'Reduced drawer rows must hide confidence');
+assert(context.recordListHtml([scopeRecord]).includes('openRecordProfile(window.__drilldownRows[0]'), 'KPI drill-down records must use the shared record-to-profile handoff');
+vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'inbound',campaign:'',status:'completed',dur:30,msg:2,from:'919111111111'},{d:'2026-07-10',direction:'outbound',campaign:'',status:'completed',dur:30,msg:2,from:'919222222222'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
+context.paintDirectionCompare();
+assert(!getElement('dirCompareTable').innerHTML.includes('Avg AI confidence'), 'Reduced direction comparison must hide AI confidence');
+assert(!getElement('dirCompareTable').innerHTML.includes('Quality pass rate (Green)'), 'Reduced direction comparison must hide quality pass rate');
+context.RECORDS = [scopeRecord];
+context.paintKPIs(context.aggregate(context.RECORDS));
+assert(!getElement('kpis').innerHTML.includes('Quality pass rate'), 'Reduced overview must hide quality pass rate');
+const compactLeadRecords = [
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 10, m: 0, ts: 3, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: false, intent: 'Payment', summary: 'Synthetic lead' },
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 11, m: 0, ts: 2, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: false, intent: 'Payment', summary: 'Synthetic lead' },
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 12, m: 0, ts: 1, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: true, intent: 'Payment', summary: 'Synthetic lead' }
+];
+context.paintHottestLeads(compactLeadRecords);
+assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Calls</span>'), 'Reduced priority cards should retain the call count');
+assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
+assert(!getElement('hottestLeads').innerHTML.includes('attention'), 'Reduced priority cards must hide attention breakdown');
+context.paintSerialCallers(compactLeadRecords);
+assert(getElement('serialCallers').innerHTML.includes('3 calls'), 'Reduced repeat-caller cards should retain total calls');
+assert(!getElement('serialCallers').innerHTML.includes('attention'), 'Reduced repeat-caller cards must hide attention breakdown');
+assert(!getElement('serialCallers').innerHTML.includes('general'), 'Reduced repeat-caller cards must hide general breakdown');
+const failureRows = Array.from({ length: 8 }, (_, index) => ({
+  from: `91922222222${index}`, direction: 'outbound', d: '2026-07-10', h: 10, m: index,
+  status: 'failed', dur: 0, msg: 0, failReason: `reason_${index}`, sipCode: ''
+}));
+context.__failureRows = failureRows;
+vm.runInContext('ALL_DIALS=__failureRows; SELECTED_CAMPAIGN="all"; paintFailureBreakdown();', context);
+assert(getElement('failureBreakdown').innerHTML.includes('Top reasons'), 'Failure section should show the concise top-reasons heading');
+assert(getElement('failureBreakdown').innerHTML.includes('Other reasons'), 'Failure section should group lower-volume reasons');
+vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];", context);
+const dialOnlyRecord={...scopeRecord,from:'919333333333',status:'failed',dur:0,msg:0};
+context.openRecordProfile(dialOnlyRecord,'drilldown');
+assert.equal(vm.runInContext('LEDGER_SCOPE.rows.length', context), 1, 'Dial-only records must fall back to the ledger instead of opening a missing profile');
+assert.equal(vm.runInContext('LEDGER_SCOPE.title', context), 'Selected dial record', 'Dial-only ledger fallback title changed');
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
-assert(scopedCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
+assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
+assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
+assert(scopedCSV.includes('Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs)'), 'Standard CSV lead context columns are missing');
+assert(scopedCSV.includes(',10,1,1,0,0,10,Hot,'), 'Standard CSV must include per-call cost plus lead call and direction totals');
+const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
+assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
+assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
+assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
+assert(scripts[1].includes('Follow-up Rank,Phone,Lead Tier,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Follow-up export must use the standard lead count columns');
+assert(scripts[1].includes('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standard lead count columns');
+assert(context.callbackHasRequestedTime([{ cbPreferred: 'Tomorrow, 2:00 PM' }]), 'Requested-time follow-up classification changed');
+assert(!context.callbackHasRequestedTime([{ cbPreferred: 'Not specified' }]), 'Unscheduled follow-ups must remain identifiable');
+
+context.__scopeRecord = scopeRecord;
+vm.runInContext('ALL_RECORDS_BACKUP=[__scopeRecord]; RECORDS=[__scopeRecord];', context);
+context.searchUserByMobile('919999999999', 'priority');
+assert.equal(getElement('userSearchResult').style.display, 'block', 'Follow-up card click must open the profile drawer');
+assert(getElement('profileSourceNote').textContent.includes('Follow-up queue'), 'Profile drawer must identify the follow-up source');
+
+let exportCapture = null;
+context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
+context.exportCallbacks();
+assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
+assert(exportCapture.name.startsWith('requested_follow_ups_'), 'Requested follow-up export filename is unclear');
+assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
+context.exportHottestLeads();
+assert(exportCapture.csv.startsWith('Follow-up Rank,Phone,Lead Tier'), 'Follow-up export must use an action-ready summary schema');
+assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('Avg Confidence'), 'Follow-up export must exclude hidden heuristic and AI fields');
+context.__compactLeadRecords = compactLeadRecords;
+vm.runInContext('RECORDS=__compactLeadRecords;', context);
+context.exportSerialEngagers();
+assert(exportCapture.csv.startsWith('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standardized action-ready summary schema');
+assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('General'), 'Repeat export must exclude hidden breakdown fields');
 
 vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'outbound',campaign:'Reset campaign'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Reset campaign';$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-10';resetAllFilters();", context);
 assert.equal(context.currentViewDescription(), 'All Calls · 10 Jul 2026 to 10 Jul 2026', 'Reset-all-filters must restore the all-call scope');
@@ -321,6 +479,33 @@ context.paintIntentQuality(intentRecords);
 assert(getElement('intentQuality').innerHTML.includes('<td class="num">2<div class="iq-sub">100% of all leads'), 'Intent conversion must count unique leads, not repeated calls');
 assert(getElement('intentQuality').innerHTML.includes('50%'), 'Per-lead hot conversion rate changed');
 
+const timingProofRows=[
+  ...Array.from({length:10},(_,index)=>({from:`9191000000${index}`,d:'2026-07-13',h:16,status:index<5?'completed':'failed',dur:index<3?75:index<5?30:0})),
+  ...Array.from({length:5},(_,index)=>({from:`9192000000${index}`,d:'2026-07-14',h:10,status:index===0?'completed':'failed',dur:index===0?75:0}))
+];
+context.paintDialHeatmap(timingProofRows);
+assert(getElement('bestWindowNote').innerHTML.includes('Best retry time: 15-17 IST'), 'Timing recommendation must aggregate the best window across weekdays');
+assert(getElement('bestWindowNote').innerHTML.includes('10 dials · 3 conversations'), 'Timing recommendation must show concise meaningful-conversation proof');
+assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 pickup · 3 meaningful'), 'Each timing cell must show its dial, pickup, and meaningful-conversation proof');
+assert(getElement('dialHeatmap').innerHTML.includes('30% meaningful'), 'Timing cell must show meaningful conversation rate');
+assert(getElement('timingMetricControls').innerHTML.includes('Meaningful · 60s+'), 'Meaningful timing toggle label is missing');
+assert(getElement('timingMetricControls').innerHTML.includes('Pickup · any answer'), 'Pickup timing toggle label is missing');
+assert(getElement('timingMetricControls').innerHTML.includes('Rank by'), 'Timing metric toggle must identify its single-select purpose');
+assert(getElement('timingMetricControls').innerHTML.includes('aria-pressed="true"'), 'Timing metric toggle must visibly mark the active selection');
+context.__timingProofRows=timingProofRows;
+vm.runInContext('window.__obRecs=__timingProofRows; setOutboundTimingMetric("pickup");', context);
+assert(getElement('bestWindowNote').innerHTML.includes('50% pickup'), 'Pickup mode must rank and label the timing recommendation by answered calls');
+assert(getElement('dialHeatmap').innerHTML.includes('50% pickup'), 'Pickup mode must update the timing grid metric');
+assert(getElement('timingMetricControls').innerHTML.includes('Pickup · any answer</button>'), 'Pickup mode must keep the selected option visible');
+context.setOutboundTimingMetric('meaningful');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Campaign:</b>09:00–21:00 IST'), 'Timing playbook must keep campaign hours visible by default');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Retry:</b>3 max · ~5h apart'), 'Timing playbook must keep retry count and spacing visible by default');
+assert(getElement('dialPlaybookCards').innerHTML.includes('<summary>Vendor configuration</summary>'), 'Vendor detail must stay available without crowding the default playbook');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Start 09:00 · stop 21:00 IST'), 'Vendor policy must expose the daily campaign start and stop');
+assert(getElement('dialPlaybookCards').innerHTML.includes('15-17 IST'), 'Vendor policy must use the all-days preferred retry window');
+assert(!context.paintDialHeatmap.toString().includes('[[8,10],[10,12]'), 'Timing windows must not extend outside the 09:00–21:00 campaign policy');
+assert(getElement('dialPlaybookCards').innerHTML.includes('queue a new lead for the next 09:00 start'), 'Vendor policy must explain the outside-hours lead handling');
+
 const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
   from: `91${String(7000000000 + index)}`,
   callback: true,
@@ -333,6 +518,6 @@ const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
 }));
 context.__callbackRecords = callbackRecords;
 vm.runInContext('ALL_RECORDS_BACKUP=__callbackRecords; CB_RENDER_LIMIT=50; paintCallbacks(__callbackRecords);', context);
-assert(getElement('cbList').innerHTML.includes('Show more — 1 more callback number'), 'Callback rendering cap changed');
+assert(getElement('cbList').innerHTML.includes('Show more — 1 more lead'), 'Requested follow-up rendering cap changed');
 
 console.log('Dashboard smoke tests passed');
