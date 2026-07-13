@@ -2306,12 +2306,12 @@ function boot(){
   updateDirectionButtons();
   populateCampaignFilter();
 
-  // Keep the header as context only. Volume, time and cost belong to the KPI strip below.
+  // Keep the header as context only. Headline metrics belong to the Management readout below.
   $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
-  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50;
   runPaintChunks(generation,[
