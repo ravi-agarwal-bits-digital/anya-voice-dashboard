@@ -102,6 +102,23 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",indigo:"#5b47d6",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
+const METRIC_DEFINITIONS=Object.freeze({
+  'Enquiries':'Final unique Call-ID conversation records in the active dashboard scope.',
+  'Unique leads':'Distinct normalized lead phone numbers represented by those final records.',
+  'Callbacks':'Final records carrying the callback signal; a call can also be Hot or an attention signal.',
+  'Hot leads':'Final records classified as Hot by the lead-temperature field.',
+  'AI confidence':'Average model confidence across final conversation records.',
+  'Attention signals':'Final records flagged as frustrated or requiring review.',
+  'Dials placed':'Final unique dial-level records, including failed and initiated attempts.',
+  'Connect rate':'Connected dial-level records divided by all dial-level records in scope.',
+  'Distinct-number reach':'Distinct normalized numbers with at least one connected dial.',
+  'Advisory minutes':'Billed minutes from connected conversation records only.',
+  'Estimated operating cost':'Advisory minutes multiplied by the dashboard operating-rate assumption.',
+  'India / International':'Final conversation records grouped by normalized phone geography.',
+  'Average enquiry duration':'Average duration across final conversation records.',
+  'Quality pass rate':'Green review-band records divided by final conversation records.'
+});
+function metricDefinition(label){return METRIC_DEFINITIONS[label]||'Computed from final records in the active dashboard scope.';}
 const $=id=>document.getElementById(id);
 let RECORDS=[], SRC="";
 
@@ -369,6 +386,24 @@ function quickFilter(type){
   updateFilterButtons(type);
 }
 
+function resetAllFilters(){
+  const source=ALL_DIALS.length?ALL_DIALS:ALL_RECORDS_BACKUP;
+  const{min,max}=recordDateBounds(source);
+  SELECTED_DIRECTION='all';
+  SELECTED_CAMPAIGN='all';
+  if(min)$('filterFromDate').value=min;
+  if(max)$('filterToDate').value=max;
+  const campaign=$('campaignFilter');if(campaign)campaign.value='all';
+  const custom=$('customFilterPanel');if(custom)custom.style.display='none';
+  const search=$('searchMobile');if(search)search.value='';
+  closeUserSearch();
+  clearLedgerFilters();
+  applyFilters();
+  updateFilterButtons('all');
+  updateDirectionButtons();
+  updateCampaignFilterVisibility();
+}
+
 function toggleCustomFilter(){
   const panel=$("customFilterPanel");
   panel.style.display=panel.style.display==="none"?"flex":"none";
@@ -633,7 +668,7 @@ function searchUserByMobile(mobile, source="search"){
   if(note){
     const label=source==="callback"?"Opened from the Priority follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from Priority prospects":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
     const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
-    note.textContent=label+`. Full call history is shown. ${scope}`;
+    note.textContent=label+`. Full call history is shown. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
   revealUserProfile(source);
 }
@@ -2265,7 +2300,7 @@ function paintManagementBrief(){
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
     const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key],curIn)} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key],curOut)} out</div>`:'';
-    return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="Click for details"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
+    return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="${esc(metricDefinition(label))} Click for details" aria-label="${esc(label)}: ${esc(metricDefinition(label))}"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
   }).join('');
   window.__briefRecs=recs;
 }
@@ -2348,7 +2383,8 @@ function paintKPIs(o){
     ["good",pct(o.green)+"%","Quality pass rate","green"]
   ];
   $("kpis").innerHTML=cards.map(c=>{
-    const clickable=c[3]?`onclick="openKpiPanel('${c[3]}')" style="cursor:pointer" title="Click for details"`:"";
+    const definition=metricDefinition(c[2]);
+    const clickable=c[3]?`onclick="openKpiPanel('${c[3]}')" style="cursor:pointer" title="${esc(definition)} Click for details" aria-label="${esc(c[2])}: ${esc(definition)}"`: `title="${esc(definition)}" aria-label="${esc(c[2])}: ${esc(definition)}"`;
     const arrow=c[3]?`<span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span>`:"";
     return `<div class="kpi ${c[0]}" ${clickable}><div class="b"></div>${arrow}<div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`;
   }).join("");
@@ -2372,15 +2408,19 @@ function closeKpiPanel(){
   $("kpiPanel").style.transform='translateX(100%)';
   $("kpiOverlay").style.display='none';
 }
+function activeFilterScopeLabel(){return currentViewDescription();}
+function drawerScopeHtml(label='Dashboard scope'){
+  return `<div class="drawer-scope-note"><b>${esc(label)}:</b> ${esc(activeFilterScopeLabel())}</div>`;
+}
 // Standard record -> CSV used by every drawer/section export, so a downloaded file always has the
 // same columns wherever it came from. Phone is full (unmasked) for actioning the lead.
-function recordsToCSV(rows){
-  let csv='Phone,Country,Direction,Call Time,Duration (mins),Lead Temp,Review Band,Intent,Confidence %,Need Score,Frustrated,Callback,Status,Summary\n';
+function recordsToCSV(rows,scopeLabel=activeFilterScopeLabel()){
+  let csv='Phone,Country,Direction,Call Time,Duration (mins),Lead Temp,Review Band,Intent,Confidence %,Need Score,Frustrated,Callback,Status,Summary,Filter Scope\n';
   rows.forEach(r=>{
     const c=classifyPhone(r.from);
     csv+=[fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
       Math.round(r.dur/60*10)/10,escCSV(r.leadTemp),escCSV(r.band),escCSV(r.intent),Math.round(r.conf),Math.round(r.need),
-      r.frustrated?'Yes':'No',r.callback?'Yes':'No',escCSV(r.status),escCSV(r.summary)].join(',')+'\n';
+      r.frustrated?'Yes':'No',r.callback?'Yes':'No',escCSV(r.status),escCSV(r.summary),escCSV(scopeLabel)].join(',')+'\n';
   });
   return csv;
 }
@@ -2389,17 +2429,19 @@ function slugForFile(s){return String(s||'export').toLowerCase().replace(/[^a-z0
 function exportPanelCSV(){
   const rows=window.__panelRows||[];
   if(!rows.length){alert("Nothing to export in this view.");return;}
-  downloadCSV(slugForFile(window.__panelTitle)+'_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows));
+  const scope=activeFilterScopeLabel();
+  downloadCSV(slugForFile(window.__panelTitle)+'__'+slugForFile(scope)+'_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows,scope));
 }
 // Exports the calls shown in the lead-profile drawer.
 function exportProfileCSV(){
   const rows=window.__profileCalls||[];
   if(!rows.length){alert("No calls to export for this lead.");return;}
-  downloadCSV('lead_'+slugForFile(fullPhone(rows[0].from))+'_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows));
+  const scope=`Full lead history; active dashboard scope: ${activeFilterScopeLabel()}`;
+  downloadCSV('lead_'+slugForFile(fullPhone(rows[0].from))+'__full-history_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows,scope));
 }
 function showKpiPanel(title,bodyHtml,rows){
   $("kpiPanelTitle").textContent=title;
-  $("kpiPanelBody").innerHTML=bodyHtml;
+  $("kpiPanelBody").innerHTML=drawerScopeHtml()+bodyHtml;
   window.__panelTitle=title;
   window.__panelRows=Array.isArray(rows)?rows:[];
   const btn=$("kpiPanelExport");
