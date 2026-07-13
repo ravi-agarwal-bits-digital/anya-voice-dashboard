@@ -12,6 +12,7 @@ This file records public-safe repository and application milestones. Detailed in
 - Added clear spacing between the Follow-up queue and Repeat engagement panels.
 - Reworked Callback requests into Requested follow-ups: replaced the inferred SLA with an honest readiness view, clarified requested-time coverage and scheduling gaps, and aligned adjacent profile, Ledger, and CSV terminology.
 - Merged the Executive summary into the top Overview as a compact Management readout, removing the duplicate standalone destination while retaining printable leadership context and metric definitions.
+- Removed the duplicate KPI strip ahead of the Management readout, expanded all sidebar groups by default, and made requested-follow-up readiness filters visibly selected when active.
 
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.

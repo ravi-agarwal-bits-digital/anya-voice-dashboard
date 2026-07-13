@@ -188,6 +188,9 @@ assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat eng
 assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
 assert(html.includes('Management readout'), 'Management readout must sit in the overview');
 assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be merged into overview');
+assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
+assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
+assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
@@ -198,6 +201,7 @@ assert(scripts[1].includes('csv+=[escCSV(r.callId),fullPhone(r.from)'), 'Record 
 assert(!scripts[1].includes('Avg Confidence %,Avg Need Score'), 'Visible operational exports must not use AI score columns');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('.repeat-engagement-panel{margin-top:24px!important;}'), 'Follow-up and repeat engagement panels need clear visual separation');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('#cbReadiness .follow-up-readiness-chip[aria-pressed="true"]'), 'Requested follow-up filter needs an obvious active state');
 assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
 assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
 assert(html.includes('label="Confidence" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence group marker is missing');
@@ -273,6 +277,8 @@ const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urg
 assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope)"), 'International export must use the standard CSV schema');
 assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope())"), 'Call ledger export must include its active filters and scope');
+assert(context.callbackHasRequestedTime([{ cbPreferred: 'Tomorrow, 2:00 PM' }]), 'Requested-time follow-up classification changed');
+assert(!context.callbackHasRequestedTime([{ cbPreferred: 'Not specified' }]), 'Unscheduled follow-ups must remain identifiable');
 
 context.__scopeRecord = scopeRecord;
 vm.runInContext('ALL_RECORDS_BACKUP=[__scopeRecord]; RECORDS=[__scopeRecord];', context);

@@ -523,7 +523,7 @@ function applyFilters(){
   }
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
-  paintHealth(o);paintKPIs(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
 
   // Trigger KPI and verdict animations
   document.querySelectorAll('.kpi').forEach(kpi=>{

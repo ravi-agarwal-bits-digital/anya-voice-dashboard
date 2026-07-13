@@ -27,7 +27,7 @@ Update this section after every merged PR:
 
 - Active PR: #50 temporary reduced AI/quality dashboard view
 - Last merged PR: #49 dashboard hardening and QA coverage
-- Current production issue: None known; #50 is a visibility-only reduction pending review, with CEO-facing naming, de-duplicated metric ownership, a top-level Management readout, polished Follow-up/Repeat engagement cards, repaired profile-drawer navigation, standardized operational CSV exports, compact failure reasons, a neutral Follow-up queue label, and an action-oriented Requested follow-ups view that avoids inferred SLA claims.
+- Current production issue: None known; #50 is a visibility-only reduction pending review, with CEO-facing naming, one top-level Management readout instead of duplicate KPIs, expanded sidebar navigation, polished Follow-up/Repeat engagement cards, repaired profile-drawer navigation, standardized operational CSV exports, compact failure reasons, a neutral Follow-up queue label, and an action-oriented Requested follow-ups view with visibly active readiness filters.
 - Next approved task: Final workspace-specific QA for PR #43 after the hardening baseline is accepted.
 - Known risks: Browser/device coverage is limited to local smoke checks; real workbook timing varies by device and browser. Hidden UI is retained in source for later restoration.
 - Tests to run: `node --check js/dashboard.js`, admin/dashboard/workbook smoke tests, responsive smoke test, large-workbook performance smoke, reduced-view visibility checks, and `git diff --check`.
