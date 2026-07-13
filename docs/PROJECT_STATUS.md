@@ -27,7 +27,7 @@ Update this section after every merged PR:
 
 - Active PR: #50 temporary reduced AI/quality dashboard view
 - Last merged PR: #49 dashboard hardening and QA coverage
-- Current production issue: None known; #50 is a visibility-only reduction pending review, with compact operational cards, top-seven failure reasons, and a neutral Follow-up queue label.
+- Current production issue: None known; #50 is a visibility-only reduction pending review, with CEO-facing naming, polished Follow-up/Repeat engagement cards, repaired profile-drawer navigation, standardized operational CSV exports, compact failure reasons, and a neutral Follow-up queue label.
 - Next approved task: Final workspace-specific QA for PR #43 after the hardening baseline is accepted.
 - Known risks: Browser/device coverage is limited to local smoke checks; real workbook timing varies by device and browser. Hidden UI is retained in source for later restoration.
 - Tests to run: `node --check js/dashboard.js`, admin/dashboard/workbook smoke tests, responsive smoke test, large-workbook performance smoke, reduced-view visibility checks, and `git diff --check`.

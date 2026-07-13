@@ -95,9 +95,10 @@ for (const fn of [
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
-  'resolveLeadSearch', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
+  'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
   'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
+  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
+  'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
@@ -178,13 +179,20 @@ assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Manage
 assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
 assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
-assert(html.includes('Follow-up queue &amp; repeat callers'), 'Follow-up queue heading is missing');
-assert(html.includes('Follow-up queue (Top 50)'), 'Follow-up queue panel title is missing');
+assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
+assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
+assert(html.includes('<h4>Follow-up queue</h4>'), 'Follow-up queue panel title is missing');
+assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
+assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
+assert(html.includes('<h2>Executive summary</h2>'), 'Executive summary title is missing');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
 assert(!scripts[1].includes('<b style="color:var(--hot)">Attention</b>'), 'Profile timeline must not surface Attention labels in the reduced view');
 assert(!scripts[1].includes('if(r.frustrated)tags.push'), 'Ledger rows must not surface Attention tags in the reduced view');
+assert(scripts[1].includes("openProfileForPhone(${jsArg(l.phone)},'priority',this)"), 'Follow-up cards must use the profile drawer handler');
+assert(scripts[1].includes('csv+=[escCSV(r.callId),fullPhone(r.from)'), 'Record exports must include stable Call IDs');
+assert(!scripts[1].includes('Avg Confidence %,Avg Need Score'), 'Visible operational exports must not use AI score columns');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
 assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
 assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');
@@ -236,7 +244,7 @@ const compactLeadRecords = [
   { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 12, m: 0, ts: 1, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: true, intent: 'Payment', summary: 'Synthetic lead' }
 ];
 context.paintHottestLeads(compactLeadRecords);
-assert(getElement('hottestLeads').innerHTML.includes('<b>Calls:</b> 3'), 'Reduced priority cards should retain the call count');
+assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Calls</span>'), 'Reduced priority cards should retain the call count');
 assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
 assert(!getElement('hottestLeads').innerHTML.includes('attention'), 'Reduced priority cards must hide attention breakdown');
 context.paintSerialCallers(compactLeadRecords);
@@ -253,9 +261,34 @@ assert(getElement('failureBreakdown').innerHTML.includes('Top reasons'), 'Failur
 assert(getElement('failureBreakdown').innerHTML.includes('Other reasons'), 'Failure section should group lower-volume reasons');
 vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];", context);
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
-assert(scopedCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
+assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
 assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
+assert(scopedCSV.includes('Callback Window'), 'Standard CSV callback column is missing');
+const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
+assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
+assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope)"), 'International export must use the standard CSV schema');
+assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope())"), 'Call ledger export must include its active filters and scope');
+
+context.__scopeRecord = scopeRecord;
+vm.runInContext('ALL_RECORDS_BACKUP=[__scopeRecord]; RECORDS=[__scopeRecord];', context);
+context.searchUserByMobile('919999999999', 'priority');
+assert.equal(getElement('userSearchResult').style.display, 'block', 'Follow-up card click must open the profile drawer');
+assert(getElement('profileSourceNote').textContent.includes('Follow-up queue'), 'Profile drawer must identify the follow-up source');
+
+let exportCapture = null;
+context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
+context.exportCallbacks();
+assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
+assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
+context.exportHottestLeads();
+assert(exportCapture.csv.startsWith('Follow-up Rank,Phone,Lead Tier'), 'Follow-up export must use an action-ready summary schema');
+assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('Avg Confidence'), 'Follow-up export must exclude hidden heuristic and AI fields');
+context.__compactLeadRecords = compactLeadRecords;
+vm.runInContext('RECORDS=__compactLeadRecords;', context);
+context.exportSerialEngagers();
+assert(exportCapture.csv.startsWith('Phone,Direction Mix,Total Calls'), 'Repeat engagement export must use an action-ready summary schema');
+assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('General'), 'Repeat export must exclude hidden breakdown fields');
 
 vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'outbound',campaign:'Reset campaign'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Reset campaign';$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-10';resetAllFilters();", context);
 assert.equal(context.currentViewDescription(), 'All Calls · 10 Jul 2026 to 10 Jul 2026', 'Reset-all-filters must restore the all-call scope');

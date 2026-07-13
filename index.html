@@ -87,7 +87,7 @@
     </div>
 
     <div class="side-group open" data-group="demand">
-      <button type="button" class="side-group-label"><span>Demand &amp; quality</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <button type="button" class="side-group-label"><span>Demand</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Conversion</span></a>
         <a class="side-link" href="#sec-perf" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI &amp; quality</span></a>
@@ -117,9 +117,9 @@
     </div>
 
     <div class="side-group" data-group="leadership">
-      <button type="button" class="side-group-label"><span>Leadership</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+      <button type="button" class="side-group-label"><span>Executive</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
-        <a class="side-link" href="#sec-brief" title="Management Summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Mgmt Summary</span></a>
+        <a class="side-link" href="#sec-brief" title="Executive summary"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16"></path><path d="M4 12h10"></path><path d="M4 19h16"></path><path d="M18 10l2 2-2 2"></path></svg></span><span>Executive summary</span></a>
       </div>
     </div>
   </nav>
@@ -130,7 +130,7 @@
 <div id="uploadView" style="display:none !important;visibility:hidden !important;pointer-events:none !important">
   <div class="tag">BITS Pilani Digital · Anya Voice Dashboard</div>
   <h1>Anya Voice <em>Dashboard</em></h1>
-  <p class="lead">Review voice performance, lead quality, caller intent, operating cost, and follow-up priorities from a single management view. Everything runs in your browser; nothing is uploaded.</p>
+  <p class="lead">Review call demand, outcomes, operating cost, and follow-up priorities from a single executive view. Everything runs in your browser; nothing is uploaded.</p>
   <div class="drop" id="dropZone">
     <div style="font-size:42px;margin-bottom:14px"></div>
     <b>Add voice export</b>
@@ -147,7 +147,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div class="top-brand">
         <img class="top-logo-img" src="assets/logo.jpg" alt="BITS Pilani Digital logo">
-        <div class="top-title-wrap"><div class="top-title">Anya Voice Dashboard</div><div class="top-subtitle">Call quality, lead intelligence and follow-up priorities</div></div>
+        <div class="top-title-wrap"><div class="top-title">Anya Voice Dashboard</div><div class="top-subtitle">Call demand, outcomes and follow-up priorities</div></div>
       </div>
       <div id="meta" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
@@ -209,7 +209,7 @@
   </section>
 
   <section id="sec-direction" class="direction-overview">
-    <div class="shead"><span class="n">02</span><h2>Call Flow Overview</h2></div>
+    <div class="shead"><span class="n">02</span><h2>Call flow</h2></div>
     <div class="direction-summary" id="directionSummary"></div>
     <div class="panel" style="margin-top:16px">
       <div class="shead" style="margin-bottom:14px"><h4 style="font-family:'Source Serif 4',serif;font-size:15px;font-weight:600">Inbound vs Outbound at a glance</h4></div>
@@ -247,7 +247,7 @@
     </div>
   </aside>
 
-  <section id="sec-conversion"><div class="shead"><span class="n">03</span><h2>Demand conversion</h2></div>
+  <section id="sec-conversion"><div class="shead"><span class="n">03</span><h2>Outcomes &amp; follow-up</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Demand outcomes</h4><div class="cap">Callback demand and lead tiers across the selected period. Callback is an intent signal and can overlap with any lead tier.</div><div class="funnel" id="funnel"></div></div>
       <div class="conversion-support">
@@ -271,13 +271,13 @@
     <div class="panel" style="margin-top:24px"><h4>Conversion quality by intent</h4><div class="cap">Not every reached call is worth the same. For each thing people call about, how often it turns into a <b>hot lead</b> vs. a frustrated dead-end — so effort and scripting go where demand actually converts. Counted <b>once per lead</b> (a number dialled repeatedly isn't double-counted). Reflects the current date &amp; direction view.</div><div id="intentQualityControls" class="iq-toggle"></div><div id="intentQuality"></div></div>
   </section>
 
-  <section id="sec-volume"><div class="shead"><span class="n">06</span><h2>Demand trends</h2></div>
+  <section id="sec-volume"><div class="shead"><span class="n">06</span><h2>Demand over time</h2></div>
     <div class="grid2">
       <div class="panel"><h4>Daily volume</h4><div class="cap">Daily call volume across the selected period.</div><div id="dayChart"></div></div>
       <div class="panel"><h4>Hourly patterns</h4><div class="cap">Hourly call patterns and service demand.</div><div id="hourChart"></div></div>
     </div></section>
 
-  <section id="sec-geo"><div class="shead"><span class="n">07</span><h2>Lead geography</h2><button onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export international</button></div>
+  <section id="sec-geo"><div class="shead"><span class="n">07</span><h2>Reach by geography</h2><button onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export international</button></div>
     <div class="panel">
       <div class="cap">Domestic vs international split, and the international country breakdown, for the selected period.</div>
       <div class="grid2" style="margin-top:10px">
@@ -292,7 +292,7 @@
       <div class="od-title">Outbound</div>
       <div class="od-sub">Everything about the calls <b>you place</b> — conversion &amp; reach, dialing cadence &amp; capacity, and campaign performance. Jump to any of the three from the <b>Outbound</b> group in the sidebar. Hidden under the Inbound view.</div>
     </div>
-    <div class="shead"><span class="n">08</span><h2>Outbound Performance &amp; Conversion</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="shead"><span class="n">08</span><h2>Outbound results</h2><span id="outboundScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Every outbound dial — connected, failed and initiated — deduplicated by Call ID. Reach and connectivity come from all dials; lead quality comes from the calls that connected.</div>
     <div class="strip" id="outboundPerfKpis"></div>
     <div class="panel" style="margin-top:24px"><h4>Outbound conversion funnel</h4><div class="cap">Dials placed &rarr; connected &rarr; hot leads. The red row is the failed-call leakage &mdash; dials that never connected. Click any bar (or the leakage) for the calls behind it.</div><div id="outboundFunnel"></div></div>
@@ -322,19 +322,19 @@
   </section>
 
   <section id="sec-campaigns">
-    <div class="shead"><span class="n">10</span><h2>Campaign Performance</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="shead"><span class="n">10</span><h2>Campaign results</h2><span id="campaignScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
     <div class="cap" style="margin:-10px 0 18px">Every outbound campaign side by side. Fresh, targeted lists usually convert far better than bulk batches &mdash; this makes that visible. Use the campaign selector in the header to scope the whole dashboard to one campaign.</div>
     <div class="panel"><h4>Campaign leaderboard</h4><div class="cap">Dials, connect rate, unique-number reach, and hot-lead rate per campaign. Click a row for its calls; click a header to sort.</div><div id="campaignLeaderboard"></div></div>
     <div class="panel" style="margin-top:24px"><h4>Why we never reached them</h4><div class="cap">Top reasons outbound numbers were not reached. Smaller categories are grouped for a compact operating view.</div><div id="failureCoverage" class="opf-bestwin" style="display:none"></div><div id="failureBreakdown"></div></div>
   </section>
 
   <section id="sec-campaigns-hidden" style="display:none">
-    <div class="opf-hidden-note">Campaign Performance is hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. It reappears under Outbound or All calls.</div>
+    <div class="opf-hidden-note">Campaign results are hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. They reappear under Outbound or All calls.</div>
   </section>
 
-  <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Follow-up queue &amp; repeat callers</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-up CSV</button></div>
-    <div class="panel"><h4>Follow-up queue (Top 50)</h4><div class="cap">Leads ranked for follow-up. Select a lead to open the profile drawer.</div><div id="hottestLeads" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
-    <div class="panel" style="margin-top:24px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><h4 style="margin:0">Repeat callers (3+ calls)</h4><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div><div class="cap">Phone numbers with 3+ calls. Select a lead to view the timeline.</div><div id="serialCallers" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px;max-height:600px;overflow-y:auto;padding-right:8px"></div></div>
+  <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Follow-up &amp; repeat engagement</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-up CSV</button></div>
+    <div class="panel follow-up-panel"><h4>Follow-up queue</h4><div class="cap">Leads ranked for follow-up. Select a card to open the profile drawer.</div><div id="hottestLeads" class="follow-up-grid"></div></div>
+    <div class="panel repeat-engagement-panel"><div class="repeat-engagement-heading"><div><h4 style="margin:0">Repeat engagement</h4><div class="cap">Phone numbers with 3+ calls. Select a card to view the full timeline.</div></div><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export repeat CSV</button></div><div id="serialCallers" class="repeat-engagement-grid"></div></div>
   </section>
 
   <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Callback requests</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export CSV</button></div>
@@ -349,7 +349,7 @@
       <div class="panel"><h4>Cost impact</h4><div class="cap">Estimated cost of attention-required calls at ₹5/min</div><div id="frustCost"></div></div>
     </div></section>
 
-  <section id="sec-explorer"><div class="shead"><span class="n">14</span><h2>Enquiry ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export current ledger view</button></div>
+  <section id="sec-explorer"><div class="shead"><span class="n">14</span><h2>Call ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export current ledger view</button></div>
     <div class="panel">
       <div class="cap">Every call in the selected date and direction view. Search, sort, and select a row to open the profile drawer.</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 10px">
@@ -419,11 +419,11 @@
     </div></section>
 
   <section id="sec-brief" class="management-brief">
-    <div class="shead"><span class="n">15</span><h2>Management Summary</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button></div>
-    <div class="cap" style="margin:-10px 0 16px">A leadership-ready snapshot of the current date &amp; direction view. Open it any time from the <b>Mgmt Summary</b> button in the header or the sidebar.</div>
+    <div class="shead"><span class="n">15</span><h2>Executive summary</h2><button type="button" class="brief-print-btn" onclick="printManagementBrief()">Export / Save PDF</button></div>
+    <div class="cap" style="margin:-10px 0 16px">A leadership-ready snapshot of the current date &amp; direction view. Open it any time from the <b>Executive summary</b> button in the header or sidebar.</div>
     <div class="brief-cover">
       <div class="brief-eyebrow">Leadership snapshot</div>
-      <h3>Management Summary</h3>
+      <h3>Executive summary</h3>
       <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
       <div class="strip" id="briefKpis"></div>
     </div>

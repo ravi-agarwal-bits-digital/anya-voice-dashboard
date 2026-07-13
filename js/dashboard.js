@@ -614,6 +614,7 @@ function searchUserByMobile(mobile, source="search"){
   }
 
   // Calculate stats
+  const frustrated=userCalls.filter(c=>c.frustrated).length;
   const avgConf=Math.round(userCalls.reduce((a,c)=>a+c.conf,0)/userCalls.length);
   const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
   const totalDur=sumBilledMinutes(userCalls);
@@ -673,7 +674,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
-    const label=source==="callback"?"Opened from the Follow-up queue":source==="ledger"?"Opened from the Enquiry ledger":source==="priority"?"Opened from the Follow-up queue":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from Management Summary":"Opened from mobile search";
+    const label=source==="callback"?"Opened from the Follow-up queue":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from the Follow-up queue":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
     const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
     note.textContent=label+`. Full call history is shown. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
@@ -1570,13 +1571,13 @@ function paintUnreachableList(unreachable,avgDials){
 function exportUnreachableCSV(){
   const groups=window.__unreachGroups||[];
   if(!groups.length){alert('No repeatedly unreachable numbers to export.');return;}
-  let csv='Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status\n';
+  let csv='Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status,Filter Scope\n';
   groups.forEach(calls=>{
     const sorted=calls.slice().sort((a,b)=>a.ts-b.ts),first=sorted[0],last=sorted[sorted.length-1],country=classifyPhone(first.from).country;
     const campaigns=[...new Set(sorted.map(r=>String(r.campaign||'').trim()).filter(Boolean))].join(' | ');
-    csv+=[fullPhone(first.from),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status)].join(',')+'\n';
+    csv+=[fullPhone(first.from),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status),escCSV(`${activeFilterScopeLabel()} · Repeatedly unreachable`)].join(',')+'\n';
   });
-  downloadCSV('repeatedly_unreachable_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  downloadCSV('repeatedly_unreachable_'+csvDateStamp()+'.csv',csv);
 }
 
 // ===== OUTBOUND CADENCE & CAPACITY =====
@@ -2435,12 +2436,12 @@ function drawerScopeHtml(label='Dashboard scope'){
 // Standard record -> CSV used by every drawer/section export, so a downloaded file always has the
 // same columns wherever it came from. Phone is full (unmasked) for actioning the lead.
 function recordsToCSV(rows,scopeLabel=activeFilterScopeLabel()){
-  let csv='Phone,Country,Direction,Call Time,Duration (mins),Lead Temp,Review Band,Intent,Confidence %,Need Score,Frustrated,Callback,Status,Summary,Filter Scope\n';
+  let csv='Call ID,Phone,Country,Direction,Call Time,Campaign,Status,Duration (mins),Lead Temp,Callback,Callback Window,Intent,Failure Reason,Summary,Filter Scope\n';
   rows.forEach(r=>{
     const c=classifyPhone(r.from);
-    csv+=[fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
-      Math.round(r.dur/60*10)/10,escCSV(r.leadTemp),escCSV(r.band),escCSV(r.intent),Math.round(r.conf),Math.round(r.need),
-      r.frustrated?'Yes':'No',r.callback?'Yes':'No',escCSV(r.status),escCSV(r.summary),escCSV(scopeLabel)].join(',')+'\n';
+    csv+=[escCSV(r.callId),fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
+      escCSV(r.campaign),escCSV(r.status),Math.round(r.dur/60*10)/10,escCSV(r.leadTemp),r.callback?'Yes':'No',
+      escCSV(r.cbPreferred||'Not specified'),escCSV(r.intent),escCSV(r.failReason),escCSV(r.summary),escCSV(scopeLabel)].join(',')+'\n';
   });
   return csv;
 }
@@ -2450,14 +2451,14 @@ function exportPanelCSV(){
   const rows=window.__panelRows||[];
   if(!rows.length){alert("Nothing to export in this view.");return;}
   const scope=activeFilterScopeLabel();
-  downloadCSV(slugForFile(window.__panelTitle)+'__'+slugForFile(scope)+'_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows,scope));
+  downloadCSV(slugForFile(window.__panelTitle)+'__'+slugForFile(scope)+'_'+csvDateStamp()+'.csv',recordsToCSV(rows,scope));
 }
 // Exports the calls shown in the lead-profile drawer.
 function exportProfileCSV(){
   const rows=window.__profileCalls||[];
   if(!rows.length){alert("No calls to export for this lead.");return;}
   const scope=`Full lead history; active dashboard scope: ${activeFilterScopeLabel()}`;
-  downloadCSV('lead_'+slugForFile(fullPhone(rows[0].from))+'__full-history_'+new Date().toISOString().slice(0,10)+'.csv',recordsToCSV(rows,scope));
+  downloadCSV('lead_'+slugForFile(fullPhone(rows[0].from))+'__full-history_'+csvDateStamp()+'.csv',recordsToCSV(rows,scope));
 }
 function showKpiPanel(title,bodyHtml,rows){
   $("kpiPanelTitle").textContent=title;
@@ -2763,12 +2764,8 @@ function paintGeo(o){
 function exportGeo(){
   const intl=RECORDS.filter(r=>classifyPhone(r.from).intl);
   if(!intl.length){alert("No international leads to export in this range.");return;}
-  let csv='Phone,Country,Direction,Call Time,Duration (mins),Intent,Lead Temp,Confidence %,Need Score,Summary\n';
-  intl.sort((a,b)=>b.ts-a.ts).forEach(r=>{
-    const c=classifyPhone(r.from);
-    csv+=`${fullPhone(r.from)},${escCSV(c.country)},${escCSV(directionLabel(r.direction))},${escCSV(formatCallTime(r))},${Math.round(r.dur/60*10)/10},${escCSV(r.intent)},${escCSV(r.leadTemp)},${Math.round(r.conf)},${Math.round(r.need)},${escCSV(r.summary)}\n`;
-  });
-  downloadCSV('international_leads_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  const scope=`${activeFilterScopeLabel()} · International leads only`;
+  downloadCSV('international_leads_'+csvDateStamp()+'.csv',recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope));
 }
 
 // ===== CALL EXPLORER =====
@@ -3011,12 +3008,7 @@ function explorerOpen(phone){
 function exportExplorer(){
   const rows=getExplorerRows();
   if(!rows.length){alert("No calls to export in the current view.");return;}
-  let csv='Phone,Country,Direction,Call Time,Duration (mins),Lead Temp,Intent,Confidence %,Need Score,Frustrated,Callback,Summary\n';
-  rows.forEach(r=>{
-    const c=classifyPhone(r.from);
-    csv+=`${fullPhone(r.from)},${escCSV(c.country)},${escCSV(directionLabel(r.direction))},${escCSV(formatCallTime(r))},${Math.round(r.dur/60*10)/10},${escCSV(r.leadTemp)},${escCSV(r.intent)},${Math.round(r.conf)},${Math.round(r.need)},${r.frustrated?'Yes':'No'},${r.callback?'Yes':'No'},${escCSV(r.summary)}\n`;
-  });
-  downloadCSV('call_explorer_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  downloadCSV('call_ledger_'+csvDateStamp()+'.csv',recordsToCSV(rows,ledgerExportScope()));
 }
 
 
@@ -3105,28 +3097,20 @@ function paintHottestLeads(records){
     let typeEmoji="Cold",typeCol="var(--cold)";
     if(l.hot>=Math.ceil(l.total*0.6)){typeEmoji="Hot";typeCol="var(--hot)";}
     else if(l.hot>=Math.ceil(l.total*0.3)){typeEmoji="Warm";typeCol="var(--warm)";}
-    const leadBreakdown=reducedAiViewEnabled()?'':`<div><b>Lead:</b> ${typeEmoji} ${l.hot}H (${percentOf(l.hot,l.total)}%) | ${l.warm}W (${percentOf(l.warm,l.total)}%) | ${l.cold}C (${percentOf(l.cold,l.total)}%)</div>`;
-    const callBreakdown=reducedAiViewEnabled()?`<div><b>Calls:</b> ${l.total}</div>`:`<div><b>Calls:</b> ${l.total} (${l.frustrated} attention · ${percentOf(l.frustrated,l.total)}%)</div>`;
-    const advancedLeadDetails=reducedAiViewEnabled()?'':`
-        <div><b>Avg Conf:</b> ${l.avgConf}%</div>
-        <div><b>Avg Need:</b> ${l.avgNeed}</div>
-        <div style="grid-column:1/-1"><b>Top Intent:</b> ${esc(l.topIntent)}</div>`;
-
-    return`<div style="padding:14px;background:#f8fafc;border-radius:8px;border:1px solid var(--line);cursor:pointer;transition:.2s" onclick="markProfileSource(this);openLeadProfile(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-        <b style="font-family:'Inter',monospace;font-size:12px">${esc(maskPhone(l.phone))}</b>
-        <span style="background:${typeCol};color:#fff;padding:2px 6px;border-radius:2px;font-size:10px;font-weight:600">#${i+1}</span>
+    const callback=l.calls.some(c=>c.callback);
+    return`<article class="follow-up-card drawer-click-card" style="--card-accent:${typeCol}" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(l.phone)},'priority',this)">
+      <div class="follow-up-card-head">
+        <div><div class="follow-up-rank">Follow-up #${i+1}</div><b class="follow-up-phone">${esc(maskPhone(l.phone))}</b></div>
+        <span class="follow-up-tier" style="color:${typeCol}">${typeEmoji}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;color:var(--muted);margin-bottom:8px">
-        ${leadBreakdown}
-        ${callBreakdown}
-        <div><b>Duration:</b> ⏳ ${l.totalDur} mins</div>
-        ${advancedLeadDetails}
-        <div style="grid-column:1/-1"><b>Cost:</b> <span style="color:var(--hot)">₹${l.totalDur*5}</span></div>
+      <div class="follow-up-card-stats">
+        <div><b>${l.total}</b><span>Calls</span></div>
+        <div><b>${l.totalDur}</b><span>Minutes</span></div>
+        <div><b>₹${l.totalDur*5}</b><span>Cost</span></div>
       </div>
-      ${directionMix(l.calls)}
-      <div style="font-size:9px;color:var(--faint);margin-top:6px">Click to view full profile →</div>
-    </div>`;
+      <div class="follow-up-card-meta">${directionMix(l.calls)}${callback?'<span class="follow-up-callback">Callback requested</span>':''}</div>
+      <div class="drawer-action-hint">Open full profile</div>
+    </article>`;
   }).join("");
 }
 
@@ -3142,17 +3126,19 @@ function paintSerialCallers(records){
   if(!serial.length){$("serialCallers").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No serial engagers (3+ calls).</div>";return;}
 
   $("serialCallers").innerHTML=serial.map((s,i)=>`
-    <div class="drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:16px;cursor:pointer;transition:.2s;border-left:3px solid var(--warm)" onclick="markProfileSource(this);showSerialTimeline(${i})">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-        <b style="font-family:'Inter',monospace;font-size:13px">${esc(maskPhone(s.phone))}</b>
-        <span style="background:var(--warm);color:#000;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${s.total} calls</span>
+    <article class="repeat-engagement-card drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="markProfileSource(this);showSerialTimeline(${i})">
+      <div class="repeat-engagement-card-head">
+        <div><div class="repeat-engagement-eyebrow">Repeat engagement</div><b class="repeat-engagement-phone">${esc(maskPhone(s.phone))}</b></div>
+        <span class="repeat-engagement-count">${s.total} calls</span>
       </div>
-      <div style="font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-        <div style="grid-column:1/-1"><b style="color:var(--teal)">${s.totalDur} mins</b> total | <b style="color:var(--warm)">₹${s.totalDur*5}</b> cost</div>
+      <div class="repeat-engagement-stats">
+        <div><b>${s.total}</b><span>Total calls</span></div>
+        <div><b>${s.totalDur}</b><span>Minutes</span></div>
+        <div><b>₹${s.totalDur*5}</b><span>Cost</span></div>
       </div>
-      ${directionMix(s.calls)}
-      <div class="drawer-action-hint">High engagement • Open profile timeline in drawer</div>
-    </div>
+      <div class="repeat-engagement-card-meta">${directionMix(s.calls)}</div>
+      <div class="drawer-action-hint">Open profile timeline</div>
+    </article>
   `).join("");
   window.SERIAL_CALLERS=serial;
 }
@@ -3187,8 +3173,17 @@ function downloadCSV(filename, csvContent){
 }
 
 function escCSV(val){
-  const s=String(val||'').replace(/"/g,'""');
-  return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s}"`:s;
+  const s=String(val??'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/"/g,'""');
+  return /[",\n]/.test(s)?`"${s}"`:s;
+}
+function csvDateStamp(){return new Date().toISOString().slice(0,10);}
+function ledgerExportScope(){
+  const parts=[activeFilterScopeLabel()];
+  if(LEDGER_SCOPE?.title)parts.push(LEDGER_SCOPE.title);
+  if(LEDGER_STATE.filters.size)parts.push([...LEDGER_STATE.filters].map(f=>LEDGER_FILTER_LABELS[f]||f).join(' + '));
+  if(LEDGER_STATE.search.trim())parts.push(`Search: ${LEDGER_STATE.search.trim()}`);
+  if(LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort)parts.push(LEDGER_SORT_LABELS[LEDGER_STATE.sort]||LEDGER_STATE.sort);
+  return parts.join(' · ');
 }
 
 function exportHottestLeads(){
@@ -3198,40 +3193,31 @@ function exportHottestLeads(){
     const hot=calls.filter(c=>c.leadTemp==="Hot").length;
     const warm=calls.filter(c=>c.leadTemp==="Warm").length;
     const cold=calls.filter(c=>c.leadTemp==="Cold").length;
-    const frustrated=calls.filter(c=>c.frustrated).length;
-    const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
-    const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
     const totalDur=sumBilledMinutes(calls);
-    const leadScore=Math.round((hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2);
-    const intents={};calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
-    const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
     const lastCall=calls.sort((a,b)=>b.ts-a.ts)[0];
-    return{ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",lastCallTime:formatCallTime(lastCall),lastSummary:lastCall.summary};
-  }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
+    const followUpScore=(hot*3+warm*2+cold)*2+calls.length*1.5+Math.round(calls.reduce((a,c)=>a+Number(c.need||0),0)/calls.length)*0.3+Math.round(calls.reduce((a,c)=>a+Number(c.conf||0),0)/calls.length)*0.2;
+    const tier=hot>=Math.ceil(calls.length*0.6)?'Hot':hot>=Math.ceil(calls.length*0.3)?'Warm':'Cold';
+    return{ph,total:calls.length,tier,totalDur,followUpScore,callback:calls.some(c=>c.callback),directionMix:directionMixText(calls),lastCallTime:formatCallTime(lastCall),lastStatus:lastCall.status,lastSummary:lastCall.summary};
+  }).sort((a,b)=>b.followUpScore-a.followUpScore).slice(0,50);
 
-  let csv='Phone,Direction Mix,Total Calls,Hot,Warm,Cold,Frustrated,Avg Confidence %,Avg Need Score,Total Duration (mins),Lead Score,Top Intent,Last Call Time,Last Summary\n';
-  leads.forEach(l=>{csv+=`${fullPhone(l.ph)},${escCSV(directionMixText(groupByPhone(RECORDS)[l.ph]||[]))},${l.total},${l.hot},${l.warm},${l.cold},${l.frustrated},${l.avgConf},${l.avgNeed},${l.totalDur},${l.leadScore},${escCSV(l.topIntent)},${escCSV(l.lastCallTime)},${escCSV(l.lastSummary)}\n`;});
-  downloadCSV('follow_up_queue_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  let csv='Follow-up Rank,Phone,Lead Tier,Total Calls,Callback Requested,Direction Mix,Total Duration (mins),Total Cost (Rs),Last Call Time,Last Status,Last Summary,Filter Scope\n';
+  leads.forEach((l,i)=>{csv+=[i+1,fullPhone(l.ph),escCSV(l.tier),l.total,l.callback?'Yes':'No',escCSV(l.directionMix),l.totalDur,l.totalDur*5,escCSV(l.lastCallTime),escCSV(l.lastStatus),escCSV(l.lastSummary),escCSV(`${activeFilterScopeLabel()} · Follow-up queue`)].join(',')+'\n';});
+  downloadCSV('follow_up_queue_'+csvDateStamp()+'.csv',csv);
 }
 
 function exportSerialEngagers(){
   const serial=findSerialCallers(RECORDS);
   if(!serial.length){alert("No serial engagers (3+ calls) to export in this range.");return;}
-  let csv='Phone,Direction Mix,Total Calls,Frustrated,General,Total Duration (mins),Total Cost (Rs),Last Call Time\n';
+  let csv='Phone,Direction Mix,Total Calls,Total Duration (mins),Total Cost (Rs),Last Call Time,Last Status,Last Summary,Filter Scope\n';
   serial.forEach(s=>{
     const lastCall=s.calls[0];
-    csv+=`${fullPhone(s.phone)},${escCSV(directionMixText(s.calls||[]))},${s.total},${s.frustrated},${s.general},${s.totalDur},${s.totalDur*5},${escCSV(formatCallTime(lastCall))}\n`;
+    csv+=[fullPhone(s.phone),escCSV(directionMixText(s.calls||[])),s.total,s.totalDur,s.totalDur*5,escCSV(formatCallTime(lastCall)),escCSV(lastCall.status),escCSV(lastCall.summary),escCSV(`${activeFilterScopeLabel()} · Repeat engagement`)].join(',')+'\n';
   });
-  downloadCSV('serial_engagers_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  downloadCSV('repeat_engagement_'+csvDateStamp()+'.csv',csv);
 }
 
 function exportCallbacks(){
   const cbs=RECORDS.filter(r=>r.callback);
   if(!cbs.length){alert("No callback requests to export for the current date and direction view.");return;}
-  let csv='Phone,Direction,Call Time,Detected Callback Window,Duration (mins),Intent,Callback Reason,Confidence %,Need Score,Summary\n';
-  cbs.sort((a,b)=>b.ts-a.ts).forEach(c=>{
-    const durMins=Math.round(c.dur/60*10)/10;
-    csv+=`${fullPhone(c.from)},${escCSV(directionLabel(c.direction))},${escCSV(formatCallTime(c))},${escCSV(c.cbPreferred||'Not specified')},${durMins},${escCSV(c.intent)},${escCSV(c.cbReason)},${Math.round(c.conf)},${Math.round(c.need)},${escCSV(c.summary)}\n`;
-  });
-  downloadCSV('callback_requests_'+new Date().toISOString().slice(0,10)+'.csv',csv);
+  downloadCSV('callback_requests_'+csvDateStamp()+'.csv',recordsToCSV(cbs.sort((a,b)=>b.ts-a.ts),`${activeFilterScopeLabel()} · Callback requests`));
 }
