@@ -176,8 +176,10 @@ assert(!html.includes('id="timelinePanel"'), 'Superseded inline timeline panel m
 assert(!scripts[1].includes('timelinePanel'), 'Dashboard logic must use the profile drawer timeline');
 assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data freshness metadata is missing');
 assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
-assert(scripts[1].includes("['Connected dials'"), 'Direction glance must include outbound connect performance');
-assert(scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must include wasted outbound effort');
+assert(!scripts[1].includes("['Connected dials'"), 'Direction glance must not duplicate outbound connect performance');
+assert(!scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must not duplicate outbound reach diagnostics');
+assert(!scripts[1].includes('Outbound operational context'), 'Direction glance must remain limited to inbound/outbound comparison');
+assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
@@ -185,6 +187,7 @@ assert(html.includes('<h4>Follow-up queue</h4>'), 'Follow-up queue panel title i
 assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
 assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
 assert(html.includes('<h2>Executive summary</h2>'), 'Executive summary title is missing');
+assert(html.includes('>Executive summary</button>'), 'Executive summary header action is missing');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');

@@ -1160,6 +1160,9 @@ function paintDirectionSplit(){
   const inbound=base.filter(r=>normalizeDirection(r.direction)==='inbound').length;
   const outbound=base.filter(r=>normalizeDirection(r.direction)==='outbound').length;
   const unknown=Math.max(0,n-inbound-outbound);
+  // In the combined view, the comparison table below already owns the direction split.
+  // Keep these cards only when a single direction needs a compact scope summary.
+  if(SELECTED_DIRECTION==='all' && inbound && outbound){el.innerHTML='';return;}
   const card=(cls,label,val,note,pred,useRecordsBase)=>{
     const selectedClass=(cls==='all'&&SELECTED_DIRECTION==='all')||(cls===SELECTED_DIRECTION)?' selected':'';
     const baseRef=useRecordsBase?'RECORDS':'window.__dirBase';
@@ -1168,7 +1171,7 @@ function paintDirectionSplit(){
   };
   window.__dirBase=base;
   const selected=currentDirectionLabel();
-  el.innerHTML=card('all','Current view',RECORDS.length,`${selected} after active date and direction filters.`,()=>true,true)+
+  el.innerHTML=card('all','Selected scope',RECORDS.length,`${selected} after active date and direction filters.`,()=>true,true)+
     card('inbound','Inbound',inbound,'Calls initiated by prospects/users within the selected date range.',r=>normalizeDirection(r.direction)==='inbound')+
     card('outbound','Outbound',outbound,'Calls initiated outward for follow-up, counselling, or engagement.',r=>normalizeDirection(r.direction)==='outbound')+
     (unknown?card('unknown','Unknown',unknown,'Direction missing or unmapped in the export. Included only in All Calls.',r=>{const d=normalizeDirection(r.direction);return d!=='inbound'&&d!=='outbound';}): '');
@@ -1262,11 +1265,8 @@ function paintDirectionCompare(){
   window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
   window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound');
   if(!ib.n || !ob.n){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
-  const ops=outboundGlanceStats();
-  window.__dirOutDials=ops.dials;window.__dirOutConnected=ops.connected;window.__dirOutFailed=ops.dials.filter(r=>normalizeDisposition(r)!=='connected');
-  window.__dirOutUnreachable=[].concat(...ops.unreachable);window.__dirOutHot=ops.connected.filter(r=>r.leadTemp==='Hot');
-  // Connect/answer rate intentionally lives in the dedicated outbound section (dial-level), not here --
-  // these rows compare connected conversations, where a "connect rate" would trivially be ~100% both sides.
+  // Dial mechanics intentionally live in Outbound results. This table is only for a clean
+  // inbound/outbound conversation comparison, avoiding repeated reach and failure metrics.
   const rows=[
     ['Unique people',`${ib.unique} callers`,`${ob.unique} leads dialled`,'()=>true'],
     ['Callback requests',`${ib.callbacks} (${ib.callbackPct}%)`,`${ob.callbacks} (${ob.callbackPct}%)`,'r=>r.callback'],
@@ -1278,23 +1278,12 @@ function paintDirectionCompare(){
   const visibleRows=reducedAiViewEnabled()
     ?rows.filter(r=>!['Avg AI confidence','Quality pass rate (Green)'].includes(r[0]))
     :rows;
-  const operationalRows=[
-    ['Dials placed','Not applicable',ops.n.toLocaleString(),'window.__dirOutDials'],
-    ['Connected dials','Inbound calls arrive connected',`${ops.connected.length.toLocaleString()} (${ops.connectPct}%)`,'window.__dirOutConnected'],
-    ['Distinct-number reach','Unique callers shown above',`${ops.reached.length.toLocaleString()} of ${ops.numbers.toLocaleString()} (${ops.reachPct}%)`,'window.__dirOutConnected'],
-    ['Failed / unconnected effort','Not applicable',`${ops.failed.toLocaleString()} (${ops.failedPct}%)`,'window.__dirOutFailed'],
-    ['Repeatedly unreachable','Not applicable',`${ops.unreachable.length.toLocaleString()} numbers`,'window.__dirOutUnreachable'],
-    ['Average dials per number','Not applicable',ops.avgDials,'window.__dirOutDials'],
-    ['Hot leads reached','Hot callers shown above',`${ops.hotReached.length.toLocaleString()} (${ops.hotReachPct}% of reached)`,'window.__dirOutHot']
-  ];
   el.innerHTML=`<table class="opf-cmp-table direction-glance-table"><thead><tr><th>Metric</th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
     `<tbody>${visibleRows.map(r=>`<tr><td>${esc(r[0])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}`+
-    `<tr class="direction-glance-group"><td colspan="3">Outbound operational context</td></tr>`+
-    operationalRows.map(r=>`<tr><td>${esc(r[0])}</td><td class="direction-na">${esc(r[1])}</td><td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',()=>true,${r[3]})">${esc(r[2])}</td></tr>`).join('')+
     `</tbody></table>`;
 }
 function paintDispositionBreak(obRecs){
@@ -2295,7 +2284,7 @@ function paintManagementBrief(){
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
   if(summary){
     summary.innerHTML=reducedAiViewEnabled()
-      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), the follow-up queue contains <b>${cur.hot}</b> leads (${hotPct}%), and the period showed <b>${serialPhrase}</b>.`
+      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} is summarized below as an operating view. The main action areas are callback demand and the follow-up queue; the period showed <b>${serialPhrase}</b>.`
       :`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
   }
   const hasPrev=prev.length>0;
@@ -2349,9 +2338,8 @@ function boot(){
   updateDirectionButtons();
   populateCampaignFilter();
 
-  const totalMins=sumBilledMinutes(RECORDS);
-  const totalCost=totalMins*5;
-  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",totalMins+" mins"],["Cost","₹"+totalCost],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
+  // Keep the header as context only. Volume, time and cost belong to the KPI strip below.
+  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
@@ -2504,7 +2492,7 @@ function defaultDrillStats(rows){
   const avgConf=Math.round(rows.reduce((a,r)=>a+r.conf,0)/n);
   const avgNeed=Math.round(rows.reduce((a,r)=>a+r.need,0)/n);
   const ratio=v=>`${v} (${percentOf(v,n)}%)`,hot=rows.filter(r=>r.leadTemp==="Hot").length,callbacks=rows.filter(r=>r.callback).length,intl=rows.filter(r=>classifyPhone(r.from).intl).length;
-  const stats=[["Matching calls",n],["Hot leads",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
+  const stats=[["Matching calls",n],["Follow-up queue",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
   if(!reducedAiViewEnabled())stats.splice(1,0,["Avg confidence",avgConf+"%"],["Avg need",avgNeed]);
   return stats;
 }
@@ -2521,7 +2509,7 @@ function openKpiPanel(key){
   if(key==="all"){title="All Calls";rows=RECORDS.slice();}
   else if(key==="hot"){title="Follow-up queue";rows=RECORDS.filter(r=>r.leadTemp==="Hot");}
   else if(key==="green"){title="Quality-pass calls (Green)";rows=RECORDS.filter(r=>r.band==="Green");}
-  else if(key==="geo"){title="Lead geography";rows=RECORDS.filter(r=>classifyPhone(r.from).intl);} // intl records listed; india summarized in stats
+  else if(key==="geo"){title="Reach by geography";rows=RECORDS.filter(r=>classifyPhone(r.from).intl);} // intl records listed; india summarized in stats
   else if(key==="conf"){title="Assistant confidence";rows=RECORDS.slice();}
 
   const n=RECORDS.length||1;
@@ -2529,11 +2517,13 @@ function openKpiPanel(key){
   if(key==="all"){
     const mins=sumBilledMinutes(RECORDS);
     const ratio=v=>`${v} (${percentOf(v,RECORDS.length)}%)`;
-    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Hot",ratio(RECORDS.filter(r=>r.leadTemp==="Hot").length)],["Frustrated",ratio(RECORDS.filter(r=>r.frustrated).length)],["Callbacks",ratio(RECORDS.filter(r=>r.callback).length)],["International",ratio(RECORDS.filter(r=>classifyPhone(r.from).intl).length)]];
+    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Follow-up queue",ratio(RECORDS.filter(r=>r.leadTemp==="Hot").length)],["Callbacks",ratio(RECORDS.filter(r=>r.callback).length)],["International",ratio(RECORDS.filter(r=>classifyPhone(r.from).intl).length)]];
+    if(!reducedAiViewEnabled())stats.splice(3,0,["Attention signals",ratio(RECORDS.filter(r=>r.frustrated).length)]);
   }else if(key==="hot"){
     const h=rows;const avgC=h.length?Math.round(h.reduce((a,r)=>a+r.conf,0)/h.length):0;
     const callbacks=h.filter(r=>r.callback).length,intl=h.filter(r=>classifyPhone(r.from).intl).length;
-    stats=[["Hot leads",`${h.length} (${percentOf(h.length,n)}%)`],["Avg confidence",avgC+"%"],["With callback",`${callbacks} (${percentOf(callbacks,h.length)}%)`],["International",`${intl} (${percentOf(intl,h.length)}%)`]];
+    stats=[["Follow-up queue",`${h.length} (${percentOf(h.length,n)}%)`],["With callback",`${callbacks} (${percentOf(callbacks,h.length)}%)`],["International",`${intl} (${percentOf(intl,h.length)}%)`]];
+    if(!reducedAiViewEnabled())stats.splice(1,0,["Avg confidence",avgC+"%"]);
   }else if(key==="green"){
     stats=[["Green (pass)",RECORDS.filter(r=>r.band==="Green").length],["Amber",RECORDS.filter(r=>r.band==="Amber").length],["Red",RECORDS.filter(r=>r.band==="Red").length],["Pass rate",Math.round(RECORDS.filter(r=>r.band==="Green").length/n*100)+"%"]];
   }else if(key==="geo"){
