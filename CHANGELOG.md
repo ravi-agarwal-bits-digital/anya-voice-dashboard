@@ -22,6 +22,7 @@ This file records public-safe repository and application milestones. Detailed in
 - Displayed each Ledger row's billed cost and cumulative lead cost so cost sorting is directly auditable.
 - Removed the heuristic Ledger Priority sort and retained only factual follow-up, repeat, duration, and cost ordering.
 - Clarified per-call Ledger cost with billed-minute context and removed non-operational transcript-completeness filters.
+- Added lead-level inbound/outbound mix tags beside cumulative Ledger cost exposure.
 - Removed the redundant Hot/Warm/Cold lead-tier breakdown from profile drawers.
 - Added inbound/outbound call mix to profile-drawer call totals and collapsed long call histories behind an earlier-calls disclosure.
 - Removed redundant active-view count context from profile drawers.

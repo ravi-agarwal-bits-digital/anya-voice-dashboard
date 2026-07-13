@@ -2843,6 +2843,24 @@ function ledgerLeadCostMap(records){
 function ledgerLeadCost(r,records=LEDGER_SCOPE?.rows||RECORDS){
   return ledgerLeadCostMap(records).get(ledgerPhoneKey(r))||ledgerCallCost(r);
 }
+const _ledgerLeadDirectionCache=new WeakMap();
+function ledgerLeadDirectionMixMap(records){
+  if(_ledgerLeadDirectionCache.has(records))return _ledgerLeadDirectionCache.get(records);
+  const mixes=new Map();
+  records.forEach(r=>{
+    const key=ledgerPhoneKey(r);
+    if(!key)return;
+    const mix=mixes.get(key)||{inbound:0,outbound:0,unknown:0};
+    const direction=normalizeDirection(r.direction);
+    mix[direction]=(mix[direction]||0)+1;
+    mixes.set(key,mix);
+  });
+  _ledgerLeadDirectionCache.set(records,mixes);
+  return mixes;
+}
+function ledgerLeadDirectionMix(r,records=LEDGER_SCOPE?.rows||RECORDS){
+  return ledgerLeadDirectionMixMap(records).get(ledgerPhoneKey(r))||{inbound:0,outbound:0,unknown:1};
+}
 function ledgerHasCallbackWindow(r){return !!(r?.cbPreferred && r.cbPreferred!=="Not specified");}
 function ledgerSearchBlob(r){
   const c=classifyPhone(r.from);
@@ -2953,6 +2971,7 @@ function renderExplorer(resetLimit){
     const billedCost=ledgerCallCost(r);
     const billedMins=billedCost/5;
     const leadCost=ledgerLeadCost(r);
+    const leadMix=ledgerLeadDirectionMix(r);
     const tags=[];
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
     if(ledgerHasCallbackWindow(r))tags.push(`<span style="background:#fff7e8;color:var(--gold);padding:1px 6px;border-radius:3px;font-size:9px">Window</span>`);
@@ -2961,6 +2980,8 @@ function renderExplorer(resetLimit){
       const repeatLabel=repeat.count>=4?`${repeat.count} calls · high repeat`:`${repeat.count} calls · repeat`;
       tags.push(`<span style="background:#eef2ff;color:var(--navy);padding:1px 6px;border-radius:3px;font-size:9px">${esc(repeatLabel)}</span>`);
     }
+    const leadMixLabel=[leadMix.inbound?`In ${leadMix.inbound}`:'',leadMix.outbound?`Out ${leadMix.outbound}`:'',leadMix.unknown?`Other ${leadMix.unknown}`:''].filter(Boolean).join(' · ');
+    if(leadMixLabel)tags.push(`<span style="background:#f5f8fc;color:var(--navy);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:800">Lead mix: ${esc(leadMixLabel)}</span>`);
     tags.unshift(directionPill(r.direction));
     return `<div onclick="markProfileSource(this);explorerOpen(${jsArg(r.from)})" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
       <div style="min-width:0">

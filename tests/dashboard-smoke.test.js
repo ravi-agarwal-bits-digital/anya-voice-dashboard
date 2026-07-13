@@ -99,7 +99,7 @@ for (const fn of [
   'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
-  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost'
+  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -166,6 +166,8 @@ assert.equal(context.ledgerCallCost({ status: 'completed', dur: 61 }), 10, 'Ledg
 assert.equal(context.ledgerCallCost({ status: 'failed', dur: 120 }), 0, 'Unconnected calls must not contribute ledger cost');
 const leadCostRows=[{ from: '+91 99999 99999', status: 'completed', dur: 61 },{ from: '919999999999', status: 'completed', dur: 3 }];
 assert.equal(context.ledgerLeadCost(leadCostRows[0],leadCostRows), 15, 'Lead total cost must combine normalized phone-format variants');
+const leadMixRows=[{ from: '919999999999', direction: 'inbound' },{ from: '+91 99999 99999', direction: 'outbound' }];
+assert.deepEqual(JSON.parse(JSON.stringify(context.ledgerLeadDirectionMix(leadMixRows[0],leadMixRows))), { inbound: 1, outbound: 1, unknown: 0 }, 'Lead direction mix must combine inbound and outbound history');
 const normalizedLeadGroups = context.groupByPhone([
   { from: '+91 99999 99999', status: 'completed', dur: 60 },
   { from: '919999999999', status: 'completed', dur: 60 }
@@ -217,6 +219,7 @@ assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highe
 assert(scripts[1].includes('lead_cost_asc:(a,b)=>'), 'Ledger must support lowest lead-total-cost sorting');
 assert(scripts[1].includes('Cost ₹${billedCost} · ${billedMins} billed min'), 'Ledger must explain the billed cost behind cost sorting');
 assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumulative lead cost behind lead-total sorting');
+assert(scripts[1].includes('Lead mix: ${esc(leadMixLabel)}'), 'Ledger must show the inbound/outbound mix behind cumulative lead cost');
 assert(!html.includes('data-f="has_transcript"'), 'Ledger must not expose transcript-completeness filters');
 assert(!html.includes('data-f="no_transcript"'), 'Ledger must not expose transcript-completeness filters');
 assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
