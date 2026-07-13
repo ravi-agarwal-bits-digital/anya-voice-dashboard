@@ -642,7 +642,6 @@ function searchUserByMobile(mobile, source="search"){
       <div><b>Duration:</b> ${totalDur} mins</div>
       <div><b>Total cost:</b> ₹${totalCost}</div>
       ${reducedView?'':`<div><b>Avg Confidence:</b> ${avgConf}%</div><div><b>Avg Need Score:</b> ${avgNeed}</div>`}
-      <div style="grid-column:1/-1"><b>Lead tier:</b> Hot ${hot} (${percentOf(hot,userCalls.length)}%) | Warm ${warm} (${percentOf(warm,userCalls.length)}%) | Cold ${cold} (${percentOf(cold,userCalls.length)}%)</div>
       ${reducedView?'':`<div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>`}
     </div>
   `;

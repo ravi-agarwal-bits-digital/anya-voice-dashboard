@@ -20,6 +20,7 @@ This file records public-safe repository and application milestones. Detailed in
 - Normalized phone grouping in Follow-up queue and Repeat engagement so card minutes and cost match the lead drawer when phone formatting differs.
 - Added Ledger sorting by estimated per-call cost using the dashboard's billed-minute operating-cost assumption.
 - Displayed each Ledger row's billed cost so the estimated-cost sort is directly auditable.
+- Removed the redundant Hot/Warm/Cold lead-tier breakdown from profile drawers.
 
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.
