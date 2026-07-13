@@ -2937,6 +2937,7 @@ function renderExplorer(resetLimit){
   }
   $("explorerList").innerHTML=shown.map(r=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
+    const billedCost=ledgerCallCost(r);
     const tags=[];
     if(r.callback)tags.push(`<span style="background:rgba(0,212,170,.12);color:var(--teal);padding:1px 6px;border-radius:3px;font-size:9px">Callback</span>`);
     if(ledgerHasCallbackWindow(r))tags.push(`<span style="background:#fff7e8;color:var(--gold);padding:1px 6px;border-radius:3px;font-size:9px">Window</span>`);
@@ -2955,6 +2956,7 @@ function renderExplorer(resetLimit){
       <div style="text-align:right;font-size:10px;color:var(--muted);white-space:nowrap">
         <div style="color:${tempCol};font-weight:600;font-size:11px">${esc(r.leadTemp||"—")}</div>
         <div>${formatDuration(r.dur)}</div>
+        <div style="color:var(--navy);font-weight:800">₹${billedCost} billed</div>
         <div>Conf ${Math.round(r.conf)}%</div>
         <div style="color:var(--faint)">${formatCallTime(r)}</div>
       </div>
