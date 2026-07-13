@@ -191,6 +191,8 @@ assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be m
 assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
 assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard render must not target the removed KPI strip');
 assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintFunnel(o);'), 'Management readout must render with the top essentials');
+assert(!scripts[1].includes('["Source",SRC]'), 'Header source chip must remain removed');
+assert(scripts[1].includes('function renderHeaderMeta(records)'), 'First-load and filtered header chips must share one renderer');
 assert(scripts[1].includes("['hot','Advisory minutes','mins','minutes',()=>true]"), 'Management readout must retain advisory minutes');
 assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',()=>true]"), 'Management readout must retain operating cost');
 assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');

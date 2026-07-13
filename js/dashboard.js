@@ -513,14 +513,7 @@ function applyFilters(){
   RECORDS=FILTERED_RECORDS;
   invalidateLedgerRepeatCache();
   clearLedgerScope(false);
-  // Rebuild meta pills for the current filtered set (or honest empty-state)
-  if(RECORDS.length===0){
-    $("meta").innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
-  }else{
-    const dts=RECORDS.map(r=>r.d).sort();const dmn=dts[0],dmx=dts[dts.length-1];
-    const tMins=sumBilledMinutes(RECORDS);
-    $("meta").innerHTML=[["Period",dmn+" – "+dmx],["Calls",RECORDS.length+" calls"],["Avg. duration",Math.round(RECORDS.reduce((a,r)=>a+r.dur,0)/RECORDS.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
-  }
+  renderHeaderMeta(RECORDS);
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
   paintHealth(o);paintManagementBrief();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
@@ -551,6 +544,16 @@ function applyFilters(){
 
 let searchTimer;
 function percentOf(value,total){return total?Math.round(Number(value||0)/total*100):0;}
+function renderHeaderMeta(records){
+  const meta=$("meta");
+  if(!meta)return;
+  if(!records.length){
+    meta.innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
+    return;
+  }
+  const dts=records.map(r=>r.d).sort(),dmn=dts[0],dmx=dts[dts.length-1],tMins=sumBilledMinutes(records);
+  meta.innerHTML=[["Period",dmn+" – "+dmx],["Calls",records.length+" calls"],["Avg. duration",Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
+}
 function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
 function phoneSearchVariants(value){
   const raw=phoneDigits(value),c=classifyPhone(value),normalized=phoneDigits((c.cc||'')+(c.national||'')),national=phoneDigits(c.national||'');
@@ -2308,8 +2311,8 @@ function boot(){
   updateDirectionButtons();
   populateCampaignFilter();
 
-  // Keep the header as context only. Headline metrics belong to the Management readout below.
-  $("meta").innerHTML=[["Period",dmin+" – "+dmax],["Source",SRC]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
+  // Match the filtered header on first load so the top context never changes shape.
+  renderHeaderMeta(RECORDS);
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
