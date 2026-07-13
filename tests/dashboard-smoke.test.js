@@ -1,6 +1,7 @@
 const fs = require('fs');
 const vm = require('vm');
 const assert = require('assert');
+const { performance } = require('node:perf_hooks');
 const XLSX = require('../assets/xlsx.full.min.js');
 
 const html = fs.readFileSync('index.html', 'utf8');
@@ -37,6 +38,7 @@ for (const path of [
 for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
   'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-brief',
+  'resetAllFilters', 'metricDefinitions',
   'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
@@ -63,6 +65,7 @@ const getElement = id => {
   return elements.get(id);
 };
 const document = {
+  documentElement: { clientHeight: 0 },
   body: makeElement(), getElementById: getElement,
   querySelector: selector => selector === '#dataLoading p' ? loadingText : makeElement(), querySelectorAll: () => [],
   createElement: () => makeElement(), addEventListener: noop
@@ -93,7 +96,8 @@ for (const fn of [
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
-  'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope'
+  'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
+  'activeFilterScopeLabel', 'metricDefinition', 'recordsToCSV'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -157,6 +161,15 @@ assert.equal(context.sumBilledMinutes([
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
 assert(scripts[1].includes('id="cbShowMore" role="button" tabindex="0" onkeydown='), 'Callback pagination must be keyboard accessible');
+assert(fs.existsSync('data/voice_analytics.xlsx'), 'Published workbook is missing');
+assert(fs.existsSync('data/voice_analytics.xlsx.meta.json'), 'Published workbook metadata is missing');
+assert(html.indexOf('src="js/auth.js"') < html.indexOf('src="js/dashboard.js"'), 'Authentication must load before dashboard logic');
+assert(scripts[1].includes("data/voice_analytics.xlsx"), 'GitHub Pages workbook path changed');
+assert(scripts[1].includes("fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'}"), 'GitHub Pages loading must revalidate the workbook');
+assert(scripts[1].includes('resetAllFilters'), 'Reset-all-filters control is not wired');
+assert(scripts[1].includes('drawer-scope-note'), 'Drawer active-scope explanation is missing');
+assert(scripts[1].includes('Filter Scope'), 'Drawer CSV exports must include active scope');
+assert(scripts[1].includes('metricDefinition'), 'Management metric definitions are not wired to tooltips');
 assert(!html.includes('id="timelinePanel"'), 'Superseded inline timeline panel must remain removed');
 assert(!scripts[1].includes('timelinePanel'), 'Dashboard logic must use the profile drawer timeline');
 assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data freshness metadata is missing');
@@ -172,6 +185,21 @@ const searchRows = [
 assert.equal(context.resolveLeadSearch('99999-99999', searchRows).calls.length, 2, 'Phone search must normalize formatting and return full lead history');
 assert.equal(context.resolveLeadSearch('+91 88888 88888', searchRows).calls.length, 1, 'Phone search must support country-code input');
 assert.equal(context.percentOf(2, 5), 40, 'Applicable count percentages changed');
+assert(context.metricDefinition('Enquiries').includes('Call-ID'), 'Enquiry definition must document final Call-ID grain');
+
+const scopeRecord = {
+  from: '919999999999', direction: 'inbound', d: '2026-07-10', h: 10, m: 30, dur: 75,
+  leadTemp: 'Hot', band: 'Green', intent: 'Eligibility', conf: 90, need: 80,
+  frustrated: false, callback: true, status: 'completed', summary: 'Synthetic export'
+};
+const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
+assert(scopedCSV.startsWith('Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
+assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
+assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
+
+vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'outbound',campaign:'Reset campaign'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Reset campaign';$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-10';resetAllFilters();", context);
+assert.equal(context.currentViewDescription(), 'All Calls · 10 Jul 2026 to 10 Jul 2026', 'Reset-all-filters must restore the all-call scope');
+vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
 
 context.__campaignScopeRows = [
   { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign A' },
@@ -190,6 +218,25 @@ context.__unreachGroups = [[
 ]];
 context.exportUnreachableCSV();
 assert(unreachableDownload && unreachableDownload.csv.includes('+919999999999,India,3,'), 'Unreachable CSV must aggregate the complete dial count per number');
+
+const performanceRows = Array.from({ length: 8000 }, (_, index) => ({
+  'Created At (IST)': '10 Jul 2026, 10:30:00 AM IST',
+  'Call ID': `performance-${index % 4000}`,
+  Direction: index % 2 ? 'inbound' : 'outbound', Status: 'completed',
+  From: `91${String(7000000000 + (index % 4000)).padStart(10, '0')}`,
+  To: '919999999999', 'Duration (s)': 45, Messages: 6,
+  'Full Transcript': 'Synthetic performance conversation',
+  'Lead Temp.': index % 5 === 0 ? 'Hot' : 'Warm', 'Review Band': 'Green',
+  'Bot Conf.': 90, 'Need Score': 80
+}));
+const performanceStart = performance.now();
+const performanceDeduped = context.dedupeRowsByCallId(performanceRows);
+const performanceRecords = performanceDeduped.map(row => context.rowToRecord(row)).filter(record => record && record.d);
+const performanceAggregate = context.aggregate(performanceRecords);
+const performanceElapsed = performance.now() - performanceStart;
+assert.equal(performanceDeduped.length, 4000, 'Large-workbook Call-ID deduplication changed');
+assert.equal(performanceAggregate.n, 4000, 'Large-workbook aggregation changed');
+assert(performanceElapsed < 5000, `Large-workbook core processing is too slow (${Math.round(performanceElapsed)}ms)`);
 
 const overview = XLSX.utils.aoa_to_sheet([['Overview'], ['Not call data']]);
 const voiceRows = [

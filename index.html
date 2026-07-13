@@ -163,6 +163,7 @@
         <button onclick="quickFilter('month')" id="btn-month" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 30 Days</button>
         <button onclick="quickFilter('all')" id="btn-all" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">All</button>
         <button onclick="toggleCustomFilter()" id="btn-custom" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Custom range</button>
+        <button type="button" onclick="resetAllFilters()" id="resetAllFilters" title="Reset dates, direction, campaign, search and ledger filters" style="padding:6px 12px;background:#fff8ea;border:1px solid var(--gold);border-radius:4px;color:#7a570f;font-size:12px;font-weight:700;cursor:pointer;transition:.2s">Reset all</button>
         <!-- Inline custom date range (compact, appears in same row) -->
         <div id="customFilterPanel" style="display:none;align-items:center;gap:8px;background:#f8fafc;border:1px solid rgba(0,212,170,0.3);border-radius:6px;padding:5px 8px">
           <input type="date" id="filterFromDate" style="padding:5px 8px;background:#ffffff;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'Inter',monospace;cursor:pointer">
@@ -425,6 +426,17 @@
       <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
       <div class="strip" id="briefKpis"></div>
     </div>
+    <details id="metricDefinitions" class="metric-definitions">
+      <summary>Metric definitions</summary>
+      <div class="metric-definition-grid">
+        <div><b>Enquiries</b><span>Final unique Call-ID conversation records in the active dashboard scope.</span></div>
+        <div><b>Unique leads</b><span>Distinct normalized lead phone numbers represented by those final records.</span></div>
+        <div><b>Callbacks / Hot leads</b><span>Final records carrying the callback signal or the Hot lead classification.</span></div>
+        <div><b>Attention signals</b><span>Final records flagged as frustrated or requiring review.</span></div>
+        <div><b>AI confidence</b><span>Average model confidence across final conversation records.</span></div>
+        <div><b>Dials, connect and reach</b><span>Dial-level metrics include final unique dials, including failed and initiated attempts.</span></div>
+      </div>
+    </details>
   </section>
 
     <footer id="foot"></footer>

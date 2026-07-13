@@ -7,6 +7,9 @@ This file records public-safe repository and application milestones. Detailed in
 - Added format-tolerant global lead search, targeted profile/ledger handoffs, complete repeatedly-unreachable dial exports, publication freshness, campaign-aware Management Summary scoping, outbound operational context, and clearer applicable percentages without changing the workspace layout.
 - Consolidated the top quality signal wording and removed the superseded inline repeat-caller timeline in favor of the existing profile drawer timeline.
 
+- Added a one-click reset for the complete dashboard filter scope, explicit active-scope context in drill-down drawers and CSV exports, management metric definitions, responsive smoke coverage, and large-workbook core-processing checks.
+- Added regression coverage for search, filters, drawers, CSV exports, encrypted GitHub Pages loading paths, and mobile/tablet layout contracts.
+
 - Added raw-versus-final Call-ID status reconciliation to the Admin pre-publish review so lifecycle rows can be audited against the source worksheet without changing dashboard grain.
 
 - Clarified Admin pre-publish review scopes by separating raw worksheet rows from final per-Call-ID status counts, surfacing lifecycle duplicates, and explicitly documenting that Admin validation is structural rather than business intelligence.
