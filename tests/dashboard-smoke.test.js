@@ -92,7 +92,7 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
-  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
+  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
@@ -132,6 +132,9 @@ assert.equal(context.normalizeDisposition({ status: 'completed', dur: 30, msg: 2
 assert.equal(context.normalizeDisposition({ status: 'failed', dur: 30, msg: 0 }), 'failed');
 assert.equal(context.normalizeDisposition({ status: '', dur: 20, msg: 2, trans: 'hello' }), 'connected');
 assert.equal(context.normalizeDisposition({ status: '', dur: 0, msg: 0, trans: '' }), 'no_answer');
+assert(context.isMeaningfulConversation({ status: 'completed', dur: 60 }), 'A completed 60-second call must count as meaningful');
+assert(!context.isMeaningfulConversation({ status: 'completed', dur: 59 }), 'Brief completed calls must not count as meaningful');
+assert(!context.isMeaningfulConversation({ status: 'failed', dur: 120 }), 'Failed dials must not count as meaningful');
 
 assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
 assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
@@ -194,9 +197,9 @@ assert(!scripts[1].includes('Outbound operational context'), 'Direction glance m
 assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
 assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing must be presented as an operating playbook');
 assert(html.includes('id="dialPlaybookCards"'), 'Outbound playbook action cards are missing');
-assert(html.includes('strongest 2-hour time of day across'), 'Outbound playbook must explain the two-hour operating granularity');
-assert(html.includes('Fresh lead? Make the first attempt immediately.'), 'Outbound playbook must preserve first-attempt lead freshness');
-assert(html.includes('Weekday evidence'), 'Weekday timing must be positioned as supporting proof');
+assert(html.includes('best all-days 2-hour window'), 'Outbound playbook must explain the two-hour operating granularity');
+assert(html.includes('Fresh lead: call immediately.'), 'Outbound playbook must preserve first-attempt lead freshness');
+assert(html.includes('<summary>View weekday proof</summary>'), 'Weekday timing must be positioned as supporting proof');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
@@ -476,16 +479,18 @@ assert(getElement('intentQuality').innerHTML.includes('<td class="num">2<div cla
 assert(getElement('intentQuality').innerHTML.includes('50%'), 'Per-lead hot conversion rate changed');
 
 const timingProofRows=[
-  ...Array.from({length:10},(_,index)=>({from:`9191000000${index}`,d:'2026-07-13',h:16,status:index<5?'completed':'failed',dur:index<5?30:0})),
-  ...Array.from({length:5},(_,index)=>({from:`9192000000${index}`,d:'2026-07-14',h:10,status:index===0?'completed':'failed',dur:index===0?30:0}))
+  ...Array.from({length:10},(_,index)=>({from:`9191000000${index}`,d:'2026-07-13',h:16,status:index<5?'completed':'failed',dur:index<3?75:index<5?30:0})),
+  ...Array.from({length:5},(_,index)=>({from:`9192000000${index}`,d:'2026-07-14',h:10,status:index===0?'completed':'failed',dur:index===0?75:0}))
 ];
 context.paintDialHeatmap(timingProofRows);
-assert(getElement('bestWindowNote').innerHTML.includes('Best time of day: 16-18 IST across all days'), 'Timing recommendation must aggregate the best window across weekdays');
-assert(getElement('bestWindowNote').innerHTML.includes('10 dials across all days, 5 connected'), 'Timing recommendation must show the all-days dial and connection proof');
-assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 connected'), 'Each timing cell must show its dial and connection proof');
-assert(getElement('dialPlaybookCards').innerHTML.includes('Vendor calling rules'), 'Timing playbook must provide a compact vendor-ready policy');
+assert(getElement('bestWindowNote').innerHTML.includes('Best retry time: 16-18 IST'), 'Timing recommendation must aggregate the best window across weekdays');
+assert(getElement('bestWindowNote').innerHTML.includes('10 dials · 3 conversations'), 'Timing recommendation must show concise meaningful-conversation proof');
+assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 answered'), 'Each timing cell must show its dial and answered-call proof');
+assert(getElement('dialHeatmap').innerHTML.includes('30% meaningful'), 'Timing cell must show meaningful conversation rate');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Campaign:</b>09:00–21:00 IST'), 'Timing playbook must keep campaign hours visible by default');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Retry:</b>3 max · ~5h apart'), 'Timing playbook must keep retry count and spacing visible by default');
+assert(getElement('dialPlaybookCards').innerHTML.includes('<summary>Vendor configuration</summary>'), 'Vendor detail must stay available without crowding the default playbook');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Start 09:00 · stop 21:00 IST'), 'Vendor policy must expose the daily campaign start and stop');
-assert(getElement('dialPlaybookCards').innerHTML.includes('3 max · ~5h apart'), 'Vendor policy must expose retry count and spacing');
 assert(getElement('dialPlaybookCards').innerHTML.includes('16-18 IST'), 'Vendor policy must use the all-days preferred retry window');
 assert(getElement('dialPlaybookCards').innerHTML.includes('queue a new lead for the next 09:00 start'), 'Vendor policy must explain the outside-hours lead handling');
 

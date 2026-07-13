@@ -1222,6 +1222,9 @@ function normalizeDisposition(r){
   }
   return 'unknown';
 }
+function isMeaningfulConversation(r){
+  return normalizeDisposition(r)==='connected' && Number(r?.dur||0)>=60;
+}
 function dispositionCounts(recs){
   const buckets={connected:0,no_answer:0,voicemail:0,busy:0,failed:0,initiated:0,unknown:0};
   recs.forEach(r=>{buckets[normalizeDisposition(r)]++;});
@@ -1376,8 +1379,8 @@ function paintDialHeatmap(obRecs){
   const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const blockDefs=[[8,10],[10,12],[12,14],[14,16],[16,18],[18,20],[20,22]];
   const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}-${String(b[1]).padStart(2,'0')}`);
-  const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0,recs:[]})));
-  const timeBuckets=blockDefs.map(()=>({n:0,connected:0,recs:[]}));
+  const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0,meaningful:0,recs:[]})));
+  const timeBuckets=blockDefs.map(()=>({n:0,connected:0,meaningful:0,recs:[]}));
   obRecs.forEach(r=>{
     if(!r.d)return;
     const parts=r.d.split('-').map(Number);
@@ -1392,6 +1395,10 @@ function paintDialHeatmap(obRecs){
       grid[wd][bi].connected++;
       timeBuckets[bi].connected++;
     }
+    if(isMeaningfulConversation(r)){
+      grid[wd][bi].meaningful++;
+      timeBuckets[bi].meaningful++;
+    }
   });
   window.__heatmapCells=grid;
   window.__timeBuckets=timeBuckets;
@@ -1399,32 +1406,34 @@ function paintDialHeatmap(obRecs){
   else if(el.style)el.style['--timing-columns']=blockDefs.length;
   const totalDials=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.n,0),0);
   const totalConnected=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.connected,0),0);
+  const totalMeaningful=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.meaningful,0),0);
   const overallPct=totalDials?Math.round(totalConnected/totalDials*100):0;
+  const overallMeaningfulPct=totalDials?Math.round(totalMeaningful/totalDials*100):0;
   // A schedule recommendation needs evidence. Five is the floor for smaller datasets; the
   // threshold scales gently for larger workbooks without hiding every useful time window.
   const minVol=Math.max(5,Math.min(20,Math.ceil(totalDials*.01)));
   const reliable=[];
   grid.forEach((row,ri)=>row.forEach((c,bi)=>{
-    if(c.n>=minVol)reliable.push({...c,ri,bi,pct:Math.round(c.connected/c.n*100)});
+    if(c.n>=minVol)reliable.push({...c,ri,bi,pct:Math.round(c.connected/c.n*100),meaningfulPct:Math.round(c.meaningful/c.n*100)});
   }));
-  const reliableTimes=timeBuckets.map((c,bi)=>({...c,bi,pct:c.n?Math.round(c.connected/c.n*100):0})).filter(c=>c.n>=minVol);
-  const bestTime=reliableTimes.slice().sort((a,b)=>b.pct-a.pct||b.n-a.n)[0];
+  const reliableTimes=timeBuckets.map((c,bi)=>({...c,bi,pct:c.n?Math.round(c.connected/c.n*100):0,meaningfulPct:c.n?Math.round(c.meaningful/c.n*100):0})).filter(c=>c.n>=minVol);
+  const bestTime=reliableTimes.slice().sort((a,b)=>b.meaningfulPct-a.meaningfulPct||b.pct-a.pct||b.n-a.n)[0];
   const slotLabel=cell=>`${dayNames[cell.ri]} ${blockLabels[cell.bi]} IST`;
   const timeLabel=cell=>`${blockLabels[cell.bi]} IST`;
-  const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} connected · ${cell.pct}%`;
+  const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} answered · ${cell.meaningful.toLocaleString()} meaningful`;
   const cardEl=$('dialPlaybookCards');
   if(cardEl){
     const retryRule=bestTime
       ?`<button type="button" class="opf-policy-rule evidence" onclick="openFilteredPanel(${jsArg(timeLabel(bestTime)+' (all days outbound)')},()=>true,window.__timeBuckets[${bestTime.bi}].recs)" title="Open the dial attempts behind this recommendation"><span>Preferred retry window</span><b>${esc(timeLabel(bestTime))}</b><small>${esc(evidence(bestTime))} · proof</small></button>`
       :`<div class="opf-policy-rule"><span>Preferred retry window</span><b>Collect more data</b><small>${minVol} dials needed per window</small></div>`;
-    cardEl.innerHTML=`<div class="opf-dialer-policy"><div class="opf-dialer-policy-head"><b>Vendor calling rules</b><span>Ready to configure</span></div><div class="opf-policy-rules"><div class="opf-policy-rule"><span>Daily campaign</span><b>Start 09:00 · stop 21:00 IST</b></div><div class="opf-policy-rule"><span>First attempt</span><b>Immediately (09:00–21:00)</b></div><div class="opf-policy-rule"><span>Retries</span><b>3 max · ~5h apart</b></div>${retryRule}<div class="opf-policy-rule"><span>Stop when</span><b>Connect · callback · opt-out</b></div></div><div class="opf-policy-stop"><b>Outside campaign hours:</b> queue a new lead for the next 09:00 start. Inside campaign hours, do not wait for a preferred window before the first attempt; timing applies to retries and batch calling only.</div></div>`;
+    cardEl.innerHTML=`<div class="opf-policy-summary"><span><b>Campaign:</b>09:00–21:00 IST</span><span><b>Retry:</b>3 max · ~5h apart</span></div><details class="opf-vendor-details"><summary>Vendor configuration</summary><div class="opf-dialer-policy"><div class="opf-policy-rules"><div class="opf-policy-rule"><span>Daily campaign</span><b>Start 09:00 · stop 21:00 IST</b></div><div class="opf-policy-rule"><span>First attempt</span><b>Immediately (09:00–21:00)</b></div><div class="opf-policy-rule"><span>Retries</span><b>3 max · ~5h apart</b></div>${retryRule}<div class="opf-policy-rule"><span>Stop when</span><b>Connect · callback · opt-out</b></div></div><div class="opf-policy-stop"><b>Outside campaign hours:</b> queue a new lead for the next 09:00 start.</div></div></details>`;
   }
   // The primary decision is the all-days time of day; weekday rows below are proof only.
   const bwEl=$('bestWindowNote');
   if(bwEl){
     bwEl.innerHTML=bestTime
-      ?`<span class="opf-bestwin-dot"></span><span><b>Best time of day: ${esc(timeLabel(bestTime))} across all days</b> — ${bestTime.pct}% versus ${overallPct}% across scheduled windows. <b>Proof:</b> ${bestTime.n.toLocaleString()} dials across all days, ${bestTime.connected.toLocaleString()} connected; about ${Math.round(bestTime.pct/10)} connects per 10 dials. Windows need at least ${minVol} dials to qualify.</span>`
-      :`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>Collect a little more timing data.</b> No 2-hour window has the ${minVol}-dial minimum yet, so the dashboard will not recommend a time prematurely.</span>`;
+      ?`<span class="opf-bestwin-dot"></span><span><b>Best retry time: ${esc(timeLabel(bestTime))}</b> · ${bestTime.meaningfulPct}% meaningful · ${bestTime.n.toLocaleString()} dials · ${bestTime.meaningful.toLocaleString()} conversations <span style="color:var(--muted)">(${bestTime.connected.toLocaleString()} answered · click proof)</span></span>`
+      :`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>No recommended retry time yet.</b> Need ${minVol} dials in one window.</span>`;
     bwEl.style.display='flex';
   }
   let html='<div></div>'+blockLabels.map(l=>`<div class="opf-hdr">${l}</div>`).join('');
@@ -1433,10 +1442,11 @@ function paintDialHeatmap(obRecs){
     grid[ri].forEach((cell,bi)=>{
       if(!cell.n){html+='<div class="opf-heatcell opf-heatcell-empty">–</div>';return;}
       const pct=Math.round(cell.connected/cell.n*100);
+      const meaningfulPct=Math.round(cell.meaningful/cell.n*100);
       const reliableCell=cell.n>=minVol;
-      const state=!reliableCell?'thin':pct>=overallPct+5?'strong':pct<=overallPct-5?'avoid':'watch';
+      const state=!reliableCell?'thin':meaningfulPct>=overallMeaningfulPct+5?'strong':meaningfulPct<=overallMeaningfulPct-5?'avoid':'watch';
       const label=!reliableCell?'Watch':state==='strong'?'Strong':state==='avoid'?'Avoid':'Watch';
-      html+=`<div class="opf-heatcell ${state}" style="cursor:pointer" title="${cell.n} dials, ${cell.connected} connected — click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)"><b>${pct}%</b><span>${cell.n} dials · ${cell.connected} connected</span><em>${label}</em></div>`;
+      html+=`<div class="opf-heatcell ${state}" style="cursor:pointer" title="${cell.n} dials, ${cell.connected} answered, ${cell.meaningful} meaningful conversations — click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)"><b>${meaningfulPct}% meaningful</b><span>${cell.n} dials · ${cell.connected} answered</span><em>${label} · ${cell.meaningful} meaningful</em></div>`;
     });
   });
   el.innerHTML=html;
