@@ -95,7 +95,7 @@ for (const fn of [
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
-  'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
+  'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
@@ -192,6 +192,9 @@ assert(!scripts[1].includes("['Connected dials'"), 'Direction glance must not du
 assert(!scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must not duplicate outbound reach diagnostics');
 assert(!scripts[1].includes('Outbound operational context'), 'Direction glance must remain limited to inbound/outbound comparison');
 assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
+assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing must be presented as an operating playbook');
+assert(html.includes('id="dialPlaybookCards"'), 'Outbound playbook action cards are missing');
+assert(html.includes('2-hour IST schedule'), 'Outbound playbook must explain the two-hour operating granularity');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
@@ -469,6 +472,15 @@ const intentRecords = [
 context.paintIntentQuality(intentRecords);
 assert(getElement('intentQuality').innerHTML.includes('<td class="num">2<div class="iq-sub">100% of all leads'), 'Intent conversion must count unique leads, not repeated calls');
 assert(getElement('intentQuality').innerHTML.includes('50%'), 'Per-lead hot conversion rate changed');
+
+const timingProofRows=[
+  ...Array.from({length:10},(_,index)=>({from:`9191000000${index}`,d:'2026-07-13',h:16,status:index<5?'completed':'failed',dur:index<5?30:0})),
+  ...Array.from({length:5},(_,index)=>({from:`9192000000${index}`,d:'2026-07-14',h:10,status:index===0?'completed':'failed',dur:index===0?30:0}))
+];
+context.paintDialHeatmap(timingProofRows);
+assert(getElement('bestWindowNote').innerHTML.includes('10 dials placed, 5 connected'), 'Timing recommendation must show the dial and connection proof');
+assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 connected'), 'Each timing cell must show its dial and connection proof');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Plan ~20 dials for 10 connects'), 'Timing playbook must convert the best window into a capacity guide');
 
 const callbackRecords = Array.from({ length: 51 }, (_, index) => ({
   from: `91${String(7000000000 + index)}`,

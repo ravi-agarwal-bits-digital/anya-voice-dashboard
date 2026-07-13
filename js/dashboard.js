@@ -1374,7 +1374,7 @@ function paintDialHeatmap(obRecs){
   const el=$('dialHeatmap');
   if(!el)return;
   const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const blockDefs=[[0,4],[4,8],[8,12],[12,16],[16,20],[20,24]];
+  const blockDefs=[[8,10],[10,12],[12,14],[14,16],[16,18],[18,20],[20,22]];
   const blockLabels=blockDefs.map(b=>`${String(b[0]).padStart(2,'0')}-${String(b[1]).padStart(2,'0')}`);
   const grid=dayNames.map(()=>blockDefs.map(()=>({n:0,connected:0,recs:[]})));
   obRecs.forEach(r=>{
@@ -1388,29 +1388,44 @@ function paintDialHeatmap(obRecs){
     if(normalizeDisposition(r)==='connected')grid[wd][bi].connected++;
   });
   window.__heatmapCells=grid;
-  // Name the single best window (highest connect rate among cells with enough volume to trust).
+  if(el.style&&typeof el.style.setProperty==='function')el.style.setProperty('--timing-columns',blockDefs.length);
+  else if(el.style)el.style['--timing-columns']=blockDefs.length;
+  const totalDials=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.n,0),0);
+  const totalConnected=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.connected,0),0);
+  const overallPct=totalDials?Math.round(totalConnected/totalDials*100):0;
+  // A schedule recommendation needs evidence. Five is the floor for smaller datasets; the
+  // threshold scales gently for larger workbooks without hiding every useful time window.
+  const minVol=Math.max(5,Math.min(20,Math.ceil(totalDials*.01)));
+  const reliable=[];
+  grid.forEach((row,ri)=>row.forEach((c,bi)=>{
+    if(c.n>=minVol)reliable.push({...c,ri,bi,pct:Math.round(c.connected/c.n*100)});
+  }));
+  const best=reliable.slice().sort((a,b)=>b.pct-a.pct||b.n-a.n)[0];
+  const worst=reliable.slice().sort((a,b)=>a.pct-b.pct||b.n-a.n)[0];
+  const slotLabel=cell=>`${dayNames[cell.ri]} ${blockLabels[cell.bi]} IST`;
+  const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} connected · ${cell.pct}%`;
+  const cardEl=$('dialPlaybookCards');
+  if(cardEl){
+    const actionCard=(label,value,proof,kind,cell)=>cell
+      ?`<article class="opf-playbook-action ${kind}" onclick="openFilteredPanel(${jsArg(slotLabel(cell)+' (outbound)')},()=>true,window.__heatmapCells[${cell.ri}][${cell.bi}].recs)" title="Open the dial attempts behind this recommendation"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="proof">${esc(proof)} · Click for proof</div></article>`
+      :`<article class="opf-playbook-action watch"><div class="label">${esc(label)}</div><div class="value">Collect more data</div><div class="proof">At least ${minVol} dials are needed in one window before making a schedule recommendation.</div></article>`;
+    const bestProof=best?`${evidence(best)} · ${best.pct>=overallPct?'+':''}${best.pct-overallPct} pts vs ${overallPct}% overall`:'';
+    const capacity=best?(best.pct?`Plan ~${Math.ceil(10/(best.pct/100))} dials for 10 connects`:'No connects in reliable windows'):'';
+    const avoidCell=worst&&worst.pct<=overallPct-4?worst:null;
+    const avoidProof=avoidCell?`${evidence(avoidCell)} · ${avoidCell.pct-overallPct} pts vs ${overallPct}% overall`:`No reliable window is at least 4 points below the ${overallPct}% overall rate.`;
+    cardEl.innerHTML=[
+      actionCard('Place more calls here',best?slotLabel(best):'',bestProof,'strong',best),
+      actionCard('Capacity guide',best?capacity:'',best?`Based on ${slotLabel(best)}. ${evidence(best)}.`:'','watch',best),
+      actionCard('Use sparingly',avoidCell?slotLabel(avoidCell):'No clear avoid window',avoidProof,'avoid',avoidCell)
+    ].join('');
+  }
+  // Put the recommendation and its evidence directly above the schedule.
   const bwEl=$('bestWindowNote');
   if(bwEl){
-    const totalDials=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.n,0),0);
-    // Ignore thin cells: a one-off high % on a handful of dials is noise, not a schedule to commit to.
-    const minVol=Math.max(30,Math.round(totalDials*0.003));
-    let best=null;
-    grid.forEach((row,ri)=>row.forEach((c,bi)=>{
-      if(c.n<minVol)return;
-      const pct=c.connected/c.n;
-      if(!best||pct>best.pct)best={pct,ri,bi,n:c.n};
-    }));
     bwEl.innerHTML=best
-      ?`<span class="opf-bestwin-dot"></span>Best reliable window: <b>${dayNames[best.ri]} ${blockLabels[best.bi]}</b> — <b>${Math.round(best.pct*100)}%</b> connect rate across ${best.n.toLocaleString()} dials. Front-load dialing here. (Thin cells with few dials are excluded.)`
-      :'';
-    bwEl.style.display=best?'flex':'none';
-  }
-  const stops=[[231,236,243],[201,214,232],[147,174,208],[77,106,153],[36,58,94],[11,31,58]];
-  function heatColor(pct){
-    const t=Math.max(0,Math.min(1,pct/75));
-    const idx=t*(stops.length-1),i0=Math.floor(idx),i1=Math.min(stops.length-1,i0+1),f=idx-i0;
-    const c0=stops[i0],c1=stops[i1];
-    return `rgb(${Math.round(c0[0]+(c1[0]-c0[0])*f)},${Math.round(c0[1]+(c1[1]-c0[1])*f)},${Math.round(c0[2]+(c1[2]-c0[2])*f)})`;
+      ?`<span class="opf-bestwin-dot"></span><span><b>Top reliable window: ${esc(slotLabel(best))}</b> — ${best.pct}% versus ${overallPct}% across scheduled windows. <b>Proof:</b> ${best.n.toLocaleString()} dials placed, ${best.connected.toLocaleString()} connected; about ${Math.round(best.pct/10)} connects per 10 dials. Windows need at least ${minVol} dials to qualify.</span>`
+      :`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>Collect a little more timing data.</b> No 2-hour window has the ${minVol}-dial minimum yet, so the dashboard will not recommend a time prematurely.</span>`;
+    bwEl.style.display='flex';
   }
   let html='<div></div>'+blockLabels.map(l=>`<div class="opf-hdr">${l}</div>`).join('');
   dayNames.forEach((day,ri)=>{
@@ -1418,7 +1433,10 @@ function paintDialHeatmap(obRecs){
     grid[ri].forEach((cell,bi)=>{
       if(!cell.n){html+='<div class="opf-heatcell opf-heatcell-empty">–</div>';return;}
       const pct=Math.round(cell.connected/cell.n*100);
-      html+=`<div class="opf-heatcell" style="background:${heatColor(pct)};color:${pct>45?'#fff':'#0b1f3a'};cursor:pointer" title="${cell.n} dials -- click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)">${pct}%</div>`;
+      const reliableCell=cell.n>=minVol;
+      const state=!reliableCell?'thin':pct>=overallPct+5?'strong':pct<=overallPct-5?'avoid':'watch';
+      const label=!reliableCell?'Watch':state==='strong'?'Strong':state==='avoid'?'Avoid':'Watch';
+      html+=`<div class="opf-heatcell ${state}" style="cursor:pointer" title="${cell.n} dials, ${cell.connected} connected — click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)"><b>${pct}%</b><span>${cell.n} dials · ${cell.connected} connected</span><em>${label}</em></div>`;
     });
   });
   el.innerHTML=html;
