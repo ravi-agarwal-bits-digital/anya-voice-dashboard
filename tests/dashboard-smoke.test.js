@@ -490,10 +490,13 @@ assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 pickup · 3 m
 assert(getElement('dialHeatmap').innerHTML.includes('30% meaningful'), 'Timing cell must show meaningful conversation rate');
 assert(getElement('timingMetricControls').innerHTML.includes('Meaningful · 60s+'), 'Meaningful timing toggle label is missing');
 assert(getElement('timingMetricControls').innerHTML.includes('Pickup · any answer'), 'Pickup timing toggle label is missing');
+assert(getElement('timingMetricControls').innerHTML.includes('Rank by'), 'Timing metric toggle must identify its single-select purpose');
+assert(getElement('timingMetricControls').innerHTML.includes('aria-pressed="true"'), 'Timing metric toggle must visibly mark the active selection');
 context.__timingProofRows=timingProofRows;
 vm.runInContext('window.__obRecs=__timingProofRows; setOutboundTimingMetric("pickup");', context);
 assert(getElement('bestWindowNote').innerHTML.includes('50% pickup'), 'Pickup mode must rank and label the timing recommendation by answered calls');
 assert(getElement('dialHeatmap').innerHTML.includes('50% pickup'), 'Pickup mode must update the timing grid metric');
+assert(getElement('timingMetricControls').innerHTML.includes('Pickup · any answer</button>'), 'Pickup mode must keep the selected option visible');
 context.setOutboundTimingMetric('meaningful');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Campaign:</b>09:00–21:00 IST'), 'Timing playbook must keep campaign hours visible by default');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Retry:</b>3 max · ~5h apart'), 'Timing playbook must keep retry count and spacing visible by default');

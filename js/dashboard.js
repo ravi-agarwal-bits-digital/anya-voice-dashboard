@@ -1433,7 +1433,7 @@ function paintDialHeatmap(obRecs){
   const timeLabel=cell=>`${blockLabels[cell.bi]} IST`;
   const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} answered · ${cell.meaningful.toLocaleString()} meaningful`;
   const metricControls=$('timingMetricControls');
-  if(metricControls)metricControls.innerHTML=`<button type="button" class="${metric==='meaningful'?'on':''}" onclick="setOutboundTimingMetric('meaningful')" aria-pressed="${metric==='meaningful'}" title="Answered calls lasting 60 seconds or more">Meaningful · 60s+</button><button type="button" class="${metric==='pickup'?'on':''}" onclick="setOutboundTimingMetric('pickup')" aria-pressed="${metric==='pickup'}" title="Any answered call, regardless of duration">Pickup · any answer</button>`;
+  if(metricControls)metricControls.innerHTML=`<span class="timing-metric-label">Rank by</span><button type="button" class="${metric==='meaningful'?'on':''}" onclick="setOutboundTimingMetric('meaningful')" aria-pressed="${metric==='meaningful'}" title="Answered calls lasting 60 seconds or more">Meaningful · 60s+</button><button type="button" class="${metric==='pickup'?'on':''}" onclick="setOutboundTimingMetric('pickup')" aria-pressed="${metric==='pickup'}" title="Any answered call, regardless of duration">Pickup · any answer</button>`;
   const cardEl=$('dialPlaybookCards');
   if(cardEl){
     const retryRule=bestTime
