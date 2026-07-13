@@ -92,7 +92,7 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
-  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation',
+  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
@@ -199,7 +199,8 @@ assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing mus
 assert(html.includes('id="dialPlaybookCards"'), 'Outbound playbook action cards are missing');
 assert(html.includes('best all-days 2-hour window'), 'Outbound playbook must explain the two-hour operating granularity');
 assert(html.includes('Fresh lead: call immediately.'), 'Outbound playbook must preserve first-attempt lead freshness');
-assert(html.includes('<summary>View weekday proof</summary>'), 'Weekday timing must be positioned as supporting proof');
+assert(html.includes('<summary>View day &amp; time detail</summary>'), 'Day and time timing detail must be positioned as supporting proof');
+assert(html.includes('id="timingMetricControls"'), 'Outbound timing metric toggle is missing');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
@@ -485,8 +486,15 @@ const timingProofRows=[
 context.paintDialHeatmap(timingProofRows);
 assert(getElement('bestWindowNote').innerHTML.includes('Best retry time: 15-17 IST'), 'Timing recommendation must aggregate the best window across weekdays');
 assert(getElement('bestWindowNote').innerHTML.includes('10 dials · 3 conversations'), 'Timing recommendation must show concise meaningful-conversation proof');
-assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 answered'), 'Each timing cell must show its dial and answered-call proof');
+assert(getElement('dialHeatmap').innerHTML.includes('10 dials · 5 pickup · 3 meaningful'), 'Each timing cell must show its dial, pickup, and meaningful-conversation proof');
 assert(getElement('dialHeatmap').innerHTML.includes('30% meaningful'), 'Timing cell must show meaningful conversation rate');
+assert(getElement('timingMetricControls').innerHTML.includes('Meaningful · 60s+'), 'Meaningful timing toggle label is missing');
+assert(getElement('timingMetricControls').innerHTML.includes('Pickup · any answer'), 'Pickup timing toggle label is missing');
+context.__timingProofRows=timingProofRows;
+vm.runInContext('window.__obRecs=__timingProofRows; setOutboundTimingMetric("pickup");', context);
+assert(getElement('bestWindowNote').innerHTML.includes('50% pickup'), 'Pickup mode must rank and label the timing recommendation by answered calls');
+assert(getElement('dialHeatmap').innerHTML.includes('50% pickup'), 'Pickup mode must update the timing grid metric');
+context.setOutboundTimingMetric('meaningful');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Campaign:</b>09:00–21:00 IST'), 'Timing playbook must keep campaign hours visible by default');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Retry:</b>3 max · ~5h apart'), 'Timing playbook must keep retry count and spacing visible by default');
 assert(getElement('dialPlaybookCards').innerHTML.includes('<summary>Vendor configuration</summary>'), 'Vendor detail must stay available without crowding the default playbook');

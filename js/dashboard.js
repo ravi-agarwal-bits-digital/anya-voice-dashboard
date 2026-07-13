@@ -1225,6 +1225,11 @@ function normalizeDisposition(r){
 function isMeaningfulConversation(r){
   return normalizeDisposition(r)==='connected' && Number(r?.dur||0)>=60;
 }
+let OUTBOUND_TIMING_METRIC='meaningful'; // 'meaningful' (60s+) | 'pickup' (any answered call)
+function setOutboundTimingMetric(metric){
+  OUTBOUND_TIMING_METRIC=metric==='pickup'?'pickup':'meaningful';
+  paintDialHeatmap(window.__obRecs||[]);
+}
 function dispositionCounts(recs){
   const buckets={connected:0,no_answer:0,voicemail:0,busy:0,failed:0,initiated:0,unknown:0};
   recs.forEach(r=>{buckets[normalizeDisposition(r)]++;});
@@ -1411,6 +1416,10 @@ function paintDialHeatmap(obRecs){
   const totalMeaningful=grid.reduce((a,row)=>a+row.reduce((b,c)=>b+c.meaningful,0),0);
   const overallPct=totalDials?Math.round(totalConnected/totalDials*100):0;
   const overallMeaningfulPct=totalDials?Math.round(totalMeaningful/totalDials*100):0;
+  const metric=OUTBOUND_TIMING_METRIC==='pickup'?'pickup':'meaningful';
+  const metricLabel=metric==='pickup'?'pickup':'meaningful';
+  const metricPct=cell=>metric==='pickup'?cell.pct:cell.meaningfulPct;
+  const overallMetricPct=metric==='pickup'?overallPct:overallMeaningfulPct;
   // A schedule recommendation needs evidence. Five is the floor for smaller datasets; the
   // threshold scales gently for larger workbooks without hiding every useful time window.
   const minVol=Math.max(5,Math.min(20,Math.ceil(totalDials*.01)));
@@ -1419,10 +1428,12 @@ function paintDialHeatmap(obRecs){
     if(c.n>=minVol)reliable.push({...c,ri,bi,pct:Math.round(c.connected/c.n*100),meaningfulPct:Math.round(c.meaningful/c.n*100)});
   }));
   const reliableTimes=timeBuckets.map((c,bi)=>({...c,bi,pct:c.n?Math.round(c.connected/c.n*100):0,meaningfulPct:c.n?Math.round(c.meaningful/c.n*100):0})).filter(c=>c.n>=minVol);
-  const bestTime=reliableTimes.slice().sort((a,b)=>b.meaningfulPct-a.meaningfulPct||b.pct-a.pct||b.n-a.n)[0];
+  const bestTime=reliableTimes.slice().sort((a,b)=>metricPct(b)-metricPct(a)||b.pct-a.pct||b.n-a.n)[0];
   const slotLabel=cell=>`${dayNames[cell.ri]} ${blockLabels[cell.bi]} IST`;
   const timeLabel=cell=>`${blockLabels[cell.bi]} IST`;
   const evidence=cell=>`${cell.n.toLocaleString()} dials · ${cell.connected.toLocaleString()} answered · ${cell.meaningful.toLocaleString()} meaningful`;
+  const metricControls=$('timingMetricControls');
+  if(metricControls)metricControls.innerHTML=`<button type="button" class="${metric==='meaningful'?'on':''}" onclick="setOutboundTimingMetric('meaningful')" aria-pressed="${metric==='meaningful'}" title="Answered calls lasting 60 seconds or more">Meaningful · 60s+</button><button type="button" class="${metric==='pickup'?'on':''}" onclick="setOutboundTimingMetric('pickup')" aria-pressed="${metric==='pickup'}" title="Any answered call, regardless of duration">Pickup · any answer</button>`;
   const cardEl=$('dialPlaybookCards');
   if(cardEl){
     const retryRule=bestTime
@@ -1434,7 +1445,7 @@ function paintDialHeatmap(obRecs){
   const bwEl=$('bestWindowNote');
   if(bwEl){
     bwEl.innerHTML=bestTime
-      ?`<span class="opf-bestwin-dot"></span><span><b>Best retry time: ${esc(timeLabel(bestTime))}</b> · ${bestTime.meaningfulPct}% meaningful · ${bestTime.n.toLocaleString()} dials · ${bestTime.meaningful.toLocaleString()} conversations <span style="color:var(--muted)">(${bestTime.connected.toLocaleString()} answered · click proof)</span></span>`
+      ?`<span class="opf-bestwin-dot"></span><span><b>Best retry time: ${esc(timeLabel(bestTime))}</b> · ${metricPct(bestTime)}% ${metricLabel} <span style="color:var(--muted)">(${bestTime.meaningfulPct}% meaningful · ${bestTime.pct}% pickup · ${bestTime.n.toLocaleString()} dials · ${bestTime.meaningful.toLocaleString()} conversations · ${bestTime.connected.toLocaleString()} answered · click proof)</span></span>`
       :`<span class="opf-bestwin-dot" style="background:var(--gold)"></span><span><b>No recommended retry time yet.</b> Need ${minVol} dials in one window.</span>`;
     bwEl.style.display='flex';
   }
@@ -1446,9 +1457,10 @@ function paintDialHeatmap(obRecs){
       const pct=Math.round(cell.connected/cell.n*100);
       const meaningfulPct=Math.round(cell.meaningful/cell.n*100);
       const reliableCell=cell.n>=minVol;
-      const state=!reliableCell?'thin':meaningfulPct>=overallMeaningfulPct+5?'strong':meaningfulPct<=overallMeaningfulPct-5?'avoid':'watch';
+      const activeMetricPct=metric==='pickup'?pct:meaningfulPct;
+      const state=!reliableCell?'thin':activeMetricPct>=overallMetricPct+5?'strong':activeMetricPct<=overallMetricPct-5?'avoid':'watch';
       const label=!reliableCell?'Watch':state==='strong'?'Strong':state==='avoid'?'Avoid':'Watch';
-      html+=`<div class="opf-heatcell ${state}" style="cursor:pointer" title="${cell.n} dials, ${cell.connected} answered, ${cell.meaningful} meaningful conversations — click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)"><b>${meaningfulPct}% meaningful</b><span>${cell.n} dials · ${cell.connected} answered</span><em>${label} · ${cell.meaningful} meaningful</em></div>`;
+      html+=`<div class="opf-heatcell ${state}" style="cursor:pointer" title="${cell.n} dials, ${cell.connected} answered, ${cell.meaningful} meaningful conversations — click for details" onclick="openFilteredPanel('${day} ${blockLabels[bi]} (outbound)',()=>true,window.__heatmapCells[${ri}][${bi}].recs)"><b>${activeMetricPct}% ${metricLabel}</b><span>${cell.n} dials · ${cell.connected} pickup · ${cell.meaningful} meaningful</span><em>${label}</em></div>`;
     });
   });
   el.innerHTML=html;
