@@ -96,7 +96,7 @@ for (const fn of [
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV',
-  'openPanelInLedger', 'openProfileInLedger', 'clearLedgerScope', 'resetAllFilters',
+  'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
@@ -275,6 +275,7 @@ assert.equal(context.reducedAiViewEnabled(), true, 'Reduced dashboard view shoul
 const reducedStats = context.defaultDrillStats([scopeRecord]).map(item => item[0]).join('|');
 assert(!reducedStats.includes('confidence') && !reducedStats.includes('need'), 'Reduced drawer stats must hide AI/need fields');
 assert(!context.recordListHtml([scopeRecord]).includes('Conf '), 'Reduced drawer rows must hide confidence');
+assert(context.recordListHtml([scopeRecord]).includes('openRecordProfile(window.__drilldownRows[0]'), 'KPI drill-down records must use the shared record-to-profile handoff');
 vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'inbound',campaign:'',status:'completed',dur:30,msg:2,from:'919111111111'},{d:'2026-07-10',direction:'outbound',campaign:'',status:'completed',dur:30,msg:2,from:'919222222222'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
 context.paintDirectionCompare();
 assert(!getElement('dirCompareTable').innerHTML.includes('Avg AI confidence'), 'Reduced direction comparison must hide AI confidence');
@@ -304,6 +305,10 @@ vm.runInContext('ALL_DIALS=__failureRows; SELECTED_CAMPAIGN="all"; paintFailureB
 assert(getElement('failureBreakdown').innerHTML.includes('Top reasons'), 'Failure section should show the concise top-reasons heading');
 assert(getElement('failureBreakdown').innerHTML.includes('Other reasons'), 'Failure section should group lower-volume reasons');
 vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];", context);
+const dialOnlyRecord={...scopeRecord,from:'919333333333',status:'failed',dur:0,msg:0};
+context.openRecordProfile(dialOnlyRecord,'drilldown');
+assert.equal(vm.runInContext('LEDGER_SCOPE.rows.length', context), 1, 'Dial-only records must fall back to the ledger instead of opening a missing profile');
+assert.equal(vm.runInContext('LEDGER_SCOPE.title', context), 'Selected dial record', 'Dial-only ledger fallback title changed');
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
 assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
 assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');

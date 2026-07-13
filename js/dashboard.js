@@ -752,6 +752,29 @@ function openProfileForPhone(phone,source='search',el=null){
   searchUserByMobile(raw,source);
 }
 
+// KPI drill-downs can include unsuccessful outbound attempts from ALL_DIALS. Those attempts do
+// not always have a conversation profile in ALL_RECORDS_BACKUP, so never send them through the
+// profile search and show a misleading "no match" drawer. Open the profile where it exists, or
+// keep the exact dial accessible in the ledger instead.
+function openRecordProfile(record,source='drilldown'){
+  if(!record)return;
+  const candidates=[record.leadPhone,record.from,record.rawTo,record.rawFrom]
+    .map(value=>String(value||'').trim()).filter(Boolean);
+  for(const phone of candidates){
+    const resolved=resolveLeadSearch(phone);
+    if(resolved.calls.length){
+      openProfileForPhone(resolved.calls[0].from,source);
+      return;
+    }
+  }
+  LEDGER_SCOPE={title:'Selected dial record',rows:[record]};
+  closeKpiPanel();
+  clearLedgerFilters(false);
+  renderExplorer(true);
+  const ledger=$('sec-explorer');
+  if(ledger)scrollToWithStickyOffset(ledger,'auto');
+}
+
 function closeUserSearch(){
   const el=$("userSearchResult"), overlay=$("profileOverlay");
   if(el){
@@ -2457,10 +2480,11 @@ function statsGridHtml(stats){
 function recordListHtml(rows){
   if(!rows.length)return emptyViewHtml("No calls match this selection");
   const sorted=rows.slice().sort((a,b)=>b.ts-a.ts).slice(0,100);
+  window.__drilldownRows=sorted;
   return `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">${rows.length} record${rows.length!==1?'s':''}${rows.length>100?' (showing latest 100)':''}</div>`+
-    sorted.map(r=>{
+    sorted.map((r,index)=>{
       const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
-      return `<div onclick="closeKpiPanel();explorerOpen(${jsArg(r.from)})" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
+      return `<div onclick="openRecordProfile(window.__drilldownRows[${index}],'drilldown')" style="padding:10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:11px" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
         <div style="display:flex;justify-content:space-between;margin-bottom:3px"><b style="font-family:'Inter',monospace;color:var(--cream)">${esc(maskPhone(r.from))}</b><span style="color:${tempCol};font-weight:600">${esc(r.leadTemp||"—")}</span></div>
         <div style="color:var(--muted);font-size:10px">${reducedAiViewEnabled()?'':esc(r.intent)+' · '}${formatDuration(r.dur)}${reducedAiViewEnabled()?'':' · Conf '+Math.round(r.conf)+'%'} · ${formatCallTime(r)}</div>
         ${r.summary?`<div style="color:var(--faint);font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.summary)}</div>`:""}
@@ -2958,6 +2982,7 @@ function renderExplorer(resetLimit){
   syncLedgerControls();
   const rows=getExplorerRows();
   const shown=rows.slice(0,LEDGER_STATE.limit);
+  window.__explorerRows=shown;
   updateLedgerChrome(rows.length,shown.length);
   if(!rows.length){
     const parts=[];
@@ -2968,7 +2993,7 @@ function renderExplorer(resetLimit){
     $("explorerMore").innerHTML="";
     return;
   }
-  $("explorerList").innerHTML=shown.map(r=>{
+  $("explorerList").innerHTML=shown.map((r,index)=>{
     const tempCol=r.leadTemp==="Hot"?C.hot:r.leadTemp==="Warm"?C.warm:C.cold;
     const billedCost=ledgerCallCost(r);
     const billedMins=billedCost/5;
@@ -2985,7 +3010,7 @@ function renderExplorer(resetLimit){
     const leadMixLabel=[leadMix.inbound?`In ${leadMix.inbound}`:'',leadMix.outbound?`Out ${leadMix.outbound}`:'',leadMix.unknown?`Other ${leadMix.unknown}`:''].filter(Boolean).join(' · ');
     if(leadMixLabel)tags.push(`<span style="background:#f5f8fc;color:var(--navy);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:800">Lead mix: ${esc(leadMixLabel)}</span>`);
     tags.unshift(directionPill(r.direction));
-    return `<div onclick="markProfileSource(this);explorerOpen(${jsArg(r.from)})" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
+    return `<div onclick="markProfileSource(this);openRecordProfile(window.__explorerRows[${index}],'ledger')" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
       <div style="min-width:0">
         <div style="font-size:12px;font-family:'Inter',monospace;color:var(--cream);margin-bottom:3px">${esc(maskPhone(r.from))}</div>
         <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.intent)} · ${esc(r.summary||"—")}</div>
