@@ -99,7 +99,7 @@ for (const fn of [
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'callbackFilenameExtra', 'repeatedlyUnreachableGroups', 'retryPolicyStatus', 'csvFilename', 'escCSVText', 'updateExportButton',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
-  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
+  'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'isLeadCostLedgerSort', 'latestLedgerRowPerLead', 'getExplorerRows', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
   assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
@@ -172,6 +172,19 @@ assert.equal(context.ledgerCallCost({ status: 'completed', dur: 61 }), 10, 'Ledg
 assert.equal(context.ledgerCallCost({ status: 'failed', dur: 120 }), 0, 'Unconnected calls must not contribute ledger cost');
 const leadCostRows=[{ from: '+91 99999 99999', status: 'completed', dur: 61 },{ from: '919999999999', status: 'completed', dur: 3 }];
 assert.equal(context.ledgerLeadCost(leadCostRows[0],leadCostRows), 15, 'Lead total cost must combine normalized phone-format variants');
+context.__leadCostLedgerRows=[
+  {from:'919999999999',status:'completed',dur:61,ts:10,direction:'outbound'},
+  {from:'+91 99999 99999',status:'completed',dur:61,ts:20,direction:'outbound'},
+  {from:'918888888888',status:'completed',dur:61,ts:30,direction:'outbound'}
+];
+vm.runInContext("RECORDS=__leadCostLedgerRows;LEDGER_SCOPE=null;LEDGER_STATE={search:'',filters:new Set(),sort:'lead_cost_desc',limit:50};", context);
+const leadCostLedger=context.getExplorerRows();
+assert.equal(leadCostLedger.length, 2, 'Lead total cost sorting must show one ledger row per normalized lead');
+assert.equal(leadCostLedger[0].ts, 20, 'Lead total cost sorting must retain the latest call for a repeated lead');
+assert.equal(leadCostLedger[1].ts, 30, 'Lead total cost sorting must still retain other leads');
+vm.runInContext("LEDGER_STATE={search:'',filters:new Set(),sort:'repeat_desc',limit:50};", context);
+assert.equal(context.getExplorerRows().length, 3, 'Call-level ledger sorts must retain every final Call-ID row');
+assert(context.isLeadCostLedgerSort('lead_cost_asc') && !context.isLeadCostLedgerSort('cost_desc'), 'Only lead-total-cost sorts may switch the ledger to lead-level rows');
 const leadMixRows=[{ from: '919999999999', direction: 'inbound' },{ from: '+91 99999 99999', direction: 'outbound' }];
 assert.deepEqual(JSON.parse(JSON.stringify(context.ledgerLeadDirectionMix(leadMixRows[0],leadMixRows))), { inbound: 1, outbound: 1, unknown: 0 }, 'Lead direction mix must combine inbound and outbound history');
 const normalizedLeadGroups = context.groupByPhone([
@@ -232,6 +245,7 @@ assert(scripts[1].includes('cost_desc:(a,b)=>ledgerCallCost(b)-ledgerCallCost(a)
 assert(scripts[1].includes('cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)'), 'Ledger must support lowest-cost sorting');
 assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highest lead-total-cost sorting');
 assert(scripts[1].includes('lead_cost_asc:(a,b)=>'), 'Ledger must support lowest lead-total-cost sorting');
+assert(scripts[1].includes("leadView?'Export visible leads':'Export visible calls'"), 'Lead-cost mode must label its export as a lead view');
 assert(scripts[1].includes('Cost ₹${billedCost} · ${billedMins} billed min'), 'Ledger must explain the billed cost behind cost sorting');
 assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumulative lead cost behind lead-total sorting');
 assert(scripts[1].includes('Lead mix: ${esc(leadMixLabel)}'), 'Ledger must show the inbound/outbound mix behind cumulative lead cost');
