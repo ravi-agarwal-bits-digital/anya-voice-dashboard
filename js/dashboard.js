@@ -2994,6 +2994,7 @@ const LEDGER_FILTER_LABELS={hot:"Hot only",frustrated:"Attention only",callback:
 // so e.g. "Hot" + "India" narrows to hot leads in India, while same-group choices read as either.
 const LEDGER_FILTER_GROUPS={hot:"quality",low_conf:"quality",red_amber:"quality",frustrated:"signals",callback:"signals",has_callback_window:"signals",serial:"signals",india:"geo",intl:"geo"};
 const LEDGER_SORT_LABELS={time_desc:"Newest first",callback_desc:"Callback first",time_asc:"Oldest first",dur_desc:"Longest duration",dur_asc:"Shortest duration",cost_desc:"Highest call cost",cost_asc:"Lowest call cost",lead_cost_desc:"Highest lead total cost",lead_cost_asc:"Lowest lead total cost",conf_desc:"Highest confidence",low_conf:"Low confidence first",need_desc:"Highest need",intl_desc:"International first",repeat_desc:"Most repeated first"};
+function isLeadCostLedgerSort(sort=LEDGER_STATE.sort){return sort==='lead_cost_desc'||sort==='lead_cost_asc';}
 
 function syncLedgerControls(){
   const s=$("explorerSearch"), sort=$("explorerSort");
@@ -3090,6 +3091,19 @@ function ledgerLeadCostMap(records){
 function ledgerLeadCost(r,records=LEDGER_SCOPE?.rows||RECORDS){
   return ledgerLeadCostMap(records).get(ledgerPhoneKey(r))||ledgerCallCost(r);
 }
+// The normal ledger is intentionally Call-ID level. Lead-total-cost sorts are the exception:
+// show one latest record per normalized lead so a lead is not repeated for every call carrying
+// the same cumulative cost. Rows without a trustworthy phone key stay separate.
+function latestLedgerRowPerLead(rows){
+  const latest=new Map(),unmatched=[];
+  rows.forEach(r=>{
+    const key=ledgerPhoneKey(r);
+    if(!key){unmatched.push(r);return;}
+    const previous=latest.get(key);
+    if(!previous||Number(r.ts||0)>Number(previous.ts||0))latest.set(key,r);
+  });
+  return [...latest.values(),...unmatched];
+}
 const _ledgerLeadDirectionCache=new WeakMap();
 function ledgerLeadDirectionMixMap(records){
   if(_ledgerLeadDirectionCache.has(records))return _ledgerLeadDirectionCache.get(records);
@@ -3160,6 +3174,7 @@ function getExplorerRows(){
       return terms.every(t=>blob.includes(t));
     });
   }
+  if(isLeadCostLedgerSort(sort))rows=latestLedgerRowPerLead(rows);
   const sorters={
     time_desc:(a,b)=>b.ts-a.ts,
     callback_desc:(a,b)=>(Number(!!b.callback)-Number(!!a.callback))||b.ts-a.ts,
@@ -3195,8 +3210,9 @@ function updateLedgerChrome(total,shown){
   if($("ledgerActiveChips"))$("ledgerActiveChips").innerHTML=chips.join("");
   const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filters.size||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
   if($("ledgerClearBtn"))$("ledgerClearBtn").style.display=active?"inline-flex":"none";
-  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${LEDGER_SCOPE?LEDGER_SCOPE.title:RECORDS.length+' in selected dashboard view'}`;
-  updateExportButton('explorerExport','Export visible calls',total,'calls');
+  const leadView=isLeadCostLedgerSort();
+  if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} ${leadView?'leads':'enquiries'} · ${LEDGER_SCOPE?LEDGER_SCOPE.title:RECORDS.length+' in selected dashboard view'}`;
+  updateExportButton('explorerExport',leadView?'Export visible leads':'Export visible calls',total,leadView?'leads':'calls');
 }
 function renderExplorer(resetLimit){
   if(!$("explorerList"))return;
@@ -3261,7 +3277,8 @@ function explorerOpen(phone){
 function exportExplorer(){
   const rows=getExplorerRows();
   if(!rows.length){alert("No calls to export in the current view.");return;}
-  downloadCSV(csvFilename('call-ledger','calls',ledgerExportScope()),recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS));
+  const leadView=isLeadCostLedgerSort();
+  downloadCSV(csvFilename('call-ledger',leadView?'lead-summary':'calls',ledgerExportScope()),recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS));
 }
 
 
