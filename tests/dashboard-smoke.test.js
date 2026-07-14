@@ -97,7 +97,7 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'repeatedlyUnreachableGroups',
+  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'repeatedlyUnreachableGroups', 'csvFilename', 'escCSVText', 'updateExportButton',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
@@ -234,7 +234,7 @@ assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumul
 assert(scripts[1].includes('Lead mix: ${esc(leadMixLabel)}'), 'Ledger must show the inbound/outbound mix behind cumulative lead cost');
 assert(!html.includes('data-f="has_transcript"'), 'Ledger must not expose transcript-completeness filters');
 assert(!html.includes('data-f="no_transcript"'), 'Ledger must not expose transcript-completeness filters');
-assert(html.includes('Export follow-up CSV'), 'Follow-up export label is missing');
+assert(html.includes('id="hottestExport"') && html.includes('Export lead summary'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
 assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
 assert(!scripts[1].includes('<b style="color:var(--hot)">Attention</b>'), 'Profile timeline must not surface Attention labels in the reduced view');
@@ -245,7 +245,7 @@ assert(scripts[1].includes('const timelineLimit=5;'), 'Profile drawer timeline m
 assert(scripts[1].includes('profile-history-more'), 'Profile drawer must disclose earlier calls on demand');
 assert(!scripts[1].includes('if(r.frustrated)tags.push'), 'Ledger rows must not surface Attention tags in the reduced view');
 assert(scripts[1].includes("openProfileForPhone(${jsArg(l.phone)},'priority',this)"), 'Follow-up cards must use the profile drawer handler');
-assert(scripts[1].includes('csv+=[escCSV(r.callId),fullPhone(r.from)'), 'Record exports must include stable Call IDs');
+assert(scripts[1].includes('csv+=[escCSVText(r.callId),escCSVText(fullPhone(r.from))'), 'Record exports must include stable Call IDs as text');
 assert(!scripts[1].includes('Avg Confidence %,Avg Need Score'), 'Visible operational exports must not use AI score columns');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('.repeat-engagement-panel{margin-top:24px!important;}'), 'Follow-up and repeat engagement panels need clear visual separation');
@@ -322,14 +322,18 @@ context.openRecordProfile(dialOnlyRecord,'drilldown');
 assert.equal(vm.runInContext('LEDGER_SCOPE.rows.length', context), 1, 'Dial-only records must fall back to the ledger instead of opening a missing profile');
 assert.equal(vm.runInContext('LEDGER_SCOPE.title', context), 'Selected dial record', 'Dial-only ledger fallback title changed');
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
-assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Time'), 'Drawer CSV header changed');
-assert(scopedCSV.includes('+919999999999,India,Inbound'), 'Drawer CSV record mapping changed');
+assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Date (IST),Call Time (IST)'), 'Drawer CSV header changed');
+assert(scopedCSV.includes("'+919999999999,India,Inbound"), 'Drawer CSV record mapping changed');
 assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
 assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
 assert(scopedCSV.includes('Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs)'), 'Standard CSV lead context columns are missing');
 assert(scopedCSV.includes(',10,1,1,0,0,10,Hot,'), 'Standard CSV must include per-call cost plus lead call and direction totals');
 const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
 assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
+assert.equal(context.escCSV('=2+2'), "'=2+2", 'CSV formula-like values must be protected for Excel');
+assert.equal(context.escCSVText('919999999999'), "'919999999999", 'Call IDs and phone numbers must remain text in Excel');
+vm.runInContext("$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-11';SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Campaign A';", context);
+assert.equal(context.csvFilename('call ledger', 'calls'), 'anya_call-ledger_calls_2026-07-10_to_2026-07-11_outbound_campaign-a_exported-2026-07-14.csv', 'Export filename must identify its active scope');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
 assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
 assert(scripts[1].includes('Follow-up Rank,Phone,Lead Tier,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Follow-up export must use the standard lead count columns');
@@ -347,7 +351,7 @@ let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
 context.exportCallbacks();
 assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
-assert(exportCapture.name.startsWith('requested_follow_ups_'), 'Requested follow-up export filename is unclear');
+assert(exportCapture.name.startsWith('anya_requested-followups_calls_'), 'Requested follow-up export filename is unclear');
 assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
 context.__callbackExportRows = [
   { ...scopeRecord, callId: 'callback-timed-payment', from: '919999999991', intent: 'Payment', cbPreferred: '15 Jul 2026 · 3:00 PM' },
@@ -408,7 +412,7 @@ context.__unreachRows = [
 ];
 vm.runInContext("ALL_DIALS=__unreachRows; SELECTED_CAMPAIGN='all'; $('filterFromDate').value='2026-07-09'; $('filterToDate').value='2026-07-11';", context);
 context.exportUnreachableCSV();
-assert(unreachableDownload && unreachableDownload.csv.includes('+919999999999,India,3,'), 'Unreachable CSV must aggregate the complete dial count per number');
+assert(unreachableDownload && unreachableDownload.csv.includes("'+919999999999,India,3,"), 'Unreachable CSV must aggregate the complete dial count per number');
 
 const performanceRows = Array.from({ length: 8000 }, (_, index) => ({
   'Created At (IST)': '10 Jul 2026, 10:30:00 AM IST',

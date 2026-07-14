@@ -696,7 +696,7 @@ function searchUserByMobile(mobile, source="search"){
   const resolved=resolveLeadSearch(mobile),userCalls=resolved.calls;
   const activeCalls=userCalls.filter(recordMatchesCurrentFilters);
   window.__profileCalls=userCalls;
-  const pexp=$("profileExport"); if(pexp)pexp.style.display=userCalls.length?'inline-flex':'none';
+  const pexp=$("profileExport"); if(pexp){pexp.style.display=userCalls.length?'inline-flex':'none';pexp.textContent=`Export full history · ${userCalls.length.toLocaleString()} call${userCalls.length===1?'':'s'}`;}
   const pledger=$("profileLedger"); if(pledger)pledger.style.display=userCalls.length?'inline-flex':'none';
   if(resolved.ambiguous){
     $("userSearchResult").style.display="block";
@@ -1727,7 +1727,7 @@ function paintUnreachableList(unreachable,avgDials){
     return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
   }).join('');
   el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers dialed 3+ times, never once connected — <b>${wastedDials.toLocaleString()}</b> wasted dials (avg ${avgDials} dials per number overall). Stop-calling / switch-to-SMS candidates.</div>`+
-    `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All repeatedly unreachable dials',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export complete CSV</button></div>`+
+    `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All repeatedly unreachable dials',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export lead summary · ${unreachable.length.toLocaleString()} number${unreachable.length===1?'':'s'}</button></div>`+
     `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Number</th><th>Dials</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
     (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in View all dials and Export complete CSV.</div>`:'');
 }
@@ -1740,9 +1740,9 @@ function exportUnreachableCSV(){
   groups.forEach(calls=>{
     const sorted=calls.slice().sort((a,b)=>a.ts-b.ts),first=sorted[0],last=sorted[sorted.length-1],country=classifyPhone(first.from).country;
     const campaigns=[...new Set(sorted.map(r=>String(r.campaign||'').trim()).filter(Boolean))].join(' | ');
-    csv+=[fullPhone(first.from),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status),escCSV(`${activeFilterScopeLabel()} · Repeatedly unreachable`)].join(',')+'\n';
+    csv+=[escCSVText(fullPhone(first.from)),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status),escCSV(`${activeFilterScopeLabel()} · Repeatedly unreachable`)].join(',')+'\n';
   });
-  downloadCSV('repeatedly_unreachable_'+csvDateStamp()+'.csv',csv);
+  downloadCSV(csvFilename('repeatedly-unreachable','lead-summary'),csv);
 }
 
 function repeatedlyUnreachableGroups(records){
@@ -2296,12 +2296,12 @@ function paintCallbacks(recs){
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
   const cbsAll=recs.filter(r=>r.callback);
   const readiness=$('cbReadiness');
-  if(!cbsAll.length){cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No requested follow-ups detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");if(readiness)readiness.innerHTML="";return;}
+  if(!cbsAll.length){updateExportButton('callbacksExport','Export visible calls',0,'calls');cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No requested follow-ups detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");if(readiness)readiness.innerHTML="";return;}
   const allByPhone=groupByPhone(cbsAll);
   paintFollowUpReadiness(allByPhone,recs);
   const byPhone=Object.fromEntries(Object.entries(allByPhone).filter(([,calls])=>CB_TIME_FILTER==='all'||(CB_TIME_FILTER==='timed'?callbackHasRequestedTime(calls):!callbackHasRequestedTime(calls))));
   const cbs=Object.values(byPhone).flat();
-  if(!cbs.length){cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No follow-ups match the selected readiness filter");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
+  if(!cbs.length){updateExportButton('callbacksExport','Export visible calls',0,'calls');cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No follow-ups match the selected readiness filter");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");return;}
 
   // Build multi-select intent filter chips (All + each intent)
   const intents=[...new Set(cbs.map(r=>r.intent))].sort();
@@ -2325,6 +2325,7 @@ function paintCallbacks(recs){
 
   const visibleCallbackCount=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
   const visibleLeadCount=Object.keys(filtered).length;
+  updateExportButton('callbacksExport','Export visible calls',visibleCallbackCount,'calls');
   cbCount.textContent=`${visibleLeadCount} lead${visibleLeadCount===1?'':'s'} · ${visibleCallbackCount} request${visibleCallbackCount===1?'':'s'}`;
 
   // Cap the number of callback CARDS rendered (each card renders all of its calls, incl. hidden
@@ -2603,31 +2604,38 @@ function recordsToCSV(rows,scopeLabel=activeFilterScopeLabel(),leadCostScopeRows
   const costScope=leadCostScopeRows&&leadCostScopeRows.length?leadCostScopeRows:rows;
   const leadCosts=ledgerLeadCostMap(costScope);
   const leadMixes=ledgerLeadDirectionMixMap(costScope);
-  let csv='Call ID,Phone,Country,Direction,Call Time,Campaign,Status,Duration (mins),Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs),Lead Temp,Follow-up Requested,Requested Time,Intent,Failure Reason,Summary,Filter Scope\n';
+  let csv='Call ID,Phone,Country,Direction,Call Date (IST),Call Time (IST),Campaign,Status,Duration (mins),Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs),Lead Temp,Follow-up Requested,Requested Time,Intent,Failure Reason,Summary,Filter Scope\n';
   rows.forEach(r=>{
     const c=classifyPhone(r.from);
     const leadMix=leadMixes.get(ledgerPhoneKey(r))||{inbound:0,outbound:0,unknown:1};
     const leadTotalCalls=leadMix.inbound+leadMix.outbound+leadMix.unknown;
-    csv+=[escCSV(r.callId),fullPhone(r.from),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(formatCallTime(r)),
+    csv+=[escCSVText(r.callId),escCSVText(fullPhone(r.from)),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(r.d),escCSV(formatCallTime(r)),
       escCSV(r.campaign),escCSV(r.status),Math.round(r.dur/60*10)/10,ledgerCallCost(r),leadTotalCalls,leadMix.inbound,leadMix.outbound,leadMix.unknown,leadCosts.get(ledgerPhoneKey(r))||ledgerCallCost(r),escCSV(r.leadTemp),r.callback?'Yes':'No',
       escCSV(r.cbPreferred||'Not specified'),escCSV(r.intent),escCSV(r.failReason),escCSV(r.summary),escCSV(scopeLabel)].join(',')+'\n';
   });
   return csv;
 }
 function slugForFile(s){return String(s||'export').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50)||'export';}
+function csvFilename(kind,grain='calls',extra=''){
+  const from=$('filterFromDate')?.value||'all-dates';
+  const to=$('filterToDate')?.value||'latest';
+  const campaign=SELECTED_CAMPAIGN&&SELECTED_CAMPAIGN!=='all'?SELECTED_CAMPAIGN:'all-campaigns';
+  return ['anya',kind,grain,from,'to',to,SELECTED_DIRECTION||'all',campaign,extra,`exported-${csvDateStamp()}`]
+    .filter(Boolean).map(slugForFile).join('_')+'.csv';
+}
 // Exports whatever record set the drill-down drawer is currently showing.
 function exportPanelCSV(){
   const rows=window.__panelRows||[];
   if(!rows.length){alert("Nothing to export in this view.");return;}
   const scope=activeFilterScopeLabel();
-  downloadCSV(slugForFile(window.__panelTitle)+'__'+slugForFile(scope)+'_'+csvDateStamp()+'.csv',recordsToCSV(rows,scope));
+  downloadCSV(csvFilename(window.__panelTitle||'selected-calls','calls'),recordsToCSV(rows,scope));
 }
 // Exports the calls shown in the lead-profile drawer.
 function exportProfileCSV(){
   const rows=window.__profileCalls||[];
   if(!rows.length){alert("No calls to export for this lead.");return;}
   const scope=`Full lead history; active dashboard scope: ${activeFilterScopeLabel()}`;
-  downloadCSV('lead_'+slugForFile(fullPhone(rows[0].from))+'__full-history_'+csvDateStamp()+'.csv',recordsToCSV(rows,scope));
+  downloadCSV(csvFilename('lead-history','calls',fullPhone(rows[0].from)),recordsToCSV(rows,scope));
 }
 function showKpiPanel(title,bodyHtml,rows){
   $("kpiPanelTitle").textContent=title;
@@ -2635,7 +2643,7 @@ function showKpiPanel(title,bodyHtml,rows){
   window.__panelTitle=title;
   window.__panelRows=Array.isArray(rows)?rows:[];
   const btn=$("kpiPanelExport");
-  if(btn)btn.style.display=window.__panelRows.length?'inline-flex':'none';
+  if(btn){btn.style.display=window.__panelRows.length?'inline-flex':'none';btn.textContent=`Export visible calls · ${window.__panelRows.length.toLocaleString()}`;}
   const ledgerBtn=$("kpiPanelLedger");
   if(ledgerBtn)ledgerBtn.style.display=window.__panelRows.length?'inline-flex':'none';
   $("kpiOverlay").style.display='block';
@@ -2908,6 +2916,7 @@ function paintBandBars(o){
 
 function paintGeo(o){
   const tot=o.india+o.intl;
+  updateExportButton('geoExport','Export visible calls',o.intl,'calls');
   if(!tot){$("geoSplit").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No data in this range.</div>`;$("geoCountries").innerHTML="";return;}
   // Adaptive: with no international leads, collapse to a single domestic line and drop the (empty)
   // country breakdown, so an all-India view isn't a half-empty section. The full split + country
@@ -2937,7 +2946,7 @@ function exportGeo(){
   const intl=RECORDS.filter(r=>classifyPhone(r.from).intl);
   if(!intl.length){alert("No international leads to export in this range.");return;}
   const scope=`${activeFilterScopeLabel()} · International leads only`;
-  downloadCSV('international_leads_'+csvDateStamp()+'.csv',recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS));
+  downloadCSV(csvFilename('international','calls'),recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS));
 }
 
 // ===== CALL EXPLORER =====
@@ -3152,6 +3161,7 @@ function updateLedgerChrome(total,shown){
   const active=LEDGER_STATE.search.trim()||LEDGER_STATE.filters.size||LEDGER_STATE.sort!==LEDGER_DEFAULT_STATE.sort;
   if($("ledgerClearBtn"))$("ledgerClearBtn").style.display=active?"inline-flex":"none";
   if($("explorerCount"))$("explorerCount").textContent=`Showing ${Math.min(shown,total)} of ${total} enquiries · ${LEDGER_SCOPE?LEDGER_SCOPE.title:RECORDS.length+' in selected dashboard view'}`;
+  updateExportButton('explorerExport','Export visible calls',total,'calls');
 }
 function renderExplorer(resetLimit){
   if(!$("explorerList"))return;
@@ -3216,7 +3226,7 @@ function explorerOpen(phone){
 function exportExplorer(){
   const rows=getExplorerRows();
   if(!rows.length){alert("No calls to export in the current view.");return;}
-  downloadCSV('call_ledger_'+csvDateStamp()+'.csv',recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS));
+  downloadCSV(csvFilename('call-ledger','calls'),recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS));
 }
 
 
@@ -3300,6 +3310,7 @@ function paintHottestLeads(records){
     return{phone:ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",calls:calls.sort((a,b)=>b.ts-a.ts)};
   }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
 
+  updateExportButton('hottestExport','Export lead summary',leads.length,'leads');
   if(!leads.length){$("hottestLeads").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No leads found.</div>";return;}
   window.HOTTEST_LEADS=leads;
 
@@ -3333,6 +3344,7 @@ function openLeadProfile(i){
 
 function paintSerialCallers(records){
   const serial=findSerialCallers(records);
+  updateExportButton('serialExport','Export lead summary',serial.length,'leads');
   if(!serial.length){$("serialCallers").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No serial engagers (3+ calls).</div>";return;}
 
   $("serialCallers").innerHTML=serial.map((s,i)=>`
@@ -3374,7 +3386,7 @@ function directionMixText(calls){
 }
 
 function downloadCSV(filename, csvContent){
-  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});
+  const blob=new Blob(['\uFEFF',csvContent],{type:'text/csv;charset=utf-8;'});
   const link=document.createElement('a');
   link.href=URL.createObjectURL(blob);
   link.download=filename;
@@ -3382,9 +3394,28 @@ function downloadCSV(filename, csvContent){
   URL.revokeObjectURL(link.href);
 }
 
+function updateExportButton(id,label,count,noun){
+  const btn=$(id);if(!btn)return;
+  const n=Number(count||0),word=n===1?noun:String(noun||'items');
+  btn.textContent=`${label} · ${n.toLocaleString()} ${word}`;
+  btn.disabled=!n;
+  btn.setAttribute('aria-disabled',n?'false':'true');
+  btn.title=n?`Downloads ${n.toLocaleString()} visible ${word} for the active filters.`:`No visible ${word} to export.`;
+  btn.style.opacity=n?'1':'0.55';
+  btn.style.cursor=n?'pointer':'not-allowed';
+}
+
 function escCSV(val){
-  const s=String(val??'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/"/g,'""');
+  let s=String(val??'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  // Values from transcripts and external exports can be opened directly in Excel. Prevent them
+  // from being interpreted as formulas while preserving the visible value as text.
+  if(/^[=+\-@]/.test(s))s="'"+s;
+  s=s.replace(/"/g,'""');
   return /[",\n]/.test(s)?`"${s}"`:s;
+}
+function escCSVText(val){
+  const s=String(val??'');
+  return escCSV(s?`'${s}`:'');
 }
 function csvDateStamp(){return new Date().toISOString().slice(0,10);}
 function ledgerExportScope(){
@@ -3413,8 +3444,8 @@ function exportHottestLeads(){
   }).sort((a,b)=>b.followUpScore-a.followUpScore).slice(0,50);
 
   let csv='Follow-up Rank,Phone,Lead Tier,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Callback Requested,Lead Total Duration (mins),Lead Total Cost (Rs),Last Call Time,Last Status,Last Summary,Filter Scope\n';
-  leads.forEach((l,i)=>{csv+=[i+1,fullPhone(l.ph),escCSV(l.tier),l.total,l.mix.inbound,l.mix.outbound,l.mix.unknown,l.callback?'Yes':'No',l.totalDur,l.totalDur*5,escCSV(l.lastCallTime),escCSV(l.lastStatus),escCSV(l.lastSummary),escCSV(`${activeFilterScopeLabel()} · Follow-up queue`)].join(',')+'\n';});
-  downloadCSV('follow_up_queue_'+csvDateStamp()+'.csv',csv);
+  leads.forEach((l,i)=>{csv+=[i+1,escCSVText(fullPhone(l.ph)),escCSV(l.tier),l.total,l.mix.inbound,l.mix.outbound,l.mix.unknown,l.callback?'Yes':'No',l.totalDur,l.totalDur*5,escCSV(l.lastCallTime),escCSV(l.lastStatus),escCSV(l.lastSummary),escCSV(`${activeFilterScopeLabel()} · Follow-up queue`)].join(',')+'\n';});
+  downloadCSV(csvFilename('followup-queue','lead-summary'),csv);
 }
 
 function exportSerialEngagers(){
@@ -3425,13 +3456,13 @@ function exportSerialEngagers(){
   serial.forEach(s=>{
     const lastCall=s.calls[0];
     const mix=mixes.get(s.phone)||{inbound:0,outbound:0,unknown:0};
-    csv+=[fullPhone(s.phone),s.total,mix.inbound,mix.outbound,mix.unknown,s.totalDur,s.totalDur*5,escCSV(formatCallTime(lastCall)),escCSV(lastCall.status),escCSV(lastCall.summary),escCSV(`${activeFilterScopeLabel()} · Repeat engagement`)].join(',')+'\n';
+    csv+=[escCSVText(fullPhone(s.phone)),s.total,mix.inbound,mix.outbound,mix.unknown,s.totalDur,s.totalDur*5,escCSV(formatCallTime(lastCall)),escCSV(lastCall.status),escCSV(lastCall.summary),escCSV(`${activeFilterScopeLabel()} · Repeat engagement`)].join(',')+'\n';
   });
-  downloadCSV('repeat_engagement_'+csvDateStamp()+'.csv',csv);
+  downloadCSV(csvFilename('repeat-engagement','lead-summary'),csv);
 }
 
 function exportCallbacks(){
   const cbs=visibleCallbackGroups(RECORDS).flatMap(([,calls])=>calls).sort((a,b)=>b.ts-a.ts);
   if(!cbs.length){alert("No requested follow-ups match the active filters.");return;}
-  downloadCSV('requested_follow_ups_'+csvDateStamp()+'.csv',recordsToCSV(cbs,callbackExportScope(),RECORDS));
+  downloadCSV(csvFilename('requested-followups','calls'),recordsToCSV(cbs,callbackExportScope(),RECORDS));
 }
