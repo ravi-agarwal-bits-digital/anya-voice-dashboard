@@ -97,7 +97,7 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'repeatedlyUnreachableGroups', 'csvFilename', 'escCSVText', 'updateExportButton',
+  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'callbackFilenameExtra', 'repeatedlyUnreachableGroups', 'csvFilename', 'escCSVText', 'updateExportButton',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
@@ -188,7 +188,7 @@ assert(scripts[1].includes("data/voice_analytics.xlsx"), 'GitHub Pages workbook 
 assert(scripts[1].includes("fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'}"), 'GitHub Pages loading must revalidate the workbook');
 assert(scripts[1].includes('resetAllFilters'), 'Reset-all-filters control is not wired');
 assert(scripts[1].includes('drawer-scope-note'), 'Drawer active-scope explanation is missing');
-assert(scripts[1].includes('Filter Scope'), 'Drawer CSV exports must include active scope');
+assert(!scripts[1].includes('Filter Scope'), 'CSV rows must not repeat filter scope metadata');
 assert(scripts[1].includes('metricDefinition'), 'Management metric definitions are not wired to tooltips');
 assert(!html.includes('id="timelinePanel"'), 'Superseded inline timeline panel must remain removed');
 assert(!scripts[1].includes('timelinePanel'), 'Dashboard logic must use the profile drawer timeline');
@@ -324,7 +324,7 @@ assert.equal(vm.runInContext('LEDGER_SCOPE.title', context), 'Selected dial reco
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
 assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Date (IST),Call Time (IST)'), 'Drawer CSV header changed');
 assert(scopedCSV.includes("'+919999999999,India,Inbound"), 'Drawer CSV record mapping changed');
-assert(scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV active scope is missing');
+assert(!scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV must not repeat filter scope metadata');
 assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
 assert(scopedCSV.includes('Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs)'), 'Standard CSV lead context columns are missing');
 assert(scopedCSV.includes(',10,1,1,0,0,10,Hot,'), 'Standard CSV must include per-call cost plus lead call and direction totals');
@@ -362,7 +362,7 @@ vm.runInContext("RECORDS=__callbackExportRows; CB_TIME_FILTER='timed'; CB_FILTER
 context.exportCallbacks();
 assert(exportCapture.csv.includes('callback-timed-payment'), 'Callback export must include the active topic and readiness selection');
 assert(!exportCapture.csv.includes('callback-timed-programme') && !exportCapture.csv.includes('callback-unscheduled-payment'), 'Callback export must exclude requests hidden by local filters');
-assert(exportCapture.csv.includes('Requested time · Topics: Payment'), 'Callback export must state its local filter scope');
+assert(exportCapture.name.includes('requested-time-topics-payment'), 'Callback export filename must state its local filter scope');
 vm.runInContext("CB_TIME_FILTER='all'; CB_FILTERS.clear(); RECORDS=[__scopeRecord];", context);
 context.exportHottestLeads();
 assert(exportCapture.csv.startsWith('Follow-up Rank,Phone,Lead Tier'), 'Follow-up export must use an action-ready summary schema');
