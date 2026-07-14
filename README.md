@@ -43,10 +43,6 @@ This project is maintained as a static web application. The production dashboard
 ├── data/
 │   ├── .gitkeep
 │   └── voice_analytics.xlsx
-└── _archive/
-    ├── README.md
-    ├── legacy-admin/
-    └── legacy-dashboards/
 ```
 
 ## Canonical files
@@ -59,18 +55,12 @@ This project is maintained as a static web application. The production dashboard
 | `css/` | Extracted dashboard and administration styles |
 | `js/` | Dashboard authentication, dashboard application and administration scripts |
 | `data/voice_analytics.xlsx` | Current application data file |
-| `_archive/` | Superseded files retained for reference |
 
 Only `index.html` and `admin/index.html` should be treated as active application entry points.
 
-## Archived files
+## Legacy source
 
-The `_archive/` directory contains superseded dashboard and administration files. These files are retained only for historical reference.
-
-- Do not deploy archived files as active pages.
-- Do not use archived files as the baseline for new changes.
-- Use Git history and tags for version tracking.
-- Do not add new `index-vN.html` files to the repository root.
+Superseded implementations are retained outside this public Pages repository. Do not add legacy `index-vN.html` files or old administration pages to the repository root.
 
 ## Making changes
 
@@ -99,7 +89,7 @@ Before merging a dashboard change:
 
 - Keep the repository root limited to active files and documentation.
 - Keep shared assets under `assets/`.
-- Keep retired implementations under `_archive/`.
+- Keep retired implementations out of this public repository and Pages source.
 - Never commit credentials, access tokens, plaintext passwords or unapproved raw data.
 - Review third-party assets before updating them.
 - Use pull requests for production changes.
