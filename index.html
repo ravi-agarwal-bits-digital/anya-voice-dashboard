@@ -157,14 +157,15 @@
         <button onclick="quickFilter('week')" id="btn-week" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 7 Days</button>
         <button onclick="quickFilter('month')" id="btn-month" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Last 30 Days</button>
         <button onclick="quickFilter('all')" id="btn-all" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">All</button>
-        <button onclick="toggleCustomFilter()" id="btn-custom" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Custom range</button>
+        <button type="button" onclick="toggleCustomFilter()" id="btn-custom" aria-expanded="false" aria-controls="customFilterPanel" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:12px;cursor:pointer;transition:.2s">Custom range</button>
         <button type="button" onclick="resetAllFilters()" id="resetAllFilters" title="Reset dates, direction, campaign, search and ledger filters" style="padding:6px 12px;background:#fff8ea;border:1px solid var(--gold);border-radius:4px;color:#7a570f;font-size:12px;font-weight:700;cursor:pointer;transition:.2s">Reset all</button>
         <!-- Inline custom date range (compact, appears in same row) -->
-        <div id="customFilterPanel" style="display:none;align-items:center;gap:8px;background:#f8fafc;border:1px solid rgba(0,212,170,0.3);border-radius:6px;padding:5px 8px">
+        <div id="customFilterPanel" hidden style="align-items:center;gap:8px;background:#f8fafc;border:1px solid rgba(0,212,170,0.3);border-radius:6px;padding:5px 8px">
           <input type="date" id="filterFromDate" style="padding:5px 8px;background:#ffffff;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'Inter',monospace;cursor:pointer">
           <span style="color:var(--faint);font-size:13px">→</span>
           <input type="date" id="filterToDate" style="padding:5px 8px;background:#ffffff;border:1px solid var(--line);border-radius:5px;color:var(--text);font-size:12px;font-family:'Inter',monospace;cursor:pointer">
           <button onclick="applyCustomFilter()" style="padding:5px 14px;background:var(--teal);border:none;border-radius:5px;color:#000;font-size:12px;font-weight:700;cursor:pointer">Apply</button>
+          <span id="customFilterError" hidden role="alert" style="color:#b42318;font-size:11px;font-weight:700">End date must be on or after start date.</span>
         </div>
 
         <!-- Selected Date Range pill + Search (pushed right) -->
