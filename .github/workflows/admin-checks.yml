@@ -30,5 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check admin JavaScript syntax
+        run: node --check js/admin.js
       - name: Run admin smoke tests
         run: node tests/admin-smoke.test.js

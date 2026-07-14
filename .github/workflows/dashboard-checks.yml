@@ -9,6 +9,7 @@ on:
       - 'assets/xlsx.full.min.js'
       - 'tests/dashboard-smoke.test.js'
       - 'tests/workbook-worker.test.js'
+      - 'tests/responsive-smoke.test.js'
       - '.github/workflows/dashboard-checks.yml'
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - 'assets/xlsx.full.min.js'
       - 'tests/dashboard-smoke.test.js'
       - 'tests/workbook-worker.test.js'
+      - 'tests/responsive-smoke.test.js'
 
 permissions:
   contents: read
@@ -32,7 +34,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check dashboard JavaScript syntax
+        run: |
+          node --check js/auth.js
+          node --check js/dashboard.js
+          node --check js/workbook-worker.js
       - name: Run dashboard smoke tests
         run: node tests/dashboard-smoke.test.js
       - name: Run workbook worker tests
         run: node tests/workbook-worker.test.js
+      - name: Run responsive smoke tests
+        run: node tests/responsive-smoke.test.js
