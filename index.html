@@ -276,7 +276,7 @@
       <div class="panel"><h4>Hourly patterns</h4><div class="cap">Hourly call patterns and service demand.</div><div id="hourChart"></div></div>
     </div></section>
 
-  <section id="sec-geo"><div class="shead"><span class="n">07</span><h2>Reach by geography</h2><button onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export international</button></div>
+  <section id="sec-geo"><div class="shead"><span class="n">07</span><h2>Reach by geography</h2><button id="geoExport" onclick="exportGeo()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export visible calls</button></div>
     <div class="panel">
       <div class="cap">Domestic vs international split, and the international country breakdown, for the selected period.</div>
       <div class="grid2" style="margin-top:10px">
@@ -331,12 +331,12 @@
     <div class="opf-hidden-note">Campaign results are hidden in Inbound view &mdash; campaigns and dial-failure reasons only apply to outbound calls. They reappear under Outbound or All calls.</div>
   </section>
 
-  <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Follow-up &amp; repeat engagement</h2><button onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-up CSV</button></div>
+  <section id="sec-hottest"><div class="shead"><span class="n">11</span><h2>Follow-up &amp; repeat engagement</h2><button id="hottestExport" onclick="exportHottestLeads()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export lead summary</button></div>
     <div class="panel follow-up-panel"><h4>Follow-up queue</h4><div class="cap">Leads ranked for follow-up. Select a card to open the profile drawer.</div><div id="hottestLeads" class="follow-up-grid"></div></div>
-    <div class="panel repeat-engagement-panel"><div class="repeat-engagement-heading"><div><h4 style="margin:0">Repeat engagement</h4><div class="cap">Phone numbers with 3+ calls. Select a card to view the full timeline.</div></div><button onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export repeat CSV</button></div><div id="serialCallers" class="repeat-engagement-grid"></div></div>
+    <div class="panel repeat-engagement-panel"><div class="repeat-engagement-heading"><div><h4 style="margin:0">Repeat engagement</h4><div class="cap">Phone numbers with 3+ calls. Select a card to view the full timeline.</div></div><button id="serialExport" onclick="exportSerialEngagers()" style="padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export lead summary</button></div><div id="serialCallers" class="repeat-engagement-grid"></div></div>
   </section>
 
-  <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Requested follow-ups</h2><button onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export follow-ups CSV</button></div>
+  <section id="sec-callbacks"><div class="shead"><span class="n">12</span><h2>Requested follow-ups</h2><button id="callbacksExport" onclick="exportCallbacks()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export visible calls</button></div>
     <div class="panel"><div class="cap" style="margin-bottom:16px">Leads whose conversation indicates a follow-up request. Requested time is shown only when it was detected in the conversation. <b id="cbCount" style="color:var(--hot)"></b></div>
     <div id="cbReadiness" style="margin-bottom:16px"></div>
     <div class="queue-filter-label">Filter by topic</div><div id="cbFilters" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
@@ -348,7 +348,7 @@
       <div class="panel"><h4>Cost impact</h4><div class="cap">Estimated cost of attention-required calls at ₹5/min</div><div id="frustCost"></div></div>
     </div></section>
 
-  <section id="sec-explorer"><div class="shead"><span class="n">14</span><h2>Call ledger</h2><button onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export current ledger view</button></div>
+  <section id="sec-explorer"><div class="shead"><span class="n">14</span><h2>Call ledger</h2><button id="explorerExport" onclick="exportExplorer()" style="margin-left:auto;padding:6px 14px;background:var(--teal);color:#000;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer">Export visible calls</button></div>
     <div class="panel">
       <div class="cap">Every call in the selected date and direction view. Search, sort, and select a row to open the profile drawer.</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0 10px">
