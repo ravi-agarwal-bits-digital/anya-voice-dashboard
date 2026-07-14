@@ -1375,7 +1375,7 @@ function paintRedialCurve(obRecs){
     ?`<div class="cap" style="margin-top:12px;font-size:12px">${neverReached} lead${neverReached>1?'s':''} never reached in this range, averaging ${(neverReachedAttempts/neverReached).toFixed(1)} attempt${neverReachedAttempts===neverReached?'':'s'} before dialing stopped.</div>`
     :'';
   el.innerHTML=`<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr>`+
-    `<th>Attempt</th><th>Dials</th><th>Connect rate</th><th>Share of eventual connects</th><th>Avg duration (connected)</th>`+
+    `<th>Dial attempt</th><th>Dials</th><th>Connected %</th><th>First successful connect</th><th>Avg talk time</th>`+
     `</tr></thead><tbody>${rows}</tbody></table></div>${neverLine}`;
 }
 function paintDialHeatmap(obRecs){
