@@ -144,7 +144,10 @@ assert.equal(loadingText.textContent, 'Parsing workbook…', 'Loading stage mess
 assert(scripts[1].includes("fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'}"), 'Workbook fetch must revalidate while allowing cached bytes');
 assert(scripts[1].includes('DATA_FETCH_TIMEOUT_MS=180000'), 'Growing workbook download timeout changed');
 assert(!scripts[1].includes("new File([fileBytes]"), 'Automatic loading must not copy decrypted bytes through File and FileReader');
-assert(scripts[1].includes("await processWorkbookBytes(fileBytes,'voice_analytics.xlsx')"), 'Automatic loading must process decrypted bytes directly');
+assert(scripts[1].includes("const allCalls=await processWorkbookBytes(fileBytes,'voice_analytics.xlsx',meta?.plaintextSha256||meta?.dataCommitSha||'')"), 'Automatic loading must process decrypted bytes directly with the publication version');
+assert(scripts[1].includes("const PREPARED_CACHE_DB='anya-dashboard-secure-cache'"), 'Encrypted prepared-data cache is missing');
+assert(scripts[1].includes("crypto.subtle.encrypt({name:'AES-GCM'"), 'Prepared-data cache must remain encrypted at rest');
+assert(scripts[1].includes('Opening saved secure data…'), 'Prepared-data cache load status is missing');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 14 * 1048576 }), 60000, 'Current-size workbook timeout changed');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 90 * 1048576 }), 270000, 'Growing workbook timeout must scale with size');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 200 * 1048576 }), 300000, 'Workbook timeout must remain bounded');

@@ -182,19 +182,104 @@ function fetchWithTimeout(url,options={},timeoutMs=15000){
   return fetch(url,{...options,signal:controller.signal}).finally(()=>clearTimeout(timer));
 }
 const DATA_FETCH_TIMEOUT_MS=180000;
+const PREPARED_CACHE_DB='anya-dashboard-secure-cache';
+const PREPARED_CACHE_STORE='prepared-records';
+const PREPARED_CACHE_KEY='latest';
+
+function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+function preparedCacheSupported(){return typeof indexedDB!=='undefined'&&typeof crypto!=='undefined'&&!!crypto.subtle;}
+function openPreparedCache(){
+  return new Promise((resolve,reject)=>{
+    if(!preparedCacheSupported()){reject(new Error('Secure local cache unavailable'));return;}
+    const request=indexedDB.open(PREPARED_CACHE_DB,1);
+    request.onupgradeneeded=()=>request.result.createObjectStore(PREPARED_CACHE_STORE,{keyPath:'key'});
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error('Could not open secure local cache'));
+  });
+}
+async function preparedCacheRead(){
+  const db=await openPreparedCache();
+  try{return await new Promise((resolve,reject)=>{
+    const request=db.transaction(PREPARED_CACHE_STORE,'readonly').objectStore(PREPARED_CACHE_STORE).get(PREPARED_CACHE_KEY);
+    request.onsuccess=()=>resolve(request.result||null);
+    request.onerror=()=>reject(request.error||new Error('Could not read secure local cache'));
+  });}finally{db.close();}
+}
+async function preparedCacheWrite(value){
+  const db=await openPreparedCache();
+  try{return await new Promise((resolve,reject)=>{
+    const request=db.transaction(PREPARED_CACHE_STORE,'readwrite').objectStore(PREPARED_CACHE_STORE).put(value);
+    request.onsuccess=()=>resolve();
+    request.onerror=()=>reject(request.error||new Error('Could not write secure local cache'));
+  });}finally{db.close();}
+}
+async function preparedCacheDelete(){
+  const db=await openPreparedCache();
+  try{return await new Promise((resolve,reject)=>{
+    const request=db.transaction(PREPARED_CACHE_STORE,'readwrite').objectStore(PREPARED_CACHE_STORE).delete(PREPARED_CACHE_KEY);
+    request.onsuccess=()=>resolve();
+    request.onerror=()=>reject(request.error||new Error('Could not clear secure local cache'));
+  });}finally{db.close();}
+}
+
+async function savePreparedCache(version,allCalls){
+  if(!version||!Array.isArray(allCalls)||!preparedCacheSupported())return;
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(window.DECRYPT_PASSPHRASE||'',salt,['encrypt']);
+  const plain=new TextEncoder().encode(JSON.stringify(allCalls));
+  const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);
+  await preparedCacheWrite({key:PREPARED_CACHE_KEY,version,salt,iv,ciphertext,savedAt:Date.now()});
+}
+async function loadPreparedCache(version){
+  if(!version||!preparedCacheSupported())return null;
+  try{
+    const cached=await preparedCacheRead();
+    if(!cached||cached.version!==version||!cached.salt||!cached.iv||!cached.ciphertext)return null;
+    const key=await deriveKey(window.DECRYPT_PASSPHRASE||'',new Uint8Array(cached.salt),['decrypt']);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(cached.iv)},key,cached.ciphertext);
+    const allCalls=JSON.parse(new TextDecoder().decode(plain));
+    return Array.isArray(allCalls)&&allCalls.every(r=>r&&typeof r.d==='string')?allCalls:null;
+  }catch(error){
+    console.warn('Secure local cache could not be used; loading workbook:',error);
+    preparedCacheDelete().catch(()=>{});
+    return null;
+  }
+}
+
+function setPreparedRecords(allCalls,sourceName){
+  ALL_DIALS=allCalls;
+  RECORDS=allCalls.filter(isConversationRecord);
+  SRC=sourceName;
+}
 
 function autoLoadLatestExcel(){
   setDashboardLoading();
-  loadPublicationFreshness();
+  const metadataPromise=loadPublicationFreshness();
+  const cachePromise=metadataPromise.then(meta=>loadPreparedCache(meta?.plaintextSha256||meta?.dataCommitSha||'')).catch(()=>null);
 
   // Revalidate on every visit, but allow the browser to reuse the encrypted body when unchanged.
   // `no-store` forced the full and continually-growing workbook to download on every page load.
-  fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'},DATA_FETCH_TIMEOUT_MS)
+  const workbookPromise=fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'},DATA_FETCH_TIMEOUT_MS)
     .then(r=>{
       if(r.ok)return r.arrayBuffer();
       throw new Error('File not found');
-    })
-    .then(async buf=>{
+    });
+  // Give the tiny metadata + local-cache lookup a short head start. When a matching encrypted
+  // snapshot is available, render it immediately instead of waiting for the workbook download.
+  Promise.race([cachePromise,delay(450).then(()=>null)]).then(cached=>{
+    if(cached){
+      setDashboardLoadingMessage('Opening saved secure data…');
+      setPreparedRecords(cached,'secure local snapshot');
+      if(RECORDS.length){boot();return;}
+    }
+    workbookPromise.then(async buf=>{
+      const lateCached=await Promise.race([cachePromise,delay(0).then(()=>null)]);
+      if(lateCached){
+        setDashboardLoadingMessage('Opening saved secure data…');
+        setPreparedRecords(lateCached,'secure local snapshot');
+        if(RECORDS.length){boot();return;}
+      }
       const bytes=new Uint8Array(buf);
       let fileBytes=bytes;
       // Detect encryption magic header "ANYAENC1"
@@ -212,9 +297,12 @@ function autoLoadLatestExcel(){
         }
       }
       setDashboardLoadingMessage('Reading workbook…');
-      await processWorkbookBytes(fileBytes,'voice_analytics.xlsx');
-    })
-    .catch(err=>{
+      const meta=await Promise.race([metadataPromise,delay(0).then(()=>null)]);
+      const allCalls=await processWorkbookBytes(fileBytes,'voice_analytics.xlsx',meta?.plaintextSha256||meta?.dataCommitSha||'');
+      // Metadata may arrive after a first load. Do not make the dashboard wait just to save an
+      // optional cache; once it does arrive, persist the already-normalized records securely.
+      if(!meta&&allCalls)metadataPromise.then(fresh=>savePreparedCache(fresh?.plaintextSha256||fresh?.dataCommitSha||'',allCalls)).catch(()=>{});
+    }).catch(err=>{
       const timedOut=err && err.name==='AbortError';
       setDashboardPlaceholder(
         timedOut?'Data load timed out':'No data published',
@@ -223,18 +311,21 @@ function autoLoadLatestExcel(){
           : 'No voice export was found at <b>data/voice_analytics.xlsx</b>.<br><br>Once the Excel file is published in that path, this dashboard will load it automatically.'
       );
     });
+  });
 }
 
 function loadPublicationFreshness(){
-  fetchWithTimeout('data/voice_analytics.xlsx.meta.json',{cache:'no-cache'},10000)
+  return fetchWithTimeout('data/voice_analytics.xlsx.meta.json',{cache:'no-cache'},10000)
     .then(r=>r.ok?r.json():Promise.reject(new Error('Metadata unavailable')))
     .then(meta=>{
       const el=$("publicationFreshness"),raw=meta.publishedAt||meta.published_at||meta.generatedAt;
       const date=raw?new Date(raw):null;
-      if(!el||!date||Number.isNaN(date.getTime()))return;
-      el.textContent=`Published ${new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(date)}`;
-      el.title=`Latest dataset published ${date.toLocaleString('en-IN')}`;
-    }).catch(()=>{});
+      if(el&&date&&!Number.isNaN(date.getTime())){
+        el.textContent=`Published ${new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(date)}`;
+        el.title=`Latest dataset published ${date.toLocaleString('en-IN')}`;
+      }
+      return meta;
+    }).catch(()=>null);
 }
 
 // ===== AES-256-GCM decryption (matches admin encryption) =====
@@ -254,11 +345,11 @@ function encryptedMagic(bytes){
   return null;
 }
 function isEncrypted(bytes){return !!encryptedMagic(bytes);}
-async function deriveKey(passphrase,salt){
+async function deriveKey(passphrase,salt,usages=['decrypt']){
   const baseKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(passphrase),'PBKDF2',false,['deriveKey']);
   return crypto.subtle.deriveKey(
     {name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},
-    baseKey,{name:'AES-GCM',length:256},false,['decrypt']
+    baseKey,{name:'AES-GCM',length:256},false,usages
   );
 }
 async function decryptData(bytes,passphrase){
@@ -316,7 +407,7 @@ async function parseWorkbookBytes(bytes){
     return parseWorkbookOnMainThread(bytes);
   }
 }
-async function processWorkbookBytes(bytes,sourceName){
+async function processWorkbookBytes(bytes,sourceName,cacheVersion=''){
   if($('err'))$('err').textContent='';
   if(typeof XLSX==='undefined'){
     setDashboardPlaceholder('Spreadsheet engine unavailable','The spreadsheet parser did not load. Please check internet/CDN access and refresh the dashboard.');
@@ -329,15 +420,17 @@ async function processWorkbookBytes(bytes,sourceName){
     setDashboardLoadingMessage(`Preparing dashboard from ${chosen.rows.length.toLocaleString()} rows…`);
     const rows=dedupeRowsByCallId(chosen.rows);
     const allCalls=rows.map((r,i)=>rowToRecord(r)).filter(r=>r && r.d);
-    ALL_DIALS=allCalls;                              // dial-level universe (incl. failed/initiated)
-    RECORDS=allCalls.filter(isConversationRecord);   // conversation universe -- every existing analytic
-    SRC=sourceName;
+    setPreparedRecords(allCalls,sourceName);          // dial-level + conversation universes
     if(!RECORDS.length){
       const headers=Object.keys(rows[0]||{}).slice(0,12).join(', ');
       setDashboardPlaceholder('No valid call records','The export loaded from <b>'+esc(chosen.name)+'</b>, but the dashboard could not identify a valid call date column.<br><br><b>Columns seen:</b> '+esc(headers||'none'));
       return;
     }
     boot();
+    // Saving is deliberately best-effort and happens after the dashboard is usable. The cache is
+    // encrypted with the current session passphrase and invalidated by each new publication fingerprint.
+    savePreparedCache(cacheVersion,allCalls).catch(error=>console.warn('Could not save secure local cache:',error));
+    return allCalls;
   }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
 }
 function handle(file){
