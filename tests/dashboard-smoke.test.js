@@ -359,6 +359,24 @@ vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'outbound',campai
 assert.equal(context.currentViewDescription(), 'All Calls · 10 Jul 2026 to 10 Jul 2026', 'Reset-all-filters must restore the all-call scope');
 vm.runInContext("ALL_RECORDS_BACKUP=[];ALL_DIALS=[];RECORDS=[];SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
 
+const customPanel = getElement('customFilterPanel');
+customPanel.hidden = true;
+customPanel.style.display = 'none';
+context.toggleCustomFilter();
+assert.equal(customPanel.hidden, false, 'Custom date range must open on first click');
+assert.equal(customPanel.style.display, 'flex', 'Custom date range must render as a flex row when open');
+let customApplyCount = 0;
+context.applyFilters = () => { customApplyCount++; };
+getElement('filterFromDate').value = '2026-07-12';
+getElement('filterToDate').value = '2026-07-10';
+context.applyCustomFilter();
+assert.equal(customApplyCount, 0, 'An inverted custom range must not apply an empty filter');
+assert.equal(getElement('customFilterError').hidden, false, 'An inverted custom range must explain the problem');
+getElement('filterToDate').value = '2026-07-12';
+context.applyCustomFilter();
+assert.equal(customApplyCount, 1, 'A valid custom range must apply exactly once');
+assert.equal(customPanel.hidden, true, 'A valid custom range must close after applying');
+
 context.__campaignScopeRows = [
   { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign A' },
   { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign B' }

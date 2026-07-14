@@ -414,12 +414,29 @@ function resetAllFilters(){
 
 function toggleCustomFilter(){
   const panel=$("customFilterPanel");
-  panel.style.display=panel.style.display==="none"?"flex":"none";
+  const button=$("btn-custom");
+  if(!panel)return;
+  const opening=panel.hidden;
+  panel.hidden=!opening;
+  panel.style.display=opening?"flex":"none";
+  if(button)button.setAttribute('aria-expanded',opening?'true':'false');
 }
 
 function applyCustomFilter(){
+  const fromDate=$("filterFromDate").value;
+  const toDate=$("filterToDate").value;
+  const panel=$("customFilterPanel");
+  const error=$("customFilterError");
+  if(fromDate&&toDate&&fromDate>toDate){
+    if(error)error.hidden=false;
+    if(panel){panel.hidden=false;panel.style.display="flex";}
+    const button=$("btn-custom");if(button)button.setAttribute('aria-expanded','true');
+    return;
+  }
+  if(error)error.hidden=true;
   applyFilters();
-  $("customFilterPanel").style.display="none";
+  if(panel){panel.hidden=true;panel.style.display="none";}
+  const button=$("btn-custom");if(button)button.setAttribute('aria-expanded','false');
   updateFilterButtons("custom");
 }
 
