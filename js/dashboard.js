@@ -1661,8 +1661,7 @@ function paintOutboundPerf(){
   const numbersReached=reachedNumbers.length;
   const reachPct=numbersTotal?Math.round(numbersReached/numbersTotal*100):0;
   // Unreachable: dialed 3+ times, never once connected -- wasted-effort hit-list.
-  const unreachable=numbers.filter(calls=>calls.length>=3 && !calls.some(isConn))
-    .map(calls=>calls.slice().sort((a,b)=>a.ts-b.ts)).sort((a,b)=>b.length-a.length);
+  const unreachable=repeatedlyUnreachableGroups(obRecs);
   const connectedRecs=obRecs.filter(isConn);
   const numbersHot=numbers.filter(calls=>calls.some(c=>isConn(c)&&c.leadTemp==='Hot')).length;
   const avgDials=numbersTotal?(n/numbersTotal).toFixed(1):'0.0';
@@ -1733,7 +1732,9 @@ function paintUnreachableList(unreachable,avgDials){
     (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in View all dials and Export complete CSV.</div>`:'');
 }
 function exportUnreachableCSV(){
-  const groups=window.__unreachGroups||[];
+  // Recalculate from the active global view at click time. This prevents a stale download if a
+  // user changes the date/campaign filter while deferred charts are still repainting.
+  const groups=repeatedlyUnreachableGroups(outboundRecordsInView());
   if(!groups.length){alert('No repeatedly unreachable numbers to export.');return;}
   let csv='Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status,Filter Scope\n';
   groups.forEach(calls=>{
@@ -1742,6 +1743,14 @@ function exportUnreachableCSV(){
     csv+=[fullPhone(first.from),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status),escCSV(`${activeFilterScopeLabel()} · Repeatedly unreachable`)].join(',')+'\n';
   });
   downloadCSV('repeatedly_unreachable_'+csvDateStamp()+'.csv',csv);
+}
+
+function repeatedlyUnreachableGroups(records){
+  const isConn=r=>normalizeDisposition(r)==='connected';
+  return Object.values(groupByPhone(records||[]))
+    .filter(calls=>calls.length>=3&&!calls.some(isConn))
+    .map(calls=>calls.slice().sort((a,b)=>a.ts-b.ts))
+    .sort((a,b)=>b.length-a.length);
 }
 
 // ===== OUTBOUND CADENCE & CAPACITY =====
@@ -2046,6 +2055,25 @@ let CB_TIME_FILTER='all'; // 'all' | 'timed' | 'unscheduled'
 function callbackHasRequestedTime(calls){
   return calls.some(r=>r.cbPreferred&&r.cbPreferred!=='Not specified');
 }
+// Keep the Requested follow-ups canvas and CSV on one source of truth. The global dashboard
+// filters are already represented by `recs`; these two local controls narrow that set further.
+function visibleCallbackGroups(recs=RECORDS){
+  const allByPhone=groupByPhone((recs||[]).filter(r=>r.callback));
+  const timeScoped=Object.entries(allByPhone).filter(([,calls])=>
+    CB_TIME_FILTER==='all'||(CB_TIME_FILTER==='timed'?callbackHasRequestedTime(calls):!callbackHasRequestedTime(calls))
+  );
+  return timeScoped.map(([phone,calls])=>[
+    phone,
+    (CB_FILTERS.size===0?calls:calls.filter(r=>CB_FILTERS.has(r.intent))).slice().sort((a,b)=>a.ts-b.ts)
+  ]).filter(([,calls])=>calls.length).sort((a,b)=>b[1].length-a[1].length);
+}
+function callbackExportScope(){
+  const parts=[activeFilterScopeLabel(),'Requested follow-ups'];
+  if(CB_TIME_FILTER==='timed')parts.push('Requested time');
+  if(CB_TIME_FILTER==='unscheduled')parts.push('Needs scheduling');
+  if(CB_FILTERS.size)parts.push(`Topics: ${[...CB_FILTERS].join(' + ')}`);
+  return parts.join(' · ');
+}
 function paintFollowUpReadiness(byPhone,recs){
   const el=$('cbReadiness');
   if(!el)return;
@@ -2292,14 +2320,8 @@ function paintCallbacks(recs){
     paintCallbacks(recs);
   });
 
-  // Filter and sort — empty set = all, otherwise match any selected intent
-  const filtered={};
-  Object.entries(byPhone).forEach(([ph,calls])=>{
-    const filtered_calls=CB_FILTERS.size===0?calls:calls.filter(r=>CB_FILTERS.has(r.intent));
-    if(filtered_calls.length>0){
-      filtered[ph]=filtered_calls.sort((a,b)=>a.ts-b.ts);
-    }
-  });
+  // Filter and sort — empty set = all, otherwise match any selected intent.
+  const filtered=Object.fromEntries(visibleCallbackGroups(recs));
 
   const visibleCallbackCount=Object.values(filtered).reduce((sum,arr)=>sum+arr.length,0);
   const visibleLeadCount=Object.keys(filtered).length;
@@ -2308,7 +2330,7 @@ function paintCallbacks(recs){
   // Cap the number of callback CARDS rendered (each card renders all of its calls, incl. hidden
   // "more" requests, so rendering every group at once was the single biggest filter-lag cost on
   // large datasets). The count above is still exact; "Show more" raises the cap for this view.
-  const cbEntries=Object.entries(filtered).sort((a,b)=>b[1].length-a[1].length);
+  const cbEntries=Object.entries(filtered);
   const cbShown=cbEntries.slice(0,CB_RENDER_LIMIT);
   const cbHidden=cbEntries.length-cbShown.length;
   cbList.innerHTML=cbShown.map(([ph,calls])=>{
@@ -3409,7 +3431,7 @@ function exportSerialEngagers(){
 }
 
 function exportCallbacks(){
-  const cbs=RECORDS.filter(r=>r.callback);
-  if(!cbs.length){alert("No requested follow-ups to export for the current date and direction view.");return;}
-  downloadCSV('requested_follow_ups_'+csvDateStamp()+'.csv',recordsToCSV(cbs.sort((a,b)=>b.ts-a.ts),`${activeFilterScopeLabel()} · Requested follow-ups`,RECORDS));
+  const cbs=visibleCallbackGroups(RECORDS).flatMap(([,calls])=>calls).sort((a,b)=>b.ts-a.ts);
+  if(!cbs.length){alert("No requested follow-ups match the active filters.");return;}
+  downloadCSV('requested_follow_ups_'+csvDateStamp()+'.csv',recordsToCSV(cbs,callbackExportScope(),RECORDS));
 }

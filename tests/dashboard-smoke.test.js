@@ -97,7 +97,7 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility',
+  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'repeatedlyUnreachableGroups',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
@@ -349,6 +349,17 @@ context.exportCallbacks();
 assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
 assert(exportCapture.name.startsWith('requested_follow_ups_'), 'Requested follow-up export filename is unclear');
 assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
+context.__callbackExportRows = [
+  { ...scopeRecord, callId: 'callback-timed-payment', from: '919999999991', intent: 'Payment', cbPreferred: '15 Jul 2026 · 3:00 PM' },
+  { ...scopeRecord, callId: 'callback-timed-programme', from: '919999999992', intent: 'Programme', cbPreferred: '15 Jul 2026 · 4:00 PM' },
+  { ...scopeRecord, callId: 'callback-unscheduled-payment', from: '919999999993', intent: 'Payment', cbPreferred: 'Not specified' }
+];
+vm.runInContext("RECORDS=__callbackExportRows; CB_TIME_FILTER='timed'; CB_FILTERS=new Set(['Payment']);", context);
+context.exportCallbacks();
+assert(exportCapture.csv.includes('callback-timed-payment'), 'Callback export must include the active topic and readiness selection');
+assert(!exportCapture.csv.includes('callback-timed-programme') && !exportCapture.csv.includes('callback-unscheduled-payment'), 'Callback export must exclude requests hidden by local filters');
+assert(exportCapture.csv.includes('Requested time · Topics: Payment'), 'Callback export must state its local filter scope');
+vm.runInContext("CB_TIME_FILTER='all'; CB_FILTERS.clear(); RECORDS=[__scopeRecord];", context);
 context.exportHottestLeads();
 assert(exportCapture.csv.startsWith('Follow-up Rank,Phone,Lead Tier'), 'Follow-up export must use an action-ready summary schema');
 assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('Avg Confidence'), 'Follow-up export must exclude hidden heuristic and AI fields');
@@ -390,11 +401,12 @@ vm.runInContext("ALL_RECORDS_BACKUP=[];SELECTED_CAMPAIGN='all';", context);
 
 let unreachableDownload = null;
 context.downloadCSV = (name, csv) => { unreachableDownload = { name, csv }; };
-context.__unreachGroups = [[
-  { from: '919999999999', d: '2026-07-09', ts: 1, h: 10, m: 0, campaign: 'Retry A', status: 'failed' },
-  { from: '919999999999', d: '2026-07-10', ts: 2, h: 11, m: 0, campaign: 'Retry A', status: 'no_answer' },
-  { from: '919999999999', d: '2026-07-11', ts: 3, h: 12, m: 0, campaign: 'Retry B', status: 'failed' }
-]];
+context.__unreachRows = [
+  { from: '919999999999', d: '2026-07-09', ts: 1, h: 10, m: 0, direction: 'outbound', campaign: 'Retry A', status: 'failed' },
+  { from: '919999999999', d: '2026-07-10', ts: 2, h: 11, m: 0, direction: 'outbound', campaign: 'Retry A', status: 'no_answer' },
+  { from: '919999999999', d: '2026-07-11', ts: 3, h: 12, m: 0, direction: 'outbound', campaign: 'Retry B', status: 'failed' }
+];
+vm.runInContext("ALL_DIALS=__unreachRows; SELECTED_CAMPAIGN='all'; $('filterFromDate').value='2026-07-09'; $('filterToDate').value='2026-07-11';", context);
 context.exportUnreachableCSV();
 assert(unreachableDownload && unreachableDownload.csv.includes('+919999999999,India,3,'), 'Unreachable CSV must aggregate the complete dial count per number');
 
