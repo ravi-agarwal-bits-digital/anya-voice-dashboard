@@ -1714,35 +1714,44 @@ function paintOutboundFunnel(totalDials,connectedDials,failedDials,initiatedDial
     `<div></div><div><span class="opf-leak-x">✕</span> <b>${notConnected.toLocaleString()}</b> dials never connected <span class="opf-leak-sub">(${failedDials.toLocaleString()} failed${initNote})</span></div></div>`;
   el.innerHTML=stepHtml(steps[0],0)+leak+stepHtml(steps[1],1)+stepHtml(steps[2],2);
 }
-// Wasted-effort hit-list: numbers dialed repeatedly that never connected. Each row opens its own dials.
+// Compact vendor-control list: leads approaching or breaking the retry policy, with no recorded connection.
 function paintUnreachableList(unreachable,avgDials){
   const el=$('unreachableList');
   if(!el)return;
-  if(!unreachable.length){el.innerHTML=emptyViewHtml('No number was dialed 3+ times without connecting — reach discipline looks healthy.');return;}
+  if(!unreachable.length){el.innerHTML=emptyViewHtml('No numbers have reached three unsuccessful dials in this view.');return;}
   const wastedDials=unreachable.reduce((a,calls)=>a+calls.length,0);
   window.__unreachGroups=unreachable;
-  const top=unreachable.slice(0,8);
+  const top=unreachable.slice().sort((a,b)=>{
+    const pa=retryPolicyStatus(a),pb=retryPolicyStatus(b);
+    return pb.severity-pa.severity||b.length-a.length;
+  }).slice(0,8);
+  window.__unreachGroups=top;
   const rows=top.map((calls,i)=>{
     const ph=maskPhone(calls[0].from);
-    return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
+    const policy=retryPolicyStatus(calls);
+    const timingTone=policy.timingSeverity===2?'fail':policy.timingSeverity===1?'warn':'pass';
+    const capTone=policy.capSeverity===2?'fail':policy.capSeverity===1?'warn':'pass';
+    return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td><span class="rstatus ${capTone}">${esc(policy.capLabel)}</span></td><td><span class="rstatus ${timingTone}">${esc(policy.timingLabel)}</span></td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
   }).join('');
-  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers dialed 3+ times, never once connected — <b>${wastedDials.toLocaleString()}</b> wasted dials (avg ${avgDials} dials per number overall). Stop-calling / switch-to-SMS candidates.</div>`+
-    `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All repeatedly unreachable dials',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export lead summary · ${unreachable.length.toLocaleString()} number${unreachable.length===1?'':'s'}</button></div>`+
-    `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Number</th><th>Dials</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
-    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in View all dials and Export complete CSV.</div>`:'');
+  const breached=unreachable.filter(c=>retryPolicyStatus(c).severity===2).length;
+  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> leads have reached three or more unsuccessful attempts — <b>${wastedDials.toLocaleString()}</b> dials in total (avg ${avgDials} per lead). <b>${breached.toLocaleString()}</b> need an immediate policy check.</div>`+
+    `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All leads in the retry-policy watchlist',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export policy watchlist · ${unreachable.length.toLocaleString()} lead${unreachable.length===1?'':'s'}</button></div>`+
+    `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Lead</th><th>Attempts</th><th>4-call cap</th><th>Retry timing</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
+    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing the highest-risk ${top.length}. ${(unreachable.length-top.length).toLocaleString()} more are included in the full view and export.</div>`:'');
 }
 function exportUnreachableCSV(){
   // Recalculate from the active global view at click time. This prevents a stale download if a
   // user changes the date/campaign filter while deferred charts are still repainting.
   const groups=repeatedlyUnreachableGroups(outboundRecordsInView());
-  if(!groups.length){alert('No repeatedly unreachable numbers to export.');return;}
-  let csv='Phone,Country,Dial Count,First Tried,Last Tried,Campaigns,Latest Status\n';
+  if(!groups.length){alert('No leads are currently in the retry-policy watchlist.');return;}
+  let csv='Phone,Country,Attempts,4-Call Cap Status,Retry Timing Status,First Tried,Last Tried,Campaigns,Latest Status\n';
   groups.forEach(calls=>{
     const sorted=calls.slice().sort((a,b)=>a.ts-b.ts),first=sorted[0],last=sorted[sorted.length-1],country=classifyPhone(first.from).country;
     const campaigns=[...new Set(sorted.map(r=>String(r.campaign||'').trim()).filter(Boolean))].join(' | ');
-    csv+=[escCSVText(fullPhone(first.from)),escCSV(country),sorted.length,escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status)].join(',')+'\n';
+    const policy=retryPolicyStatus(sorted);
+    csv+=[escCSVText(fullPhone(first.from)),escCSV(country),sorted.length,escCSV(policy.capLabel),escCSV(policy.timingLabel),escCSV(formatCallTime(first)),escCSV(formatCallTime(last)),escCSV(campaigns),escCSV(last.status)].join(',')+'\n';
   });
-  downloadCSV(csvFilename('repeatedly-unreachable','lead-summary'),csv);
+  downloadCSV(csvFilename('retry-policy-watchlist','lead-summary'),csv);
 }
 
 function repeatedlyUnreachableGroups(records){
@@ -1751,6 +1760,25 @@ function repeatedlyUnreachableGroups(records){
     .filter(calls=>calls.length>=3&&!calls.some(isConn))
     .map(calls=>calls.slice().sort((a,b)=>a.ts-b.ts))
     .sort((a,b)=>b.length-a.length);
+}
+
+// The vendor rule is a maximum of four attempts and a roughly five-hour retry interval.
+// A 4–6h band makes the target operationally checkable without pretending timestamps are exact.
+function retryPolicyStatus(calls){
+  const sorted=(calls||[]).slice().sort((a,b)=>a.ts-b.ts);
+  const gaps=[];
+  for(let i=1;i<sorted.length;i++)gaps.push((sorted[i].ts-sorted[i-1].ts)/3600);
+  const overCap=sorted.length>4;
+  const early=gaps.filter(g=>g<4).length;
+  const late=gaps.filter(g=>g>6).length;
+  const remaining=4-sorted.length;
+  const capLabel=overCap?`${sorted.length-4} over cap`:sorted.length===4?'Cap reached':`${remaining} ${remaining===1?'retry':'retries'} left`;
+  const capSeverity=overCap?2:sorted.length===4?1:0;
+  let timingLabel='On ~5h cadence',timingSeverity=0;
+  if(early&&late){timingLabel=`${early} early · ${late} late`;timingSeverity=2;}
+  else if(early){timingLabel=`${early} retry under 4h`;timingSeverity=2;}
+  else if(late){timingLabel=`${late} gap over 6h`;timingSeverity=1;}
+  return {attempts:sorted.length,capLabel,capSeverity,timingLabel,timingSeverity,severity:Math.max(capSeverity,timingSeverity),overCap,early,late};
 }
 
 // ===== OUTBOUND CADENCE & CAPACITY =====

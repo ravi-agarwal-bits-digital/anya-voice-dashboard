@@ -97,7 +97,7 @@ for (const fn of [
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
-  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'callbackFilenameExtra', 'repeatedlyUnreachableGroups', 'csvFilename', 'escCSVText', 'updateExportButton',
+  'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'callbackFilenameExtra', 'repeatedlyUnreachableGroups', 'retryPolicyStatus', 'csvFilename', 'escCSVText', 'updateExportButton',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
@@ -196,6 +196,9 @@ assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data fr
 assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
 assert(!scripts[1].includes("['Connected dials'"), 'Direction glance must not duplicate outbound connect performance');
 assert(!scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must not duplicate outbound reach diagnostics');
+assert(html.includes('<h4>Vendor retry-policy watchlist</h4>'), 'Vendor retry-policy watchlist must remain visible');
+assert(!html.includes('<h4>Wasted-effort hit-list</h4>'), 'Removed hit-list wording must not return');
+assert(!html.includes('<div class="panel" data-hide-in-reduced-view="true"><h4>Repeatedly unreachable</h4>'), 'Outbound retry-control list must not be hidden in the reduced view');
 assert(!scripts[1].includes('Outbound operational context'), 'Direction glance must remain limited to inbound/outbound comparison');
 assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
 assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing must be presented as an operating playbook');
@@ -413,6 +416,12 @@ context.__unreachRows = [
 vm.runInContext("ALL_DIALS=__unreachRows; SELECTED_CAMPAIGN='all'; $('filterFromDate').value='2026-07-09'; $('filterToDate').value='2026-07-11';", context);
 context.exportUnreachableCSV();
 assert(unreachableDownload && unreachableDownload.csv.includes("'+919999999999,India,3,"), 'Unreachable CSV must aggregate the complete dial count per number');
+assert(unreachableDownload.csv.includes('4-Call Cap Status,Retry Timing Status'), 'Retry-policy CSV must explain both vendor-policy checks');
+assert(unreachableDownload.name.includes('retry-policy-watchlist'), 'Retry-policy CSV filename must be meaningful');
+const tooSoonPolicy=context.retryPolicyStatus([{ts:0},{ts:5*3600},{ts:6*3600}]);
+assert.equal(tooSoonPolicy.timingLabel, '1 retry under 4h', 'Retry-policy watchlist must flag retries made before the 4-hour lower bound');
+const capPolicy=context.retryPolicyStatus([{ts:0},{ts:5*3600},{ts:10*3600},{ts:15*3600}]);
+assert.equal(capPolicy.capLabel, 'Cap reached', 'Retry-policy watchlist must flag a lead at the four-attempt cap');
 
 const performanceRows = Array.from({ length: 8000 }, (_, index) => ({
   'Created At (IST)': '10 Jul 2026, 10:30:00 AM IST',
