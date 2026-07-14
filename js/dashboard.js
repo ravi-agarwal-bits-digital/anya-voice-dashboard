@@ -1714,11 +1714,11 @@ function paintOutboundFunnel(totalDials,connectedDials,failedDials,initiatedDial
     `<div></div><div><span class="opf-leak-x">✕</span> <b>${notConnected.toLocaleString()}</b> dials never connected <span class="opf-leak-sub">(${failedDials.toLocaleString()} failed${initNote})</span></div></div>`;
   el.innerHTML=stepHtml(steps[0],0)+leak+stepHtml(steps[1],1)+stepHtml(steps[2],2);
 }
-// Wasted-effort hit-list: numbers dialed repeatedly that never connected. Each row opens its own dials.
+// Retry-control list: numbers dialed repeatedly that never connected. Each row opens its own dials.
 function paintUnreachableList(unreachable,avgDials){
   const el=$('unreachableList');
   if(!el)return;
-  if(!unreachable.length){el.innerHTML=emptyViewHtml('No number was dialed 3+ times without connecting — reach discipline looks healthy.');return;}
+  if(!unreachable.length){el.innerHTML=emptyViewHtml('No numbers have reached three unsuccessful dials in this view.');return;}
   const wastedDials=unreachable.reduce((a,calls)=>a+calls.length,0);
   window.__unreachGroups=unreachable;
   const top=unreachable.slice(0,8);
@@ -1726,10 +1726,10 @@ function paintUnreachableList(unreachable,avgDials){
     const ph=maskPhone(calls[0].from);
     return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
   }).join('');
-  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers dialed 3+ times, never once connected — <b>${wastedDials.toLocaleString()}</b> wasted dials (avg ${avgDials} dials per number overall). Stop-calling / switch-to-SMS candidates.</div>`+
+  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> numbers reached three or more attempts with no connection — <b>${wastedDials.toLocaleString()}</b> dials in total (avg ${avgDials} per number). Review before the next retry or move them to another channel.</div>`+
     `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All repeatedly unreachable dials',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export lead summary · ${unreachable.length.toLocaleString()} number${unreachable.length===1?'':'s'}</button></div>`+
     `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Number</th><th>Dials</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
-    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in View all dials and Export complete CSV.</div>`:'');
+    (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing the top ${top.length} by dial count. ${(unreachable.length-top.length).toLocaleString()} more are included in the full view and export.</div>`:'');
 }
 function exportUnreachableCSV(){
   // Recalculate from the active global view at click time. This prevents a stale download if a

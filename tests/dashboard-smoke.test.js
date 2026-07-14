@@ -196,6 +196,9 @@ assert(scripts[1].includes("voice_analytics.xlsx.meta.json"), 'Published-data fr
 assert(scripts[1].includes("if(!recordMatchesCampaign(r))return false"), 'Management Summary must respect the active campaign');
 assert(!scripts[1].includes("['Connected dials'"), 'Direction glance must not duplicate outbound connect performance');
 assert(!scripts[1].includes("['Repeatedly unreachable'"), 'Direction glance must not duplicate outbound reach diagnostics');
+assert(html.includes('<h4>Repeatedly unreachable</h4>'), 'Outbound retry-control list must remain visible');
+assert(!html.includes('<h4>Wasted-effort hit-list</h4>'), 'Removed hit-list wording must not return');
+assert(!html.includes('<div class="panel" data-hide-in-reduced-view="true"><h4>Repeatedly unreachable</h4>'), 'Outbound retry-control list must not be hidden in the reduced view');
 assert(!scripts[1].includes('Outbound operational context'), 'Direction glance must remain limited to inbound/outbound comparison');
 assert(scripts[1].includes("if(SELECTED_DIRECTION==='all' && inbound && outbound)"), 'Combined direction view should avoid duplicate direction cards');
 assert(html.includes('<h4>Outbound calling playbook</h4>'), 'Outbound timing must be presented as an operating playbook');
