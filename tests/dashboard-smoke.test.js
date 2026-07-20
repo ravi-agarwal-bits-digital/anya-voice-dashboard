@@ -99,7 +99,7 @@ for (const fn of [
   'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
-  'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
+  'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters', 'sortCampaignLeaderboardRows', 'setCampaignLeaderboardSort', 'campaignLeaderboardHeader',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'callbackFilenameExtra', 'repeatedlyUnreachableGroups', 'retryPolicyStatus', 'csvFilename', 'escCSVText', 'updateExportButton',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'isLeadCostLedgerSort', 'latestLedgerRowPerLead', 'getExplorerRows', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
@@ -288,7 +288,8 @@ assert(html.includes('label="Reach" data-hide-in-reduced-view="true"'), 'Reduced
 assert(html.includes('data-f="frustrated" data-hide-in-reduced-view="true"'), 'Reduced Ledger attention filter marker is missing');
 assert(html.includes('<h4>Why we never reached them</h4>'), 'Failure section should use the concise lost-reach title');
 assert(html.indexOf('<section id="sec-outbound-perf">') < html.indexOf('<h4>Why we never reached them</h4>') && html.indexOf('<h4>Why we never reached them</h4>') < html.indexOf('<section id="sec-campaigns">'), 'Failure diagnostics must sit in outbound performance, before campaign results');
-assert(!scripts[1].includes('CAMPAIGN_SORT'), 'Campaign leaderboard must remain alphabetical rather than metric-sortable');
+assert(scripts[1].includes('CAMPAIGN_LEADERBOARD_SORT'), 'Campaign leaderboard must retain its selected header sort');
+assert(scripts[1].includes('aria-sort'), 'Campaign leaderboard headers must expose their sort state');
 assert(scripts[1].includes('entries.slice(0,7)'), 'Failure reasons should be capped at the top seven');
 assert(scripts[1].includes("Other reasons"), 'Failure reasons should group the long tail');
 for (const marker of [
@@ -451,6 +452,15 @@ assert(context.recordMatchesCampaign({ campaign: 'Campaign A' }) && context.reco
 assert(!context.recordMatchesCampaign({ campaign: 'Campaign C' }), 'Unselected campaigns must be excluded from scope');
 assert(context.currentViewDescription().includes('2 campaigns'), 'Multi-campaign scope should be clear in the dashboard context');
 vm.runInContext("SELECTED_CAMPAIGNS.clear();", context);
+
+const campaignRows=[
+  {campaign:'Beta',dials:12,connectPct:40,reachPct:60,hotPct:30},
+  {campaign:'Alpha',dials:8,connectPct:70,reachPct:60,hotPct:55},
+  {campaign:'Gamma',dials:12,connectPct:25,reachPct:20,hotPct:10}
+];
+assert.deepEqual(context.sortCampaignLeaderboardRows(campaignRows,{key:'campaign',direction:'asc'}).map(r=>r.campaign), ['Alpha','Beta','Gamma'], 'Campaign leaderboard default order must remain alphabetical');
+assert.deepEqual(context.sortCampaignLeaderboardRows(campaignRows,{key:'dials',direction:'desc'}).map(r=>r.campaign), ['Beta','Gamma','Alpha'], 'Campaign leaderboard metric sorting must rank dials and break ties alphabetically');
+assert.deepEqual(context.sortCampaignLeaderboardRows(campaignRows,{key:'connectPct',direction:'asc'}).map(r=>r.campaign), ['Gamma','Beta','Alpha'], 'Campaign leaderboard header sorting must support ascending metric order');
 
 let unreachableDownload = null;
 context.downloadCSV = (name, csv) => { unreachableDownload = { name, csv }; };
