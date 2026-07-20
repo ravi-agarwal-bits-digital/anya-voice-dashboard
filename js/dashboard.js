@@ -459,6 +459,8 @@ let ALL_DIALS=[]; // dial-level universe: every unique call incl. failed/initiat
                   // so lead/quality/intent metrics are never diluted by non-connecting dials.
 let SELECTED_DIRECTION="all";
 let SELECTED_CAMPAIGN="all"; // 'all' or an exact Campaign name; scopes the whole dashboard when set
+let SELECTED_CAMPAIGNS=new Set();
+let CAMPAIGN_DRAFT=new Set();
 let renderGeneration=0;
 
 function recordDateBounds(records){
@@ -504,9 +506,11 @@ function resetAllFilters(){
   const{min,max}=recordDateBounds(source);
   SELECTED_DIRECTION='all';
   SELECTED_CAMPAIGN='all';
+  SELECTED_CAMPAIGNS.clear();
+  CAMPAIGN_DRAFT.clear();
   if(min)$('filterFromDate').value=min;
   if(max)$('filterToDate').value=max;
-  const campaign=$('campaignFilter');if(campaign)campaign.value='all';
+  const campaign=$('campaignFilter');if(campaign)campaign.open=false;
   const custom=$('customFilterPanel');if(custom)custom.style.display='none';
   const search=$('searchMobile');if(search)search.value='';
   closeUserSearch();
@@ -628,11 +632,12 @@ function applyFilters(){
     if(fromDate && r.d<fromDate) return false;
     if(toDate && r.d>toDate) return false;
     if(SELECTED_DIRECTION!=='all' && normalizeDirection(r.direction)!==SELECTED_DIRECTION) return false;
-    if(SELECTED_CAMPAIGN!=='all' && (r.campaign||'')!==SELECTED_CAMPAIGN) return false;
+    if(!recordMatchesCampaign(r)) return false;
     return true;
   });
 
   RECORDS=FILTERED_RECORDS;
+  populateCampaignFilter();
   invalidateLedgerRepeatCache();
   clearLedgerScope(false);
   renderHeaderMeta(RECORDS);
@@ -1218,7 +1223,7 @@ function setDirectionFilter(dir, ev){
   }
   SELECTED_DIRECTION=normalized;
   // Campaigns are outbound-only, so a campaign filter is meaningless (and misleading) under Inbound.
-  if(normalized==='inbound' && SELECTED_CAMPAIGN!=='all'){SELECTED_CAMPAIGN='all';const s=$('campaignFilter');if(s)s.value='all';}
+  if(normalized==='inbound' && activeCampaigns().size){SELECTED_CAMPAIGN='all';SELECTED_CAMPAIGNS.clear();CAMPAIGN_DRAFT.clear();const s=$('campaignFilter');if(s)s.open=false;}
   updateDirectionButtons();
   applyFilters();
 }
@@ -1244,27 +1249,57 @@ function updateDirectionButtons(){
 }
 // The campaign dropdown only makes sense for outbound; hide it under the Inbound view.
 function updateCampaignFilterVisibility(){
-  const sel=$('campaignFilter');if(!sel)return;
-  const has=sel.options.length>1; // more than just the "All campaigns" default
-  sel.style.display=(has && SELECTED_DIRECTION!=='inbound')?'':'none';
+  const filter=$('campaignFilter');if(!filter)return;
+  const has=(filter.dataset.count||'0')!=='0';
+  filter.style.display=(has && SELECTED_DIRECTION!=='inbound')?'':'none';
 }
-function setCampaignFilter(name){
-  SELECTED_CAMPAIGN=name||'all';
+function activeCampaigns(){
+  return SELECTED_CAMPAIGN!=='all'?new Set([SELECTED_CAMPAIGN]):SELECTED_CAMPAIGNS;
+}
+function campaignSelectionKey(){return [...activeCampaigns()].sort().join('|');}
+function campaignSelectionLabel(){
+  const count=activeCampaigns().size;
+  return count?`${count} campaign${count===1?'':'s'}`:'Campaigns';
+}
+function syncCampaignFilterDraft(open){
+  if(open){CAMPAIGN_DRAFT=new Set(activeCampaigns());populateCampaignFilter();}
+}
+function toggleCampaignOption(name,checked){
+  if(checked)CAMPAIGN_DRAFT.add(name);else CAMPAIGN_DRAFT.delete(name);
+}
+function applyCampaignFilter(){
+  SELECTED_CAMPAIGN='all';
+  SELECTED_CAMPAIGNS=new Set(CAMPAIGN_DRAFT);
+  const filter=$('campaignFilter');if(filter)filter.open=false;
   applyFilters();
 }
-// Populate the campaign dropdown from the campaigns present in the data (outbound only; inbound has none).
+function clearCampaignFilter(){
+  CAMPAIGN_DRAFT.clear();
+  applyCampaignFilter();
+}
+// Populate the campaign multi-select from outbound campaigns. Counts are active-date unique contacts.
 // Hidden entirely when the export carries no campaign column (older files), so nothing regresses.
 function populateCampaignFilter(){
-  const sel=$('campaignFilter');
-  if(!sel)return;
-  const counts={};
-  ALL_DIALS.forEach(r=>{const c=(r.campaign||'').trim();if(c)counts[c]=(counts[c]||0)+1;});
-  const names=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
-  if(!names.length){sel.innerHTML='<option value="all">All campaigns</option>';SELECTED_CAMPAIGN='all';updateCampaignFilterVisibility();return;}
-  sel.innerHTML=`<option value="all">All campaigns</option>`+
-    names.map(n=>`<option value="${esc(n)}">${esc(n)} (${counts[n].toLocaleString()})</option>`).join('');
-  if(SELECTED_CAMPAIGN!=='all' && !counts[SELECTED_CAMPAIGN])SELECTED_CAMPAIGN='all';
-  sel.value=SELECTED_CAMPAIGN;
+  const filter=$('campaignFilter'),options=$('campaignFilterOptions');
+  if(!filter||!options)return;
+  const contacts={};
+  ALL_DIALS.forEach(r=>{
+    const campaign=(r.campaign||'').trim(),phone=ledgerPhoneKey(r);
+    if(campaign&&normalizeDirection(r.direction)==='outbound'){
+      if(!contacts[campaign])contacts[campaign]=new Set();
+      if(phone&&recordMatchesDate(r)){
+        contacts[campaign].add(phone);
+      }
+    }
+  });
+  const names=Object.keys(contacts).sort((a,b)=>contacts[b].size-contacts[a].size||a.localeCompare(b));
+  const selected=activeCampaigns();
+  filter.dataset.count=String(names.length);
+  if(!names.length){filter.open=false;updateCampaignFilterVisibility();return;}
+  options.innerHTML=names.map(name=>`<label class="campaign-filter-option"><input type="checkbox" value="${esc(name)}" ${CAMPAIGN_DRAFT.has(name)?'checked':''} onchange="toggleCampaignOption(this.value,this.checked)"><span>${esc(name)}</span><small>${contacts[name].size.toLocaleString()} contact${contacts[name].size===1?'':'s'}</small></label>`).join('');
+  const label=$('campaignFilterLabel'),hint=$('campaignFilterHint');
+  if(label)label.textContent=campaignSelectionLabel();
+  if(hint)hint.textContent=selected.size?`${selected.size} selected`:'All campaigns';
   updateCampaignFilterVisibility();
 }
 function recordMatchesDate(r){
@@ -1279,7 +1314,8 @@ function recordMatchesDirection(r){
   return SELECTED_DIRECTION==='all' || normalizeDirection(r.direction)===SELECTED_DIRECTION;
 }
 function recordMatchesCampaign(r){
-  return SELECTED_CAMPAIGN==='all' || (r.campaign||'')===SELECTED_CAMPAIGN;
+  const selected=activeCampaigns();
+  return !selected.size || selected.has((r.campaign||'').trim());
 }
 function recordMatchesCurrentFilters(r){return recordMatchesDate(r)&&recordMatchesDirection(r)&&recordMatchesCampaign(r);}
 function currentDirectionLabel(){return SELECTED_DIRECTION==='all'?'All Calls':directionLabel(SELECTED_DIRECTION);}
@@ -1288,7 +1324,8 @@ function currentViewDescription(){
   const to=$('filterToDate')&&$('filterToDate').value;
   let bits=[];
   bits.push(currentDirectionLabel());
-  if(SELECTED_CAMPAIGN!=='all')bits.push('“'+SELECTED_CAMPAIGN+'”');
+  const campaigns=[...activeCampaigns()];
+  if(campaigns.length)bits.push(campaigns.length===1?'“'+campaigns[0]+'”':campaignSelectionLabel());
   if(from||to){
     const fmt=d=>{try{return new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});}catch(e){return d;}};
     if(from&&to)bits.push(fmt(from)+' to '+fmt(to));
@@ -1372,7 +1409,7 @@ function _dateSig(){const f=$('filterFromDate')?$('filterFromDate').value:'';con
 function outboundRecordsInView(){
   // Dial-level: pulls from ALL_DIALS (incl. failed/initiated) so connect rate is real, not the ~100%
   // you'd get from completed-only conversation records. Respects the campaign filter too.
-  const sig=_dateSig()+'|'+SELECTED_CAMPAIGN;
+  const sig=_dateSig()+'|'+campaignSelectionKey();
   if(_obViewSig===sig && _obViewCache)return _obViewCache;
   _obViewSig=sig;
   _obViewCache=ALL_DIALS.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)==='outbound');
@@ -2675,7 +2712,7 @@ function slugForFile(s){return String(s||'export').toLowerCase().replace(/[^a-z0
 function csvFilename(kind,grain='calls',extra=''){
   const from=$('filterFromDate')?.value||'all-dates';
   const to=$('filterToDate')?.value||'latest';
-  const campaign=SELECTED_CAMPAIGN&&SELECTED_CAMPAIGN!=='all'?SELECTED_CAMPAIGN:'all-campaigns';
+  const campaign=campaignSelectionKey()||'all-campaigns';
   return ['anya',kind,grain,from,'to',to,SELECTED_DIRECTION||'all',campaign,extra,`exported-${csvDateStamp()}`]
     .filter(Boolean).map(slugForFile).join('_')+'.csv';
 }
@@ -2906,7 +2943,8 @@ function paintDurBands(o){
   const max=Math.max(...sorted.map(d=>d[1]),1);
   const col={"<30s":C.muted,"30-60s":C.blue,"1-2m":C.teal,"2-3m":C.amber,"3m+":C.hot};
   const durPred={"<30s":"r=>r.dur<30","30-60s":"r=>r.dur>=30&&r.dur<60","1-2m":"r=>r.dur>=60&&r.dur<120","2-3m":"r=>r.dur>=120&&r.dur<180","3m+":"r=>r.dur>=180"};
-  $("durBands").innerHTML=sorted.map(d=>`<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${d[0]} duration',${durPred[d[0]]})"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`).join("");
+  const total=sorted.reduce((sum,[,count])=>sum+count,0);
+  $("durBands").innerHTML=sorted.map(d=>{const share=total?Math.round(d[1]/total*100):0;return `<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${d[0]} duration',${durPred[d[0]]})"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls · ${share}%</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`;}).join("");
 }
 
 function paintMsgImpact(o){
