@@ -176,7 +176,14 @@
           <button type="button" class="dir-btn" id="dir-inbound" data-dir="inbound" onclick="setDirectionFilter('inbound', event)" aria-pressed="false">Inbound</button>
           <button type="button" class="dir-btn" id="dir-outbound" data-dir="outbound" onclick="setDirectionFilter('outbound', event)" aria-pressed="false">Outbound</button>
         </div>
-          <select id="campaignFilter" onchange="setCampaignFilter(this.value)" title="Filter the whole dashboard to one outbound campaign" style="display:none"></select>
+          <details id="campaignFilter" class="campaign-filter" style="display:none" ontoggle="syncCampaignFilterDraft(this.open)">
+            <summary title="Filter the dashboard by one or more outbound campaigns"><span id="campaignFilterLabel">Campaigns</span><span class="campaign-filter-caret">⌄</span></summary>
+            <div class="campaign-filter-menu">
+              <div class="campaign-filter-menu-head"><b>Campaigns</b><span id="campaignFilterHint">All campaigns</span></div>
+              <div id="campaignFilterOptions" class="campaign-filter-options"></div>
+              <div class="campaign-filter-actions"><button type="button" class="campaign-filter-clear" onclick="clearCampaignFilter()">Clear</button><button type="button" class="campaign-filter-apply" onclick="applyCampaignFilter()">Apply</button></div>
+            </div>
+          </details>
           <span id="directionCurrent" class="direction-current all" aria-live="polite">All calls</span>
           <div id="selectedDateRange" style="padding:6px 12px;background:#f8fafc;border:1px solid var(--teal);border-radius:4px;font-size:11px;color:var(--teal);display:none;white-space:nowrap;font-weight:600">
             Range <span id="dateRangeText" style="font-family:'Inter',monospace;font-size:11px"></span>

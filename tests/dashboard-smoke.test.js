@@ -95,6 +95,7 @@ for (const fn of [
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isGzipData', 'unpackPublishedData',
+  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
@@ -431,6 +432,22 @@ vm.runInContext("ALL_RECORDS_BACKUP=__campaignScopeRows;SELECTED_DIRECTION='all'
 assert.equal(context.recordsInRange('2026-07-10', '2026-07-10').length, 1, 'Management Summary campaign scope changed');
 vm.runInContext("ALL_RECORDS_BACKUP=[];SELECTED_CAMPAIGN='all';", context);
 
+context.__campaignFilterRows = [
+  { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign A', from: '919999999999' },
+  { d: '2026-07-10', direction: 'outbound', campaign: 'Campaign A', from: '919999999999' },
+  { d: '2026-07-11', direction: 'outbound', campaign: 'Campaign A', from: '918888888888' },
+  { d: '2026-07-11', direction: 'outbound', campaign: 'Campaign B', from: '917777777777' }
+];
+vm.runInContext("ALL_DIALS=__campaignFilterRows;ALL_RECORDS_BACKUP=__campaignFilterRows;SELECTED_CAMPAIGN='all';SELECTED_CAMPAIGNS.clear();CAMPAIGN_DRAFT.clear();$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-11';", context);
+context.populateCampaignFilter();
+assert(getElement('campaignFilterOptions').innerHTML.includes('2 contacts'), 'Campaign labels must show unique contacts, not dials');
+assert(!getElement('campaignFilterOptions').innerHTML.includes('calls'), 'Campaign labels must not show dial counts');
+vm.runInContext("SELECTED_CAMPAIGNS=new Set(['Campaign A','Campaign B']);", context);
+assert(context.recordMatchesCampaign({ campaign: 'Campaign A' }) && context.recordMatchesCampaign({ campaign: 'Campaign B' }), 'Multiple selected campaigns must remain in scope');
+assert(!context.recordMatchesCampaign({ campaign: 'Campaign C' }), 'Unselected campaigns must be excluded from scope');
+assert(context.currentViewDescription().includes('2 campaigns'), 'Multi-campaign scope should be clear in the dashboard context');
+vm.runInContext("SELECTED_CAMPAIGNS.clear();", context);
+
 let unreachableDownload = null;
 context.downloadCSV = (name, csv) => { unreachableDownload = { name, csv }; };
 context.__unreachRows = [
@@ -540,6 +557,8 @@ assert.equal(outcomeAggregate.callbacks, 2, 'Demand outcomes must count callback
 assert.deepEqual(JSON.parse(JSON.stringify(outcomeAggregate.durBands)), { '<30s': 1, '30-60s': 1, '1-2m': 1, '2-3m': 1, '3m+': 1 }, 'Duration bands changed');
 assert(html.includes('id="durBands"'), 'Duration mix panel is missing');
 assert(scripts[1].includes('paintDurBands(o)'), 'Duration mix must be painted during dashboard rendering');
+context.paintDurBands(outcomeAggregate);
+assert(getElement('durBands').innerHTML.includes('1 calls · 20%'), 'Duration mix must show each bucket share of filtered conversations');
 
 const intentRecords = [
   { from: '911111111111', intent: 'Payment', leadTemp: 'Warm', band: 'Amber', frustrated: false, conf: 70, need: 60 },
