@@ -74,7 +74,7 @@ const fetchMock = async (url, options = {}) => {
 };
 
 const context = {
-  console, XLSX, fetch: fetchMock, crypto: require('crypto').webcrypto,
+  console, XLSX, fetch: fetchMock, crypto: require('crypto').webcrypto, Blob, Response, CompressionStream, DecompressionStream,
   TextEncoder, TextDecoder, Uint8Array, Date, Map, Set, Number, String,
   Math, JSON, Array, Object, RegExp, Error, Intl,
   btoa: value => Buffer.from(value, 'binary').toString('base64'),
@@ -88,7 +88,7 @@ const context = {
   window: {}
 };
 vm.createContext(context);
-vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,validationSheetName};`, context);
+vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,gzipBytes,gunzipBytes,validationSheetName};`, context);
 
 const required = ['Created At (IST)', 'Call ID', 'Direction', 'Status', 'From', 'To', 'Duration (s)', 'Messages', 'Full Transcript'];
 const baseRow = {
@@ -107,6 +107,8 @@ const rows = XLSX.utils.sheet_to_json(roundTripWorkbook.Sheets['Voice Export'], 
 
 assert(context.__adminTest.isSupportedExport('voice_analytics.csv'), 'CSV exports should be accepted');
 assert(!context.__adminTest.isSupportedExport('voice_analytics.txt'), 'Unsupported exports should be rejected');
+assert(context.__adminTest.shouldCompressExport('voice_analytics.csv'), 'CSV exports should be compressed before publishing');
+assert(!context.__adminTest.shouldCompressExport('voice_analytics.xlsx'), 'Excel exports must retain their existing publish format');
 const csv = '\uFEFFCreated At (IST),Call ID,Direction,Status,From,To,Duration (s),Messages,Full Transcript\n"10 Jul 2026, 10:30:00 AM IST",csv-1,outbound,completed,918071436001,919999999999,30,4,"First line\nSecond line"\n"10 Jul 2026, 10:35:00 AM IST",csv-2,outbound,completed,918071436001,918888888888,45,5,"Second call"';
 const csvWorkbook = XLSX.read(Buffer.from(csv), { type: 'buffer', cellDates: true });
 const csvSheetName = context.__adminTest.validationSheetName(csvWorkbook, 'voice_analytics.csv');
@@ -145,6 +147,10 @@ assert.equal(largeValidation.metrics.dateMax.getDate(), 11, 'Large workbook maxi
   const encrypted = await context.__adminTest.encryptBytes(source, 'test-passphrase', 'AANYAENC1');
   const decrypted = await context.__adminTest.decryptBytes(encrypted, 'test-passphrase', 'AANYAENC1');
   assert(context.__adminTest.equalBytes(source, decrypted), 'Encryption round-trip failed');
+  const repetitiveCsv = new TextEncoder().encode('Created At (IST),Call ID\n'.repeat(300));
+  const compressedCsv = await context.__adminTest.gzipBytes(repetitiveCsv);
+  assert(compressedCsv.length < repetitiveCsv.length, 'CSV compression should reduce repetitive exports');
+  assert(context.__adminTest.equalBytes(repetitiveCsv, await context.__adminTest.gunzipBytes(compressedCsv)), 'Compressed CSV round-trip failed');
 
   element('publishConfirm').checked = true;
   vm.runInContext(`ADMIN_PASSPHRASE='test-passphrase';validation={errors:[],bytes:new TextEncoder().encode('synthetic workbook')};`, context);

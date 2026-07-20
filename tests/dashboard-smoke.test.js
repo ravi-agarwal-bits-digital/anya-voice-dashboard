@@ -73,9 +73,9 @@ const document = {
 const storage = { getItem: () => null, setItem: noop, removeItem: noop, clear: noop };
 const context = {
   console, XLSX, document, sessionStorage: storage, localStorage: storage,
-  crypto: require('crypto').webcrypto, TextEncoder, TextDecoder, Uint8Array,
+  crypto: require('crypto').webcrypto, TextEncoder, TextDecoder, Uint8Array, Blob, Response, CompressionStream, DecompressionStream,
   Date, Map, Set, Math, Number, String, Array, Object, RegExp, JSON, Error, Intl,
-  FileReader: function FileReader() {}, File: function File() {}, Blob: function Blob() {},
+  FileReader: function FileReader() {}, File: function File() {},
   URL: { createObjectURL: () => '', revokeObjectURL: noop },
   history: { replaceState: noop }, location: { pathname: '/', search: '', hash: '' },
   alert: noop, setTimeout: () => 0, clearTimeout: noop,
@@ -94,6 +94,7 @@ for (const fn of [
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
+  'isGzipData', 'unpackPublishedData',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters',
@@ -151,6 +152,8 @@ assert(scripts[1].includes('Opening saved secure data…'), 'Prepared-data cache
 assert.equal(context.workbookWorkerTimeout({ byteLength: 14 * 1048576 }), 60000, 'Current-size workbook timeout changed');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 90 * 1048576 }), 270000, 'Growing workbook timeout must scale with size');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 200 * 1048576 }), 300000, 'Workbook timeout must remain bounded');
+assert(context.isGzipData(Uint8Array.from([0x1f, 0x8b, 0x08])), 'Gzip payload detection is missing');
+assert(!context.isGzipData(Uint8Array.from([0x50, 0x4b, 0x03, 0x04])), 'Excel workbooks must not be mistaken for gzip data');
 
 const hostileValue = `91'\"><img src=x onerror=alert(1)>\\line`;
 const encodedArgument = context.jsArg(hostileValue);
@@ -588,4 +591,9 @@ context.__callbackRecords = callbackRecords;
 vm.runInContext('ALL_RECORDS_BACKUP=__callbackRecords; CB_RENDER_LIMIT=50; paintCallbacks(__callbackRecords);', context);
 assert(getElement('cbList').innerHTML.includes('Show more — 1 more lead'), 'Requested follow-up rendering cap changed');
 
-console.log('Dashboard smoke tests passed');
+(async () => {
+  const compressed = require('zlib').gzipSync(Buffer.from('CSV transcript\nwith a second line'));
+  const unpacked = await context.unpackPublishedData(new Uint8Array(compressed));
+  assert.equal(new TextDecoder().decode(unpacked), 'CSV transcript\nwith a second line', 'Dashboard must unpack compressed CSV exports');
+  console.log('Dashboard smoke tests passed');
+})().catch(error => { console.error(error); process.exit(1); });

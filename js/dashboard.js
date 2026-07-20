@@ -288,6 +288,10 @@ function autoLoadLatestExcel(){
         try{
           setDashboardLoadingMessage('Decrypting secure data…');
           fileBytes=await decryptData(bytes,window.DECRYPT_PASSPHRASE||'');
+          if(isGzipData(fileBytes)){
+            setDashboardLoadingMessage('Unpacking secure CSV data…');
+            fileBytes=await unpackPublishedData(fileBytes);
+          }
         }catch(e){
           setDashboardPlaceholder('Data locked','Could not decrypt the published data file. Please re-enter the dashboard password and try again.');
           if($('loginError'))$('loginError').textContent='Could not decrypt data — wrong password. Please re-enter.';
@@ -364,6 +368,13 @@ async function decryptData(bytes,passphrase){
   const key=await deriveKey(passphrase,salt);
   const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
   return new Uint8Array(plain);
+}
+function isGzipData(bytes){return bytes?.length>=2&&bytes[0]===0x1f&&bytes[1]===0x8b;}
+async function unpackPublishedData(bytes){
+  if(!isGzipData(bytes))return bytes;
+  if(typeof DecompressionStream!=='function')throw new Error('This browser cannot unpack the published CSV export. Use the latest Chrome, Edge, or Safari and try again.');
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 function retryDataLoad(){
