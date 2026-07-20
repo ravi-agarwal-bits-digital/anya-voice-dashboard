@@ -316,17 +316,25 @@ function refreshVault() {
     !localStorage.getItem(STORE.vault),
   );
 }
+function isSupportedExport(fileName) {
+  return /\.(xlsx|xls|csv)$/i.test(String(fileName || ""));
+}
+function validationSheetName(workbook, fileName) {
+  const names = workbook.SheetNames || [];
+  if (/\.csv$/i.test(String(fileName || ""))) return names[0] || null;
+  return names.includes("Voice Export") ? "Voice Export" : null;
+}
 function chooseFile(file) {
   clearValidation();
   if (!file) return;
-  if (!/\.(xlsx|xls)$/i.test(file.name)) {
-    show("validationStatus", "Select an .xlsx or .xls workbook.", "err");
+  if (!isSupportedExport(file.name)) {
+    show("validationStatus", "Select an .xlsx, .xls, or .csv export.", "err");
     return;
   }
   if (file.size > MAX_FILE_BYTES) {
     show(
       "validationStatus",
-      `This workbook is ${formatSize(file.size)}. GitHub's file API supports a maximum of 100 MB; publication is blocked above 90 MB to leave safe request overhead.`,
+      `This export is ${formatSize(file.size)}. GitHub's file API supports a maximum of 100 MB; publication is blocked above 90 MB to leave safe request overhead.`,
       "err",
     );
     return;
@@ -340,7 +348,7 @@ function chooseFile(file) {
   if (file.size > 70 * 1024 * 1024)
     show(
       "validationStatus",
-      "Large workbook: validation, encryption and publishing may take several minutes. Keep this tab open.",
+      "Large export: validation, encryption and publishing may take several minutes. Keep this tab open.",
       "warn",
     );
   else hide("validationStatus");
@@ -605,26 +613,34 @@ async function validateWorkbook() {
   if (!selectedFile) return;
   try {
     $("validateBtn").disabled = true;
-    show("validationStatus", "Reading and validating workbook…", "info");
+    show("validationStatus", "Reading and validating export…", "info");
     if (typeof XLSX === "undefined")
       throw Error("Spreadsheet parser is unavailable. Refresh and try again.");
     const bytes = new Uint8Array(await selectedFile.arrayBuffer()),
       wb = XLSX.read(bytes, { type: "array", cellDates: true });
-    if (!wb.SheetNames.includes("Voice Export")) {
+    const sheetName = validationSheetName(wb, selectedFile.name),
+      isCsv = /\.csv$/i.test(selectedFile.name);
+    if (!sheetName) {
       validation = {
-        errors: ["Required worksheet “Voice Export” was not found."],
-        warnings: [`Worksheets found: ${wb.SheetNames.join(", ") || "none"}`],
+        errors: [
+          isCsv
+            ? "The CSV export could not be read."
+            : "Required worksheet “Voice Export” was not found.",
+        ],
+        warnings: isCsv
+          ? []
+          : [`Worksheets found: ${wb.SheetNames.join(", ") || "none"}`],
         metrics: { raw: 0 },
       };
       return renderReview(validation);
     }
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets["Voice Export"], {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
       defval: "",
       raw: false,
     });
     if (!rows.length) {
       validation = {
-        errors: ["The Voice Export worksheet is empty."],
+        errors: [isCsv ? "The CSV export is empty." : "The Voice Export worksheet is empty."],
         warnings: [],
         metrics: { raw: 0 },
       };
@@ -637,7 +653,7 @@ async function validateWorkbook() {
     validation = null;
     show(
       "validationStatus",
-      `Could not validate workbook: ${e.message}`,
+      `Could not validate export: ${e.message}`,
       "err",
     );
   } finally {

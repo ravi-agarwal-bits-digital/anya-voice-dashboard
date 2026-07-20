@@ -43,4 +43,12 @@ assert.equal(posted.sheets[0].name, 'Voice Export');
 assert.equal(posted.sheets[0].rows.length, 1);
 assert.equal(posted.sheets[0].rows[0]['Call ID'], 'worker-1');
 
+const csv = '\uFEFFCreated At (IST),Call ID,Direction,Status,From,To,Duration (s),Messages,Full Transcript\n"10 Jul 2026, 10:30:00 AM IST",csv-worker-1,outbound,completed,918071436001,919999999999,30,4,"First line\nSecond line"';
+const csvBytes = Uint8Array.from(Buffer.from(csv));
+context.self.onmessage({ data: { bytes: csvBytes.buffer } });
+assert(posted?.ok, `Worker CSV parse failed: ${posted?.error || 'no response'}`);
+assert.equal(posted.sheets.length, 1, 'Worker should return the single CSV sheet');
+assert.equal(posted.sheets[0].rows[0]['Call ID'], 'csv-worker-1');
+assert.equal(posted.sheets[0].rows[0]['Full Transcript'], 'First line\nSecond line', 'Worker must preserve multiline CSV transcripts');
+
 console.log('Workbook worker tests passed');

@@ -23,6 +23,7 @@ assert(html.includes('../assets/favicon.ico'), 'Admin favicon is missing');
 assert(html.includes('../assets/xlsx.full.min.js'), 'Admin must use local SheetJS');
 assert(html.includes('id="reviewScopeNote"'), 'Admin review scope note is missing');
 assert(html.includes('id="reviewStatusReconciliation"'), 'Admin status reconciliation is missing');
+assert(html.includes('accept=".xlsx,.xls,.csv"'), 'Admin must accept CSV exports');
 for (const id of ['owner', 'repo', 'branch', 'path']) {
   assert(new RegExp(`id="${id}"[^>]*readonly`).test(html), `${id} must be read-only`);
 }
@@ -87,7 +88,7 @@ const context = {
   window: {}
 };
 vm.createContext(context);
-vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes};`, context);
+vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,validationSheetName};`, context);
 
 const required = ['Created At (IST)', 'Call ID', 'Direction', 'Status', 'From', 'To', 'Duration (s)', 'Messages', 'Full Transcript'];
 const baseRow = {
@@ -103,6 +104,17 @@ const workbook = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(workbook, sheet, 'Voice Export');
 const roundTripWorkbook = XLSX.read(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
 const rows = XLSX.utils.sheet_to_json(roundTripWorkbook.Sheets['Voice Export'], { defval: '', raw: false });
+
+assert(context.__adminTest.isSupportedExport('voice_analytics.csv'), 'CSV exports should be accepted');
+assert(!context.__adminTest.isSupportedExport('voice_analytics.txt'), 'Unsupported exports should be rejected');
+const csv = '\uFEFFCreated At (IST),Call ID,Direction,Status,From,To,Duration (s),Messages,Full Transcript\n"10 Jul 2026, 10:30:00 AM IST",csv-1,outbound,completed,918071436001,919999999999,30,4,"First line\nSecond line"\n"10 Jul 2026, 10:35:00 AM IST",csv-2,outbound,completed,918071436001,918888888888,45,5,"Second call"';
+const csvWorkbook = XLSX.read(Buffer.from(csv), { type: 'buffer', cellDates: true });
+const csvSheetName = context.__adminTest.validationSheetName(csvWorkbook, 'voice_analytics.csv');
+assert.equal(csvSheetName, 'Sheet1', 'CSV should validate its parsed single sheet');
+const csvRows = XLSX.utils.sheet_to_json(csvWorkbook.Sheets[csvSheetName], { defval: '', raw: false });
+assert.equal(csvRows[0]['Full Transcript'], 'First line\nSecond line', 'Multiline CSV transcripts must be preserved');
+assert.equal(context.__adminTest.validateRows(csvRows, Object.keys(csvRows[0])).errors.length, 0, 'Valid CSV rows should pass validation');
+assert.equal(context.__adminTest.validationSheetName(roundTripWorkbook, 'voice_analytics.xlsx'), 'Voice Export', 'Excel exports must retain the canonical sheet requirement');
 
 const valid = context.__adminTest.validateRows(rows, Object.keys(rows[0]));
 assert.equal(valid.errors.length, 0, 'Synthetic workbook should pass');
