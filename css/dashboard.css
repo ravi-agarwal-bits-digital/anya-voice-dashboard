@@ -401,10 +401,10 @@ footer b{color:var(--navy)!important}
 .iq-table{width:100%;border-collapse:collapse;font-size:13px}
 .iq-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:800;padding:0 10px 10px;border-bottom:1px solid var(--line)}
 .iq-table th.num,.iq-table td.num{text-align:right}
-.iq-table .campaign-sort{appearance:none;border:0;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;font-weight:inherit;padding:0;cursor:pointer;white-space:nowrap}
-.iq-table .campaign-sort:hover,.iq-table .campaign-sort:focus-visible{color:var(--navy);outline:none}
+.iq-table .campaign-sort{appearance:none;border:0;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;font-weight:inherit;padding:5px 8px;border-radius:999px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.iq-table .campaign-sort:hover,.iq-table .campaign-sort:focus-visible{color:var(--navy);background:#eef4ff;outline:none}
 .iq-table .campaign-sort:focus-visible{box-shadow:0 0 0 3px rgba(36,120,88,.2);border-radius:4px}
-.iq-table .campaign-sort span{display:inline-block;margin-left:4px;font-size:8px;color:var(--sage)}
+.iq-table .campaign-sort span{display:inline-block;font-size:8px;color:var(--sage)}
 .iq-table td{padding:12px 10px;border-bottom:1px solid var(--line2);vertical-align:middle}
 .iq-table tr:last-child td{border-bottom:none}
 .iq-table tr.iq-row{cursor:pointer;transition:.12s}
@@ -1042,6 +1042,7 @@ body.profile-open .profile-overlay{display:block;}
 .profile-phone-inline{font-family:'Inter',monospace;font-weight:850;font-size:12px;color:#334155;margin-left:auto;margin-right:8px;white-space:nowrap;}
 #userSearchTimeline{max-height:none!important;overflow:visible!important;padding-right:0!important;}
 #userSearchTimeline .profile-call-card{margin-bottom:12px!important;}
+.profile-call-campaign{display:inline-flex;align-items:center;margin-left:6px;padding:3px 7px;border-radius:999px;background:#eef4ff;color:#314a72;font-family:'Inter',system-ui,sans-serif;font-size:9px;font-weight:850;letter-spacing:.01em;text-transform:none;vertical-align:middle;}
 .profile-selected-source{outline:2px solid rgba(176,138,60,.25)!important;box-shadow:0 0 0 4px rgba(176,138,60,.10)!important;}
 .follow-up-panel,.repeat-engagement-panel{padding:22px!important;}
 .repeat-engagement-panel{margin-top:24px!important;}
