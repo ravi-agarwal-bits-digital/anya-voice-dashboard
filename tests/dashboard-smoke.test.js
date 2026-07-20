@@ -90,7 +90,7 @@ scripts.forEach(script => vm.runInContext(script, context));
 for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
-  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes',
+  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
@@ -168,6 +168,12 @@ assert.equal(context.sumBilledMinutes([
   { status: 'failed', dur: 120, msg: 0, trans: '' },
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
+assert.equal(context.sumTalkTimeMinutes([
+  { status: 'completed', dur: 61, msg: 1, trans: 'connected' },
+  { status: 'completed', dur: 3, msg: 1, trans: 'connected' },
+  { status: 'failed', dur: 120, msg: 0, trans: '' }
+]), 64 / 60, 'Talk-time minutes must retain connected-call seconds before per-call billing rounding');
+assert.equal(context.formatTalkMinutes(64 / 60), '1.1', 'Talk-time display must retain one decimal place');
 assert.equal(context.ledgerCallCost({ status: 'completed', dur: 61 }), 10, 'Ledger cost must use billed-minute rounding');
 assert.equal(context.ledgerCallCost({ status: 'failed', dur: 120 }), 0, 'Unconnected calls must not contribute ledger cost');
 const leadCostRows=[{ from: '+91 99999 99999', status: 'completed', dur: 61 },{ from: '919999999999', status: 'completed', dur: 3 }];
@@ -233,7 +239,9 @@ assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard 
 assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintFunnel(o);'), 'Management readout must render with the top essentials');
 assert(!scripts[1].includes('["Source",SRC]'), 'Header source chip must remain removed');
 assert(scripts[1].includes('function renderHeaderMeta(records)'), 'First-load and filtered header chips must share one renderer');
-assert(scripts[1].includes("['hot','Advisory minutes','mins','minutes',()=>true]"), 'Management readout must retain advisory minutes');
+assert(scripts[1].includes("['hot','Billable minutes','mins','minutes',()=>true]"), 'Management readout must retain billable minutes');
+assert(scripts[1].includes("['neut','Talk-time minutes','talkMins','talkMinutes',()=>true]"), 'Management readout must show talk-time minutes beside billable minutes');
+assert(scripts[1].includes('Billing clarity:'), 'Management readout must explain the impact of per-call billing rounding');
 assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',()=>true]"), 'Management readout must retain operating cost');
 assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
 assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');

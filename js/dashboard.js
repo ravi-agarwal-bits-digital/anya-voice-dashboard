@@ -120,8 +120,9 @@ const METRIC_DEFINITIONS=Object.freeze({
   'Dials placed':'Final unique dial-level records, including failed and initiated attempts.',
   'Connect rate':'Connected dial-level records divided by all dial-level records in scope.',
   'Distinct-number reach':'Distinct normalized numbers with at least one connected dial.',
-  'Advisory minutes':'Billed minutes from connected conversation records only.',
-  'Estimated operating cost':'Advisory minutes multiplied by the dashboard operating-rate assumption.',
+  'Billable minutes':'Connected conversation records, with each call rounded up to the next whole billed minute.',
+  'Talk-time minutes':'Actual connected conversation duration before per-call billing rounding.',
+  'Estimated operating cost':'Billable minutes multiplied by the dashboard operating-rate assumption.',
   'India / International':'Final conversation records grouped by normalized phone geography.',
   'Average enquiry duration':'Average duration across final conversation records.',
   'Quality pass rate':'Green review-band records divided by final conversation records.'
@@ -983,6 +984,9 @@ function formatDuration(seconds){
 // calls and round once. Zero-duration (missed) calls correctly bill 0 mins.
 function billedMinutes(seconds){
   return Math.ceil(Number(seconds||0)/60);
+}
+function sumTalkTimeMinutes(records){
+  return (records||[]).reduce((a,r)=>a+(normalizeDisposition(r)==='connected'?Number(r.dur||0)/60:0),0);
 }
 function sumBilledMinutes(records){
   // Bill only calls that actually completed/connected (status = completed). Failed, initiated,
@@ -2467,7 +2471,11 @@ function topIntentFor(recs){
 }
 function briefPack(recs){
   const mins=sumBilledMinutes(recs);
-  return{n:recs.length,mins,cost:mins*5,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,avgConf:recs.length?Math.round(recs.reduce((a,r)=>a+Number(r.conf||0),0)/recs.length):0,topIntent:topIntentFor(recs)};
+  const talkMins=sumTalkTimeMinutes(recs),roundingMins=mins-talkMins,roundingPct=talkMins?roundingMins/talkMins*100:0;
+  return{n:recs.length,mins,talkMins,roundingMins,roundingPct,cost:mins*5,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,avgConf:recs.length?Math.round(recs.reduce((a,r)=>a+Number(r.conf||0),0)/recs.length):0,topIntent:topIntentFor(recs)};
+}
+function formatTalkMinutes(minutes){
+  return Number(minutes||0).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1});
 }
 function pctBrief(num,den){return den?Math.round(num/den*100):0;}
 function deltaClass(cur,prev){if(cur>prev)return'up';if(cur<prev)return'down';return'flat';}
@@ -2494,9 +2502,10 @@ function paintManagementBrief(){
   const cbPct=pctBrief(cur.callbacks,cur.n),hotPct=pctBrief(cur.hot,cur.n);
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
   if(summary){
-    summary.innerHTML=reducedAiViewEnabled()
+    const operatingSummary=reducedAiViewEnabled()
       ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} is summarized below as an operating view. The main action areas are callback demand and the follow-up queue; the period showed <b>${serialPhrase}</b>.`
       :`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
+    summary.innerHTML=operatingSummary+`<span class="billing-clarity-note"><b>Billing clarity:</b> ${cur.mins.toLocaleString('en-IN')} billable mins vs ${formatTalkMinutes(cur.talkMins)} talk-time mins — <b>+${formatTalkMinutes(cur.roundingMins)} mins (${cur.roundingPct.toFixed(1)}%)</b> from per-call rounding.</span>`;
   }
   const hasPrev=prev.length>0;
   // Bifurcate by direction so a leader can see the inbound/outbound mix behind each headline number
@@ -2507,7 +2516,8 @@ function paintManagementBrief(){
   const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
   const kpiDefs=[
     ['good','Enquiries','n','count',()=>true],
-    ['hot','Advisory minutes','mins','minutes',()=>true],
+    ['hot','Billable minutes','mins','minutes',()=>true],
+    ['neut','Talk-time minutes','talkMins','talkMinutes',()=>true],
     ['hot','Estimated operating cost','cost','currency',()=>true],
     ['good','Unique leads','unique','ratio',()=>true],
     ['hot','Follow-up requests','callbacks','ratio',r=>r.callback],
@@ -2516,7 +2526,7 @@ function paintManagementBrief(){
   if(!reducedAiViewEnabled())kpiDefs.push(['good','AI confidence','avgConf','percent',()=>true],['neut','Attention signals','friction','ratio',r=>r.frustrated]);
   if(kpis)kpis.innerHTML=kpiDefs.map(([cls,label,key,format,pred])=>{
     const val=cur[key],prevVal=old[key];
-    const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='minutes'?`${n} mins`:format==='currency'?`₹${n}`:format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
+    const fmt=(n,pack=cur)=>format==='percent'?n+'%':format==='minutes'?`${n.toLocaleString('en-IN')} mins`:format==='talkMinutes'?`${formatTalkMinutes(n)} mins`:format==='currency'?`₹${n}`:format==='ratio'?`${n} <small>(${pctBrief(n,pack.n)}%)</small>`:n;
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
@@ -2597,7 +2607,7 @@ function paintKPIs(o){
   // here -- this row stays volume/cost/quality to avoid the top of the dashboard saying the same thing twice.
   const cards=[
     ["neut",o.n,"Total enquiries","all"],
-    ["hot",totalMins+" mins","Advisory minutes","all"],
+    ["hot",totalMins+" mins","Billable minutes","all"],
     ["hot","₹"+totalCost,"Estimated operating cost","all"],
     ["good",o.india+" India · "+o.intl+" International","India / International","geo"],
     ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration","all"]
