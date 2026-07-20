@@ -358,7 +358,7 @@ assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with c
 assert.equal(context.escCSV('=2+2'), "'=2+2", 'CSV formula-like values must be protected for Excel');
 assert.equal(context.escCSVText('919999999999'), "'919999999999", 'Call IDs and phone numbers must remain text in Excel');
 vm.runInContext("$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-11';SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Campaign A';", context);
-assert.equal(context.csvFilename('call ledger', 'calls'), 'anya_call-ledger_calls_2026-07-10_to_2026-07-11_outbound_campaign-a_exported-2026-07-14.csv', 'Export filename must identify its active scope');
+assert.equal(context.csvFilename('call ledger', 'calls'), `anya_call-ledger_calls_2026-07-10_to_2026-07-11_outbound_campaign-a_exported-${context.csvDateStamp()}.csv`, 'Export filename must identify its active scope');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
 assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
 assert(scripts[1].includes('Follow-up Rank,Phone,Lead Tier,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Follow-up export must use the standard lead count columns');
