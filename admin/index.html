@@ -35,10 +35,10 @@
   <main class="grid">
     <section class="card">
       <div class="sectionLabel">Step 1</div><h2>Select and validate</h2><p class="help">Additional worksheets and columns are accepted. Publishing is blocked only when required structure or critical values are invalid.</p>
-      <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
-      <div id="dropZone" class="drop" tabindex="0" role="button"><strong>Choose an Excel export</strong><span>or drag and drop it here</span></div>
+      <input id="fileInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+      <div id="dropZone" class="drop" tabindex="0" role="button"><strong>Choose a call export</strong><span>Excel or CSV · or drag and drop it here</span></div>
       <div id="fileLine" class="fileLine hidden"><span id="fileName"></span><span id="fileSize"></span></div>
-      <div class="actions" style="margin-top:16px"><button class="btn primary" id="validateBtn" disabled>Validate workbook</button><button class="btn" id="clearFileBtn" disabled>Clear</button></div>
+      <div class="actions" style="margin-top:16px"><button class="btn primary" id="validateBtn" disabled>Validate export</button><button class="btn" id="clearFileBtn" disabled>Clear</button></div>
       <div id="validationStatus" class="status info hidden"></div>
     </section>
 
