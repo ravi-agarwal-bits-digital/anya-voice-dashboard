@@ -1615,7 +1615,7 @@ function paintDialHeatmap(obRecs){
     const retryRule=bestTime
       ?`<button type="button" class="opf-policy-rule evidence" onclick="openFilteredPanel(${jsArg(timeLabel(bestTime)+' (all days outbound)')},()=>true,window.__timeBuckets[${bestTime.bi}].recs)" title="Open the dial attempts behind this recommendation"><span>Preferred retry window</span><b>${esc(timeLabel(bestTime))}</b><small>${esc(evidence(bestTime))} · proof</small></button>`
       :`<div class="opf-policy-rule"><span>Preferred retry window</span><b>Collect more data</b><small>${minVol} dials needed per window</small></div>`;
-    cardEl.innerHTML=`<div class="opf-policy-summary"><span><b>Campaign:</b>09:00–21:00 IST</span><span><b>Retry:</b>3 max · ~5h apart</span></div><details class="opf-vendor-details"><summary>Vendor configuration</summary><div class="opf-dialer-policy"><div class="opf-policy-rules"><div class="opf-policy-rule"><span>Daily campaign</span><b>Start 09:00 · stop 21:00 IST</b></div><div class="opf-policy-rule"><span>First attempt</span><b>Immediately (09:00–21:00)</b></div><div class="opf-policy-rule"><span>Retries</span><b>3 max · ~5h apart</b></div>${retryRule}<div class="opf-policy-rule"><span>Stop when</span><b>Connect · callback · opt-out</b></div></div><div class="opf-policy-stop"><b>Outside campaign hours:</b> queue a new lead for the next 09:00 start.</div></div></details>`;
+    cardEl.innerHTML=`<div class="opf-policy-summary"><span><b>Campaign:</b>09:00–21:00 IST</span><span><b>Attempts:</b>3 total · ~6h apart</span></div><details class="opf-vendor-details"><summary>Vendor configuration</summary><div class="opf-dialer-policy"><div class="opf-policy-rules"><div class="opf-policy-rule"><span>Daily campaign</span><b>Start 09:00 · stop 21:00 IST</b></div><div class="opf-policy-rule"><span>First attempt</span><b>Immediately (09:00–21:00)</b></div><div class="opf-policy-rule"><span>Retries</span><b>2 max · ~6h apart</b></div>${retryRule}<div class="opf-policy-rule"><span>Stop when</span><b>Connect · callback · opt-out</b></div></div><div class="opf-policy-stop"><b>Outside campaign hours:</b> queue a new lead for the next 09:00 start.</div></div></details>`;
   }
   // The primary decision is the all-days time of day; weekday rows below are proof only.
   const bwEl=$('bestWindowNote');
@@ -1785,7 +1785,7 @@ function paintOutboundFunnel(totalDials,connectedDials,failedDials,initiatedDial
 function paintUnreachableList(unreachable,avgDials){
   const el=$('unreachableList');
   if(!el)return;
-  if(!unreachable.length){el.innerHTML=emptyViewHtml('No numbers have reached three unsuccessful dials in this view.');return;}
+  if(!unreachable.length){el.innerHTML=emptyViewHtml('No numbers have reached two unsuccessful dials in this view.');return;}
   const wastedDials=unreachable.reduce((a,calls)=>a+calls.length,0);
   window.__unreachGroups=unreachable;
   const top=unreachable.slice().sort((a,b)=>{
@@ -1801,9 +1801,9 @@ function paintUnreachableList(unreachable,avgDials){
     return `<tr style="cursor:pointer" onclick="openFilteredPanel('${esc(ph)} — ${calls.length} dials, never connected',()=>true,window.__unreachGroups[${i}])"><td>${esc(ph)}</td><td class="tabular">${calls.length}</td><td><span class="rstatus ${capTone}">${esc(policy.capLabel)}</span></td><td><span class="rstatus ${timingTone}">${esc(policy.timingLabel)}</span></td><td class="tabular">${fmtDayLabel(calls[calls.length-1].d)}</td></tr>`;
   }).join('');
   const breached=unreachable.filter(c=>retryPolicyStatus(c).severity===2).length;
-  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> leads have reached three or more unsuccessful attempts — <b>${wastedDials.toLocaleString()}</b> dials in total (avg ${avgDials} per lead). <b>${breached.toLocaleString()}</b> need an immediate policy check.</div>`+
+  el.innerHTML=`<div class="opf-hit-summary"><b>${unreachable.length.toLocaleString()}</b> leads have reached two or more unsuccessful attempts — <b>${wastedDials.toLocaleString()}</b> dials in total (avg ${avgDials} per lead). <b>${breached.toLocaleString()}</b> need an immediate policy check.</div>`+
     `<div class="opf-hit-actions"><button type="button" onclick="openFilteredPanel('All leads in the retry-policy watchlist',()=>true,window.__obUnreached)">View all dials</button><button type="button" onclick="exportUnreachableCSV()">Export policy watchlist · ${unreachable.length.toLocaleString()} lead${unreachable.length===1?'':'s'}</button></div>`+
-    `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Lead</th><th>Attempts</th><th>4-call cap</th><th>Retry timing</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
+    `<div style="overflow-x:auto"><table class="opf-cmp-table"><thead><tr><th>Lead</th><th>Attempts</th><th>3-attempt cap</th><th>Retry timing</th><th>Last tried</th></tr></thead><tbody>${rows}</tbody></table></div>`+
     (unreachable.length>top.length?`<div class="cap" style="margin-top:8px;font-size:11.5px">Showing the highest-risk ${top.length}. ${(unreachable.length-top.length).toLocaleString()} more are included in the full view and export.</div>`:'');
 }
 function exportUnreachableCSV(){
@@ -1811,7 +1811,7 @@ function exportUnreachableCSV(){
   // user changes the date/campaign filter while deferred charts are still repainting.
   const groups=repeatedlyUnreachableGroups(outboundRecordsInView());
   if(!groups.length){alert('No leads are currently in the retry-policy watchlist.');return;}
-  let csv='Phone,Country,Attempts,4-Call Cap Status,Retry Timing Status,First Tried,Last Tried,Campaigns,Latest Status\n';
+  let csv='Phone,Country,Attempts,3-Attempt Cap Status,Retry Timing Status,First Tried,Last Tried,Campaigns,Latest Status\n';
   groups.forEach(calls=>{
     const sorted=calls.slice().sort((a,b)=>a.ts-b.ts),first=sorted[0],last=sorted[sorted.length-1],country=classifyPhone(first.from).country;
     const campaigns=[...new Set(sorted.map(r=>String(r.campaign||'').trim()).filter(Boolean))].join(' | ');
@@ -1824,27 +1824,27 @@ function exportUnreachableCSV(){
 function repeatedlyUnreachableGroups(records){
   const isConn=r=>normalizeDisposition(r)==='connected';
   return Object.values(groupByPhone(records||[]))
-    .filter(calls=>calls.length>=3&&!calls.some(isConn))
+    .filter(calls=>calls.length>=2&&!calls.some(isConn))
     .map(calls=>calls.slice().sort((a,b)=>a.ts-b.ts))
     .sort((a,b)=>b.length-a.length);
 }
 
-// The vendor rule is a maximum of four attempts and a roughly five-hour retry interval.
-// A 4–6h band makes the target operationally checkable without pretending timestamps are exact.
+// The vendor rule is three total attempts (the first dial plus two retries) with a six-hour target.
+// A 5–7h band makes the target operationally checkable without pretending timestamps are exact.
 function retryPolicyStatus(calls){
   const sorted=(calls||[]).slice().sort((a,b)=>a.ts-b.ts);
   const gaps=[];
   for(let i=1;i<sorted.length;i++)gaps.push((sorted[i].ts-sorted[i-1].ts)/3600);
-  const overCap=sorted.length>4;
-  const early=gaps.filter(g=>g<4).length;
-  const late=gaps.filter(g=>g>6).length;
-  const remaining=4-sorted.length;
-  const capLabel=overCap?`${sorted.length-4} over cap`:sorted.length===4?'Cap reached':`${remaining} ${remaining===1?'retry':'retries'} left`;
-  const capSeverity=overCap?2:sorted.length===4?1:0;
-  let timingLabel='On ~5h cadence',timingSeverity=0;
+  const overCap=sorted.length>3;
+  const early=gaps.filter(g=>g<5).length;
+  const late=gaps.filter(g=>g>7).length;
+  const remaining=3-sorted.length;
+  const capLabel=overCap?`${sorted.length-3} over cap`:sorted.length===3?'Cap reached':`${remaining} ${remaining===1?'retry':'retries'} left`;
+  const capSeverity=overCap?2:sorted.length===3?1:0;
+  let timingLabel='On ~6h cadence',timingSeverity=0;
   if(early&&late){timingLabel=`${early} early · ${late} late`;timingSeverity=2;}
-  else if(early){timingLabel=`${early} retry under 4h`;timingSeverity=2;}
-  else if(late){timingLabel=`${late} gap over 6h`;timingSeverity=1;}
+  else if(early){timingLabel=`${early} retry under 5h`;timingSeverity=2;}
+  else if(late){timingLabel=`${late} gap over 7h`;timingSeverity=1;}
   return {attempts:sorted.length,capLabel,capSeverity,timingLabel,timingSeverity,severity:Math.max(capSeverity,timingSeverity),overCap,early,late};
 }
 
@@ -1885,7 +1885,7 @@ function paintConcurrency(){
     s.hourPeak.map((v,h)=>`<div class="conc-col ${h>=9&&h<21?'biz':''}"><div class="cn">${v||''}</div><div class="cbar" style="height:${v/maxc*100}%"></div></div>`).join('');
   if(axis)axis.innerHTML=s.hourPeak.map((v,h)=>`<div class="ct">${h%3===0?String(h).padStart(2,'0'):''}</div>`).join('');
 }
-// Cadence: per outbound number, the ordered attempt sequence -> compliance vs the 4-attempt / 5h / 9-9 rule.
+// Cadence: per outbound number, the ordered attempt sequence -> compliance vs the 3-attempt / 6h / 9-9 rule.
 function outboundNumberSequences(){
   const byPhone=groupByPhone(outboundRecordsInView());
   return Object.values(byPhone).map(c=>c.slice().sort((a,b)=>a.ts-b.ts));
@@ -1896,22 +1896,22 @@ function paintCadenceCompliance(){
   const nums=outboundNumberSequences();
   const dials=outboundRecordsInView();
   if(!nums.length){el.innerHTML=emptyViewHtml('No outbound dials in this range.');if(note)note.style.display='none';return;}
-  const over=nums.filter(c=>c.length>4);
+  const over=nums.filter(c=>c.length>3);
   const maxAtt=Math.max(...nums.map(c=>c.length));
-  let gtot=0,lt1=0,g46=0;
-  nums.forEach(c=>{for(let i=1;i<c.length;i++){const g=(c[i].ts-c[i-1].ts)/3600;gtot++;if(g<1)lt1++;if(g>=4&&g<=6)g46++;}});
+  let gtot=0,earlyGap=0,targetGap=0,lateGap=0;
+  nums.forEach(c=>{for(let i=1;i<c.length;i++){const g=(c[i].ts-c[i-1].ts)/3600;gtot++;if(g<5)earlyGap++;else if(g<=7)targetGap++;else lateGap++;}});
   const inWin=dials.filter(r=>r.h>=9&&r.h<21);
   const outWin=dials.filter(r=>!(r.h>=9&&r.h<21));
-  const lt1Pct=gtot?Math.round(lt1/gtot*100):0, g46Pct=gtot?Math.round(g46/gtot*100):0, inWinPct=dials.length?Math.round(inWin.length/dials.length*100):0;
+  const earlyPct=gtot?Math.round(earlyGap/gtot*100):0, targetPct=gtot?Math.round(targetGap/gtot*100):0, latePct=gtot?Math.round(lateGap/gtot*100):0, inWinPct=dials.length?Math.round(inWin.length/dials.length*100):0;
   window.__overCapCalls=[].concat(...over);
   window.__offWinCalls=outWin;
   const overPct=Math.round(over.length/nums.length*100);
   const rules=[
-    {name:'Max 4 attempts per number',sub:'1 initial + 3 retries',target:'&le; 4 dials',
+    {name:'Max 3 attempts per number',sub:'1 initial + 2 retries',target:'&le; 3 dials',
      actual:`${overPct}% exceed · max ${maxAtt}`,status:overPct>10?'fail':overPct>2?'warn':'pass',
-     drill:over.length?["Numbers dialed more than 4 times","window.__overCapCalls"]:null},
-    {name:'~5-hour interval between retries',sub:'no rapid re-dialing',target:'gap &asymp; 5h',
-     actual:`${lt1Pct}% fire &lt;1h · ${g46Pct}% at 4&ndash;6h`,status:lt1Pct>30?'fail':lt1Pct>15?'warn':'pass',drill:null},
+     drill:over.length?["Numbers dialed more than 3 times","window.__overCapCalls"]:null},
+    {name:'~6-hour interval between retries',sub:'5–7h accepted for timestamp rounding',target:'gap &asymp; 6h',
+     actual:`${targetPct}% at 5&ndash;7h · ${earlyPct}% early · ${latePct}% late`,status:targetPct>=90?'pass':targetPct>=70?'warn':'fail',drill:null},
     {name:'Dial only within 9am&ndash;9pm',sub:'no off-hours calls',target:'100% in-window',
      actual:`${inWinPct}% in · ${outWin.length.toLocaleString()} outside`,status:inWinPct>=99?'pass':inWinPct>=90?'warn':'fail',
      drill:outWin.length?["Dials placed outside 9am–9pm","window.__offWinCalls"]:null}
@@ -1928,7 +1928,7 @@ function paintCadenceCompliance(){
   const fails=rules.filter(r=>r.status!=='pass').length;
   if(note){
     if(fails){note.style.display='flex';note.style.background='rgba(163,58,58,.05)';note.style.borderColor='rgba(163,58,58,.3)';
-      note.innerHTML=`<span class="opf-bestwin-dot" style="background:var(--burgundy)"></span><span><b>The policy is sound; the gap is enforcement.</b> ${overPct}% of numbers exceed the 4-attempt cap (max ${maxAtt}), ${lt1Pct}% of retries fire within an hour instead of ~5, and ${outWin.length.toLocaleString()} dials land outside 9&ndash;9. Tightening the dialer to your own rule would cut waste and lift connect rate.</span>`;
+      note.innerHTML=`<span class="opf-bestwin-dot" style="background:var(--burgundy)"></span><span><b>The policy is sound; the gap is enforcement.</b> ${overPct}% of numbers exceed the 3-attempt cap (max ${maxAtt}), ${targetPct}% of retries land in the 5&ndash;7h target band around 6 hours, and ${outWin.length.toLocaleString()} dials land outside 9&ndash;9. Tightening the dialer to your own rule would cut waste and lift connect rate.</span>`;
     }else{note.style.display='none';}
   }
 }
@@ -1948,19 +1948,20 @@ function paintRetryEconomics(){
     const isCap=i===capIdx;const col=isCap?'var(--gold)':'var(--navy)';
     return `<div class="brow"><div class="blbl">${lb}${isCap?' <span style="color:var(--gold);font-size:10px;font-weight:800">← cap</span>':''}</div><div class="btrack"><div class="bfill" style="width:${cum[i]}%;background:${col}">${cum[i]}%</div></div></div>`;
   }).join('');
-  const gapB={lt1:[0,0],b14:[0,0],b46:[0,0],gt6:[0,0]};
-  nums.forEach(c=>{for(let i=1;i<c.length;i++){const g=(c[i].ts-c[i-1].ts)/3600;const k=g<1?'lt1':g<4?'b14':g<=6?'b46':'gt6';gapB[k][1]++;if(isConn(c[i]))gapB[k][0]++;}});
-  const gapRows=[['&lt;1 hour','lt1','var(--burgundy)'],['1&ndash;4 hours','b14','var(--amber)'],['4&ndash;6 hours','b46','var(--sage)'],['&gt;6 hours','gt6','var(--blue)']];
+  const gapB={lt1:[0,0],b15:[0,0],b57:[0,0],gt7:[0,0]};
+  nums.forEach(c=>{for(let i=1;i<c.length;i++){const g=(c[i].ts-c[i-1].ts)/3600;const k=g<1?'lt1':g<5?'b15':g<=7?'b57':'gt7';gapB[k][1]++;if(isConn(c[i]))gapB[k][0]++;}});
+  const gapRows=[['&lt;1 hour','lt1','var(--burgundy)'],['1&ndash;5 hours','b15','var(--amber)'],['5&ndash;7 hours · 6h target','b57','var(--sage)'],['&gt;7 hours','gt7','var(--blue)']];
   const gpct=k=>gapB[k][1]?Math.round(gapB[k][0]/gapB[k][1]*100):0;
-  const gmax=Math.max(...['lt1','b14','b46','gt6'].map(gpct),1);
+  const gmax=Math.max(...['lt1','b15','b57','gt7'].map(gpct),1);
   if(gapEl)gapEl.innerHTML=gapRows.map(g=>{const p=gpct(g[1]);
     return `<div class="brow" style="cursor:default"><div class="blbl">${g[0]}</div><div class="btrack"><div class="bfill" style="width:${Math.round(p/gmax*100)}%;background:${g[2]}">${p}%</div></div></div>`;
   }).join('');
   if(recoEl){
-    const capN=capIdx>=0?capIdx+1:6, capPct=capIdx>=0?cum[capIdx]:100;
-    const bestGap=['b46','gt6','b14','lt1'].reduce((a,b)=>gpct(b)>gpct(a)?b:a);
-    const bestLbl={lt1:'under 1h',b14:'1–4h',b46:'4–6h',gt6:'over 6h'}[bestGap];
-    recoEl.innerHTML=`<b>What the data says:</b> cap at <b>${capN} attempt${capN>1?'s':''}</b> — that already reaches <b>${capPct}%</b> of everyone you'll ever connect with; beyond it is mostly waste. The best-connecting gap is <b>${bestLbl}</b> (${gpct(bestGap)}%) versus just ${gpct('lt1')}% for a &lt;1h rapid redial — so spacing retries ~5h earns its keep. Fewer dials, higher connect rate, lower concurrency load.`;
+    const dataCapN=capIdx>=0?capIdx+1:6;
+    const capN=Math.min(3,dataCapN), capPct=cum[capN-1]||0;
+    const bestGap=['b57','gt7','b15','lt1'].reduce((a,b)=>gpct(b)>gpct(a)?b:a);
+    const bestLbl={lt1:'under 1h',b15:'1–5h',b57:'5–7h (6h target)',gt7:'over 7h'}[bestGap];
+    recoEl.innerHTML=`<b>What the data says:</b> stay within the <b>3-attempt cap</b> — by then you have reached <b>${capPct}%</b> of everyone you'll ever connect with; beyond it is non-compliant and mostly waste. The best-connecting gap is <b>${bestLbl}</b> (${gpct(bestGap)}%) versus just ${gpct('lt1')}% for a &lt;1h rapid redial — so spacing retries around 6 hours earns its keep. Fewer dials, higher connect rate, lower concurrency load.`;
   }
 }
 function paintOutboundCadence(){
