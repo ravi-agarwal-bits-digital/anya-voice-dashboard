@@ -2004,16 +2004,46 @@ function campaignStats(){
       hotPct:reached?Math.round(numbersHot/reached*100):0,numbers:numsTotal,reached,numbersHot};
   });
 }
+// Campaigns stay alphabetical for predictable lookup until a manager explicitly ranks a metric.
+let CAMPAIGN_LEADERBOARD_SORT={key:'campaign',direction:'asc'};
+function sortCampaignLeaderboardRows(rows,sort=CAMPAIGN_LEADERBOARD_SORT){
+  const key=sort&&sort.key||'campaign';
+  const direction=sort&&sort.direction==='desc'?-1:1;
+  return rows.slice().sort((a,b)=>{
+    const av=a[key],bv=b[key];
+    const compared=key==='campaign'
+      ?String(av||'').localeCompare(String(bv||''))
+      :Number(av||0)-Number(bv||0);
+    if(compared)return compared*direction;
+    // Keep equal metric values easy to find and stable in the alphabetical default order.
+    return String(a.campaign||'').localeCompare(String(b.campaign||''));
+  });
+}
+function setCampaignLeaderboardSort(key){
+  const current=CAMPAIGN_LEADERBOARD_SORT;
+  const defaultDirection=key==='campaign'?'asc':'desc';
+  CAMPAIGN_LEADERBOARD_SORT={
+    key,
+    direction:current.key===key?(current.direction==='asc'?'desc':'asc'):defaultDirection
+  };
+  paintCampaignLeaderboard();
+}
+function campaignLeaderboardHeader(key,label,numeric=false){
+  const active=CAMPAIGN_LEADERBOARD_SORT.key===key;
+  const direction=active?CAMPAIGN_LEADERBOARD_SORT.direction:null;
+  const marker=direction==='asc'?'▲':direction==='desc'?'▼':'↕';
+  const aria=active?(direction==='asc'?'ascending':'descending'):'none';
+  return `<th${numeric?' class="num"':''} aria-sort="${aria}"><button type="button" class="campaign-sort" onclick="setCampaignLeaderboardSort(${jsArg(key)})">${label}<span aria-hidden="true">${marker}</span></button></th>`;
+}
 function paintCampaignLeaderboard(){
   const el=$('campaignLeaderboard');if(!el)return;
-  const rows=campaignStats();
+  const rows=sortCampaignLeaderboardRows(campaignStats());
   if(!rows.length){el.innerHTML=emptyViewHtml('No outbound campaigns in this range.');return;}
-  rows.sort((a,b)=>a.campaign.localeCompare(b.campaign));
   window.__campaignRows={};
   const base=outboundDialsInDateView();
   rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
   const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
-  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr><th>Campaign</th><th class="num">Dials</th><th class="num">Connect %</th><th class="num">Reach %</th><th class="num">Hot %</th></tr></thead><tbody>`+
+  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr>${campaignLeaderboardHeader('campaign','Campaign')}${campaignLeaderboardHeader('dials','Dials',true)}${campaignLeaderboardHeader('connectPct','Connect %',true)}${campaignLeaderboardHeader('reachPct','Reach %',true)}${campaignLeaderboardHeader('hotPct','Hot %',true)}</tr></thead><tbody>`+
     rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel(${jsArg(`${x.campaign} (outbound)`)},()=>true,window.__campaignRows[${jsArg(x.campaign)}])">`+
       `<td><span class="iq-name">${esc(x.campaign)}</span><div class="iq-sub">${x.numbers.toLocaleString()} numbers dialed</div></td>`+
       `<td class="num">${x.dials.toLocaleString()}</td>`+
