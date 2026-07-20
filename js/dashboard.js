@@ -793,9 +793,12 @@ function searchUserByMobile(mobile, source="search"){
 
   const renderTimelineCall=(c,i)=>{
     const date=formatCallTime(c);
+    const campaign=normalizeDirection(c.direction)==='outbound'
+      ?`<span class="profile-call-campaign">Campaign: ${esc(String(c.campaign||'').trim()||'Not recorded')}</span>`
+      :'';
     return`<div class="profile-call-card" style="border-left:3px solid var(--line)">
       <div class="profile-call-head">
-        <b>Call ${i+1} ${directionPill(c.direction)}</b>
+        <b>Call ${i+1} ${directionPill(c.direction)}${campaign}</b>
         <span style="color:var(--muted)">${date}</span>
       </div>
       <div class="profile-call-meta">

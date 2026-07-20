@@ -290,6 +290,8 @@ assert(html.includes('<h4>Why we never reached them</h4>'), 'Failure section sho
 assert(html.indexOf('<section id="sec-outbound-perf">') < html.indexOf('<h4>Why we never reached them</h4>') && html.indexOf('<h4>Why we never reached them</h4>') < html.indexOf('<section id="sec-campaigns">'), 'Failure diagnostics must sit in outbound performance, before campaign results');
 assert(scripts[1].includes('CAMPAIGN_LEADERBOARD_SORT'), 'Campaign leaderboard must retain its selected header sort');
 assert(scripts[1].includes('aria-sort'), 'Campaign leaderboard headers must expose their sort state');
+assert(scripts[1].includes('profile-call-campaign'), 'Outbound calls in the profile drawer must show their campaign');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('padding:5px 8px;border-radius:999px'), 'Campaign leaderboard header controls need padded pill targets');
 assert(scripts[1].includes('entries.slice(0,7)'), 'Failure reasons should be capped at the top seven');
 assert(scripts[1].includes("Other reasons"), 'Failure reasons should group the long tail');
 for (const marker of [
