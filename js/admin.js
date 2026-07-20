@@ -45,7 +45,8 @@ const OPTIONAL = [
 ];
 const KNOWN = [...REQUIRED, ...OPTIONAL],
   STATUS_RANK = { completed: 3, failed: 2, initiated: 1 },
-  MAX_FILE_BYTES = 90 * 1024 * 1024;
+  MAX_FILE_BYTES = 90 * 1024 * 1024,
+  MAX_PUBLISH_BYTES = 45 * 1024 * 1024;
 let ADMIN_PASSPHRASE = "",
   selectedFile = null,
   validation = null,
@@ -319,6 +320,21 @@ function refreshVault() {
 function isSupportedExport(fileName) {
   return /\.(xlsx|xls|csv)$/i.test(String(fileName || ""));
 }
+function shouldCompressExport(fileName) {
+  return /\.csv$/i.test(String(fileName || ""));
+}
+async function gzipBytes(bytes) {
+  if (typeof CompressionStream !== "function")
+    throw Error("This browser cannot compress CSV exports. Use the latest Chrome, Edge, or Safari and try again.");
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function gunzipBytes(bytes) {
+  if (typeof DecompressionStream !== "function")
+    throw Error("This browser cannot verify compressed CSV exports.");
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
 function validationSheetName(workbook, fileName) {
   const names = workbook.SheetNames || [];
   if (/\.csv$/i.test(String(fileName || ""))) return names[0] || null;
@@ -334,7 +350,7 @@ function chooseFile(file) {
   if (file.size > MAX_FILE_BYTES) {
     show(
       "validationStatus",
-      `This export is ${formatSize(file.size)}. GitHub's file API supports a maximum of 100 MB; publication is blocked above 90 MB to leave safe request overhead.`,
+      `This export is ${formatSize(file.size)}. Local validation is limited to 90 MB to keep browser memory use safe.`,
       "err",
     );
     return;
@@ -348,7 +364,7 @@ function chooseFile(file) {
   if (file.size > 70 * 1024 * 1024)
     show(
       "validationStatus",
-      "Large export: validation, encryption and publishing may take several minutes. Keep this tab open.",
+      "Large export: validation, compression, encryption and publishing may take several minutes. Keep this tab open.",
       "warn",
     );
   else hide("validationStatus");
@@ -723,18 +739,28 @@ async function publish() {
       throw Error(
         "This exact workbook is already published. No new encrypted copy was created.",
       );
-    show("publishStatus", "Encrypting workbook locally…", "info");
+    const publishBytes = shouldCompressExport(selectedFile?.name)
+      ? (show("publishStatus", "Compressing CSV locally…", "info"), await gzipBytes(validation.bytes))
+      : validation.bytes;
+    if (publishBytes.byteLength > MAX_PUBLISH_BYTES)
+      throw Error(
+        `This export is still ${formatSize(publishBytes.byteLength)} after preparation, which is too large for reliable GitHub publishing. Split it into a smaller date range or move to the planned large-data storage service.`,
+      );
+    show("publishStatus", "Encrypting export locally…", "info");
     const encrypted = await encryptBytes(
-      validation.bytes,
+      publishBytes,
       ADMIN_PASSPHRASE,
       DATA_MAGIC,
     );
     show("publishStatus", "Running encryption self-test…", "info");
-    const roundTrip = await decryptBytes(
+    const decrypted = await decryptBytes(
       encrypted,
       ADMIN_PASSPHRASE,
       DATA_MAGIC,
     );
+    const roundTrip = shouldCompressExport(selectedFile?.name)
+      ? await gunzipBytes(decrypted)
+      : decrypted;
     if (!equalBytes(roundTrip, validation.bytes))
       throw Error("Encryption self-test failed; nothing was published.");
     const base = apiUrl(s);
@@ -753,7 +779,7 @@ async function publish() {
       branch: s.branch,
     };
     if (sha) body.sha = sha;
-    show("publishStatus", "Publishing encrypted workbook…", "info");
+    show("publishStatus", "Publishing encrypted export…", "info");
     const put = await fetch(base, {
       method: "PUT",
       headers: { ...headers, "Content-Type": "application/json" },
