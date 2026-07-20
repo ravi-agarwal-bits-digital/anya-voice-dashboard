@@ -472,12 +472,15 @@ context.__unreachRows = [
 vm.runInContext("ALL_DIALS=__unreachRows; SELECTED_CAMPAIGN='all'; $('filterFromDate').value='2026-07-09'; $('filterToDate').value='2026-07-11';", context);
 context.exportUnreachableCSV();
 assert(unreachableDownload && unreachableDownload.csv.includes("'+919999999999,India,3,"), 'Unreachable CSV must aggregate the complete dial count per number');
-assert(unreachableDownload.csv.includes('4-Call Cap Status,Retry Timing Status'), 'Retry-policy CSV must explain both vendor-policy checks');
+assert(unreachableDownload.csv.includes('3-Attempt Cap Status,Retry Timing Status'), 'Retry-policy CSV must explain both vendor-policy checks');
 assert(unreachableDownload.name.includes('retry-policy-watchlist'), 'Retry-policy CSV filename must be meaningful');
-const tooSoonPolicy=context.retryPolicyStatus([{ts:0},{ts:5*3600},{ts:6*3600}]);
-assert.equal(tooSoonPolicy.timingLabel, '1 retry under 4h', 'Retry-policy watchlist must flag retries made before the 4-hour lower bound');
-const capPolicy=context.retryPolicyStatus([{ts:0},{ts:5*3600},{ts:10*3600},{ts:15*3600}]);
-assert.equal(capPolicy.capLabel, 'Cap reached', 'Retry-policy watchlist must flag a lead at the four-attempt cap');
+const tooSoonPolicy=context.retryPolicyStatus([{ts:0},{ts:4*3600},{ts:10*3600}]);
+assert.equal(tooSoonPolicy.timingLabel, '1 retry under 5h', 'Retry-policy watchlist must flag retries made before the 5-hour tolerance floor');
+const capPolicy=context.retryPolicyStatus([{ts:0},{ts:6*3600},{ts:12*3600}]);
+assert.equal(capPolicy.capLabel, 'Cap reached', 'Retry-policy watchlist must flag a lead at the three-attempt cap');
+const onCadencePolicy=context.retryPolicyStatus([{ts:0},{ts:6*3600}]);
+assert.equal(onCadencePolicy.timingLabel, 'On ~6h cadence', 'A six-hour retry must remain on policy');
+assert.equal(context.repeatedlyUnreachableGroups([{from:'919111111111',status:'failed',ts:0},{from:'919111111111',status:'failed',ts:6*3600}]).length, 1, 'Retry watchlist must surface a lead approaching the three-attempt cap');
 
 const performanceRows = Array.from({ length: 8000 }, (_, index) => ({
   'Created At (IST)': '10 Jul 2026, 10:30:00 AM IST',
@@ -603,7 +606,7 @@ assert(getElement('dialHeatmap').innerHTML.includes('50% pickup'), 'Pickup mode 
 assert(getElement('timingMetricControls').innerHTML.includes('Pickup · any answer</button>'), 'Pickup mode must keep the selected option visible');
 context.setOutboundTimingMetric('meaningful');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Campaign:</b>09:00–21:00 IST'), 'Timing playbook must keep campaign hours visible by default');
-assert(getElement('dialPlaybookCards').innerHTML.includes('Retry:</b>3 max · ~5h apart'), 'Timing playbook must keep retry count and spacing visible by default');
+assert(getElement('dialPlaybookCards').innerHTML.includes('Attempts:</b>3 total · ~6h apart'), 'Timing playbook must keep retry count and spacing visible by default');
 assert(getElement('dialPlaybookCards').innerHTML.includes('<summary>Vendor configuration</summary>'), 'Vendor detail must stay available without crowding the default playbook');
 assert(getElement('dialPlaybookCards').innerHTML.includes('Start 09:00 · stop 21:00 IST'), 'Vendor policy must expose the daily campaign start and stop');
 assert(getElement('dialPlaybookCards').innerHTML.includes('15-17 IST'), 'Vendor policy must use the all-days preferred retry window');
