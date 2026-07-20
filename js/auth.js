@@ -93,7 +93,7 @@ const COUNTRY_CODES=[
 // Returns {intl:bool, flag, country, cc, national}
 function classifyPhone(raw){
   // Strip spaces, dashes, parens, dots — keep leading + and digits
-  let p=String(raw||'').trim().replace(/[\s\-().]/g,'');
+  let p=String(raw||'').trim().replace(/^'+/,'').replace(/[\s\-().]/g,'');
   // A single leading 0 before a 10-digit Indian mobile (STD style: 09876543210)
   if(/^0[6-9]\d{9}$/.test(p)) p=p.slice(1);
   // Bare 10-digit Indian mobile (starts 6/7/8/9)

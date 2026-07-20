@@ -95,6 +95,7 @@ for (const fn of [
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isGzipData', 'unpackPublishedData',
+  'copyPhoneButton', 'copyPhone',
   'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
@@ -110,6 +111,7 @@ assert.equal(context.normalizeDirection('OUTBOUND'), 'outbound');
 assert.equal(context.normalizeDirection('incoming call'), 'inbound');
 assert.equal(context.resolveLeadPhone({ From: '918071436001', To: '919999999999' }, 'outbound'), '919999999999');
 assert.equal(context.resolveLeadPhone({ From: '918888888888', To: '918062912051' }, 'inbound'), '918888888888');
+assert.equal(context.fullPhone("'919999999999"), '+919999999999', 'Excel text markers must not leak into phone values');
 
 assert.deepEqual(
   JSON.parse(JSON.stringify(context.parseDateFull('10 Jul 2026, 10:30:00 AM IST'))),

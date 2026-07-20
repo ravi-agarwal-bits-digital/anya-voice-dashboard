@@ -682,6 +682,20 @@ function renderHeaderMeta(records){
   meta.innerHTML=[["Period",dmn+" – "+dmx],["Calls",records.length+" calls"],["Avg. duration",Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
 }
 function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
+function copyPhoneButton(phone){
+  return `<button type="button" class="phone-copy-btn" onclick="event.stopPropagation();copyPhone(${jsArg(phone)},this)" title="Copy full mobile number" aria-label="Copy mobile number">Copy</button>`;
+}
+async function copyPhone(phone,button){
+  const value=fullPhone(phone);
+  if(!value)return;
+  try{
+    if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+    else{
+      const input=document.createElement('textarea');input.value=value;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();
+    }
+    if(button){const original=button.textContent;button.textContent='Copied';setTimeout(()=>{button.textContent=original;},1200);}
+  }catch(error){console.warn('Could not copy phone number',error);}
+}
 function phoneSearchVariants(value){
   const raw=phoneDigits(value),c=classifyPhone(value),normalized=phoneDigits((c.cc||'')+(c.national||'')),national=phoneDigits(c.national||'');
   return [...new Set([raw,normalized,national,raw.length>10?raw.slice(-10):'',raw.length===11&&raw[0]==='0'?raw.slice(1):''].filter(v=>v.length>=4))];
@@ -765,7 +779,7 @@ function searchUserByMobile(mobile, source="search"){
   const engagement=engagementScore>20?"Very high":engagementScore>12?"High":"Normal";
   const reducedView=reducedAiViewEnabled();
 
-  $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span><span style="margin-left:12px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
+  $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span>${copyPhoneButton(userCalls[0].from)}<span style="margin-left:8px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
       <div class="profile-call-stat" style="grid-column:1/-1"><b>Calls:</b> ${userCalls.length}<span class="profile-call-mix-list">${callMix}</span></div>
@@ -1292,7 +1306,7 @@ function populateCampaignFilter(){
       }
     }
   });
-  const names=Object.keys(contacts).sort((a,b)=>contacts[b].size-contacts[a].size||a.localeCompare(b));
+  const names=Object.keys(contacts).sort((a,b)=>a.localeCompare(b));
   const selected=activeCampaigns();
   filter.dataset.count=String(names.length);
   if(!names.length){filter.open=false;updateCampaignFilterVisibility();return;}
@@ -2452,7 +2466,7 @@ function paintCallbacks(recs){
     return`<div data-profile-source="callback" class="drawer-click-card callback-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(ph)},'callback',this)" style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:16px">
-          <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${esc(maskPhone(ph))}</b>
+          <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${esc(maskPhone(ph))}</b>${copyPhoneButton(ph)}
           <span style="font-size:10px;color:var(--teal);font-weight:600">${totalDur} mins</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone(${jsArg(ph)},'callback',this.closest('[data-profile-source]')||this)">Open profile</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} request${calls.length>1?"s":""}</span></div>
@@ -3309,7 +3323,7 @@ function renderExplorer(resetLimit){
     tags.unshift(directionPill(r.direction));
     return `<div onclick="markProfileSource(this);openRecordProfile(window.__explorerRows[${index}],'ledger')" style="padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:6px;transition:background .15s" onmouseover="this.style.background='#f6f8fc'" onmouseout="this.style.background=''">
       <div style="min-width:0">
-        <div style="font-size:12px;font-family:'Inter',monospace;color:var(--cream);margin-bottom:3px">${esc(maskPhone(r.from))}</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-family:'Inter',monospace;color:var(--cream);margin-bottom:3px"><span>${esc(maskPhone(r.from))}</span>${copyPhoneButton(r.from)}</div>
         <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.intent)} · ${esc(r.summary||"—")}</div>
         <div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap">${tags.join("")}</div>
       </div>
@@ -3432,7 +3446,7 @@ function paintHottestLeads(records){
     const callback=l.calls.some(c=>c.callback);
     return`<article class="follow-up-card drawer-click-card" style="--card-accent:${typeCol}" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(l.phone)},'priority',this)">
       <div class="follow-up-card-head">
-        <div><div class="follow-up-rank">Follow-up #${i+1}</div><b class="follow-up-phone">${esc(maskPhone(l.phone))}</b></div>
+        <div><div class="follow-up-rank">Follow-up #${i+1}</div><b class="follow-up-phone">${esc(maskPhone(l.phone))}</b>${copyPhoneButton(l.phone)}</div>
         <span class="follow-up-tier" style="color:${typeCol}">${typeEmoji}</span>
       </div>
       <div class="follow-up-card-stats">
@@ -3461,7 +3475,7 @@ function paintSerialCallers(records){
   $("serialCallers").innerHTML=serial.map((s,i)=>`
     <article class="repeat-engagement-card drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="markProfileSource(this);showSerialTimeline(${i})">
       <div class="repeat-engagement-card-head">
-        <div><div class="repeat-engagement-eyebrow">Repeat engagement</div><b class="repeat-engagement-phone">${esc(maskPhone(s.phone))}</b></div>
+        <div><div class="repeat-engagement-eyebrow">Repeat engagement</div><b class="repeat-engagement-phone">${esc(maskPhone(s.phone))}</b>${copyPhoneButton(s.phone)}</div>
         <span class="repeat-engagement-count">${s.total} calls</span>
       </div>
       <div class="repeat-engagement-stats">
