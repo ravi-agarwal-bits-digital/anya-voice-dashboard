@@ -1089,6 +1089,7 @@ body.profile-open .profile-overlay{display:block;}
 .brief-cover:before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:linear-gradient(90deg,var(--navy),var(--gold),var(--indigo))}
 .brief-eyebrow{font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
 .brief-summary-text{font-size:14.5px;line-height:1.75;color:var(--muted);max-width:920px}
+.billing-clarity-note{display:block;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);color:var(--navy);font-size:12.5px;font-weight:650}
 .brief-cover .strip{margin:18px 0 0}
 .kpi-delta{font-size:11px;font-weight:800;margin-top:7px;display:flex;align-items:center;gap:4px}
 .kpi-delta.up{color:var(--sage)}.kpi-delta.down{color:var(--burgundy)}.kpi-delta.flat{color:var(--faint)}
