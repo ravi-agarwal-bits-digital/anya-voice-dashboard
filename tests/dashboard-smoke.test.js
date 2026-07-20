@@ -287,6 +287,8 @@ assert(html.includes('label="Confidence" data-hide-in-reduced-view="true"'), 'Re
 assert(html.includes('label="Reach" data-hide-in-reduced-view="true"'), 'Reduced Ledger reach group marker is missing');
 assert(html.includes('data-f="frustrated" data-hide-in-reduced-view="true"'), 'Reduced Ledger attention filter marker is missing');
 assert(html.includes('<h4>Why we never reached them</h4>'), 'Failure section should use the concise lost-reach title');
+assert(html.indexOf('<section id="sec-outbound-perf">') < html.indexOf('<h4>Why we never reached them</h4>') && html.indexOf('<h4>Why we never reached them</h4>') < html.indexOf('<section id="sec-campaigns">'), 'Failure diagnostics must sit in outbound performance, before campaign results');
+assert(!scripts[1].includes('CAMPAIGN_SORT'), 'Campaign leaderboard must remain alphabetical rather than metric-sortable');
 assert(scripts[1].includes('entries.slice(0,7)'), 'Failure reasons should be capped at the top seven');
 assert(scripts[1].includes("Other reasons"), 'Failure reasons should group the long tail');
 for (const marker of [

@@ -1705,6 +1705,7 @@ function paintOutboundPerf(){
   if(secHidden)secHidden.style.display='none';
   const scopeNote=$('outboundScopeNote');
   if(scopeNote)scopeNote.style.display=(SELECTED_DIRECTION==='all')?'inline-flex':'none';
+  paintFailureBreakdown();
 
   const obRecs=outboundRecordsInView();
   const n=obRecs.length;
@@ -1975,8 +1976,6 @@ function paintOutboundCadence(){
 }
 
 // ===== CAMPAIGN PERFORMANCE & FAILURE DIAGNOSTICS =====
-let CAMPAIGN_SORT='dials'; // 'dials' | 'connect' | 'reach' | 'hot'
-function setCampaignSort(k){CAMPAIGN_SORT=k;paintCampaignLeaderboard();}
 // Per-campaign outbound stats over the current DATE view (not scoped to the campaign filter -- the
 // leaderboard's whole point is to compare every campaign side by side).
 function campaignStats(){
@@ -2009,15 +2008,12 @@ function paintCampaignLeaderboard(){
   const el=$('campaignLeaderboard');if(!el)return;
   const rows=campaignStats();
   if(!rows.length){el.innerHTML=emptyViewHtml('No outbound campaigns in this range.');return;}
-  const keyMap={dials:'dials',connect:'connectPct',reach:'reachPct',hot:'hotPct'};
-  const sk=keyMap[CAMPAIGN_SORT]||'dials';
-  rows.sort((a,b)=>b[sk]-a[sk]||b.dials-a.dials);
+  rows.sort((a,b)=>a.campaign.localeCompare(b.campaign));
   window.__campaignRows={};
   const base=outboundDialsInDateView();
   rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
   const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
-  const th=(k,lbl)=>`<th class="num camp-sortable ${CAMPAIGN_SORT===k?'camp-sorted':''}" onclick="setCampaignSort('${k}')">${lbl}${CAMPAIGN_SORT===k?' ▾':''}</th>`;
-  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr><th>Campaign</th>${th('dials','Dials')}${th('connect','Connect %')}${th('reach','Reach %')}${th('hot','Hot %')}</tr></thead><tbody>`+
+  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr><th>Campaign</th><th class="num">Dials</th><th class="num">Connect %</th><th class="num">Reach %</th><th class="num">Hot %</th></tr></thead><tbody>`+
     rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel(${jsArg(`${x.campaign} (outbound)`)},()=>true,window.__campaignRows[${jsArg(x.campaign)}])">`+
       `<td><span class="iq-name">${esc(x.campaign)}</span><div class="iq-sub">${x.numbers.toLocaleString()} numbers dialed</div></td>`+
       `<td class="num">${x.dials.toLocaleString()}</td>`+
@@ -2077,7 +2073,6 @@ function paintCampaignSection(){
   if(sec)sec.style.display='';if(hidden)hidden.style.display='none';
   const scope=$('campaignScopeNote');if(scope)scope.style.display=(SELECTED_DIRECTION==='all')?'inline-flex':'none';
   paintCampaignLeaderboard();
-  paintFailureBreakdown();
 }
 
 // ===== ANOMALY DETECTION — "WHAT MOVED, AND WHY" =====
