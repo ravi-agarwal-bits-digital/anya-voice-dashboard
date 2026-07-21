@@ -687,6 +687,40 @@ function apiUrl(s, path = s.path) {
 function publicationMetadataPath(s) {
   return `${s.path}.meta.json`;
 }
+function billingPlanPath(s) {
+  const slash=s.path.lastIndexOf('/');
+  return `${slash>=0?s.path.slice(0,slash+1):''}voice_billing_plan.enc`;
+}
+function readBillingPlanForm(){
+  const plan={schemaVersion:1,startDate:$("planStart").value,endDate:$("planEnd").value,includedMinutes:Number($("includedMinutes").value),commitmentRupees:Number($("commitmentRupees").value),overageRate:Number($("overageRate").value),openingUsedMinutes:Number($("openingUsedMinutes").value||0)};
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(plan.startDate)||!/^\d{4}-\d{2}-\d{2}$/.test(plan.endDate)||plan.endDate<=plan.startDate)throw Error('Enter a valid contract start and later end date.');
+  if(!(plan.includedMinutes>0)||!(plan.commitmentRupees>=0)||!(plan.overageRate>=0)||!(plan.openingUsedMinutes>=0))throw Error('Enter valid non-negative plan amounts and a positive minute allowance.');
+  return plan;
+}
+async function publishBillingPlan(){
+  const s=settings(),token=$("token").value.trim()||sessionStorage.getItem(SESSION.token)||'';
+  if(!token)return show('planStatus','Enter or unlock a fine-grained GitHub token first.','err');
+  try{
+    $("planPublishBtn").disabled=true;
+    const plan=readBillingPlanForm(),headers={Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'},path=billingPlanPath(s),url=apiUrl(s,path);
+    show('planStatus','Encrypting billing plan locally…','info');
+    const encrypted=await encryptBytes(new TextEncoder().encode(JSON.stringify(plan)),ADMIN_PASSPHRASE,DATA_MAGIC);
+    const selfTest=JSON.parse(new TextDecoder().decode(await decryptBytes(encrypted,ADMIN_PASSPHRASE,DATA_MAGIC)));
+    if(JSON.stringify(selfTest)!==JSON.stringify(plan))throw Error('Billing-plan encryption self-test failed; nothing was published.');
+    const current=await fetch(`${url}?ref=${encodeURIComponent(s.branch)}&t=${Date.now()}`,{cache:'no-store',headers});
+    let sha=null;if(current.ok)sha=(await current.json()).sha||null;else if(current.status!==404)throw Error(`Could not read current billing plan (${current.status}).`);
+    const body={message:'Update encrypted voice billing plan',content:bytesToBase64(encrypted),branch:s.branch};if(sha)body.sha=sha;
+    const put=await fetch(url,{method:'PUT',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!put.ok){const e=await put.json().catch(()=>({}));throw Error(e.message||`Billing plan publish failed (${put.status}).`);}
+    const result=await put.json(),commitSha=result.commit?.sha;
+    if(!commitSha)throw Error('GitHub accepted the billing plan but did not return a commit identifier.');
+    const verify=await fetch(`${url}?ref=${encodeURIComponent(commitSha)}&t=${Date.now()}`,{cache:'no-store',headers:{...headers,Accept:'application/vnd.github.raw+json'}});
+    if(!verify.ok||!equalBytes(new Uint8Array(await verify.arrayBuffer()),encrypted))throw Error('Published billing-plan verification failed. Review the latest repository commit.');
+    show('planStatus','Encrypted billing plan published. Refresh the dashboard to view runway.','ok');
+    $("planConfirm").checked=false;
+  }catch(e){show('planStatus',e.message||String(e),'err');}
+  finally{$("planPublishBtn").disabled=!$("planConfirm").checked;}
+}
 async function readPublicationMetadata(s, headers) {
   const response = await fetch(
     `${apiUrl(s, publicationMetadataPath(s))}?ref=${encodeURIComponent(s.branch)}&t=${Date.now()}`,
@@ -904,6 +938,8 @@ function bind() {
       !$("publishConfirm").checked || !validation || validation.errors.length;
   };
   $("publishBtn").onclick = publish;
+  $("planConfirm").onchange=()=>{$("planPublishBtn").disabled=!$("planConfirm").checked;};
+  $("planPublishBtn").onclick=publishBillingPlan;
   $("saveSettingsBtn").onclick = saveSettings;
   $("clearTokenBtn").onclick = clearSessionToken;
   $("unlockVaultBtn").onclick = unlockVault;

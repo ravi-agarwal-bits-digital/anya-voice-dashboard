@@ -122,14 +122,14 @@ const METRIC_DEFINITIONS=Object.freeze({
   'Distinct-number reach':'Distinct normalized numbers with at least one connected dial.',
   'Billable minutes':'Connected conversation records, with each call rounded up to the next whole billed minute.',
   'Talk-time minutes':'Actual connected conversation duration before per-call billing rounding.',
-  'Estimated operating cost':'Billable minutes multiplied by the dashboard operating-rate assumption.',
+  'Bundle value used':'Billable minutes multiplied by the prepaid bundle effective rate; this is allocation, not an extra invoice.',
   'India / International':'Final conversation records grouped by normalized phone geography.',
   'Average enquiry duration':'Average duration across final conversation records.',
   'Quality pass rate':'Green review-band records divided by final conversation records.'
 });
 function metricDefinition(label){return METRIC_DEFINITIONS[label]||'Computed from final records in the active dashboard scope.';}
 const $=id=>document.getElementById(id);
-let RECORDS=[], SRC="";
+let RECORDS=[], SRC="", BILLING_PLAN=null;
 
 const dz=$("dropZone"),fi=$("fileInput");
 dz.onclick=()=>fi.click();
@@ -256,6 +256,7 @@ function setPreparedRecords(allCalls,sourceName){
 
 function autoLoadLatestExcel(){
   setDashboardLoading();
+  loadBillingPlan().catch(()=>null);
   const metadataPromise=loadPublicationFreshness();
   const cachePromise=metadataPromise.then(meta=>loadPreparedCache(meta?.plaintextSha256||meta?.dataCommitSha||'')).catch(()=>null);
 
@@ -643,7 +644,7 @@ function applyFilters(){
   renderHeaderMeta(RECORDS);
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
-  paintHealth(o);paintManagementBrief();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
 
   // Trigger KPI and verdict animations
   document.querySelectorAll('.kpi').forEach(kpi=>{
@@ -679,7 +680,7 @@ function renderHeaderMeta(records){
     return;
   }
   const dts=records.map(r=>r.d).sort(),dmn=dts[0],dmx=dts[dts.length-1],tMins=sumBilledMinutes(records);
-  meta.innerHTML=[["Period",dmn+" – "+dmx],["Calls",records.length+" calls"],["Avg. duration",Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length)+"s avg"],["Minutes",tMins+" mins"],["Cost","₹"+tMins*5]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
+  meta.innerHTML=[["Period",dmn+" – "+dmx],["Calls",records.length+" calls"],["Avg. duration",Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length)+"s avg"],["Minutes",tMins+" mins"],["Bundle value","₹"+tMins*5]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
 }
 function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
 function copyPhoneButton(phone){
@@ -1019,14 +1020,29 @@ function billedMinutes(seconds){
   return Math.ceil(Number(seconds||0)/60);
 }
 function sumTalkTimeMinutes(records){
-  return (records||[]).reduce((a,r)=>a+(normalizeDisposition(r)==='connected'?Number(r.dur||0)/60:0),0);
+  return (records||[]).reduce((a,r)=>a+(isBillableRecord(r)?Number(r.dur||0)/60:0),0);
 }
+function isBillableRecord(r){return /^(completed|done)$/i.test(String(r?.status||'').trim())&&Number(r?.dur||0)>0;}
 function sumBilledMinutes(records){
   // Bill only calls that actually completed/connected (status = completed). Failed, initiated,
   // no-answer, voicemail etc. are never billed, even if the export logs a duration for them
   // (some "failed" rows do). billedMinutes(0)=0 keeps the ">0s" rule: a connected call with zero
   // talk time bills nothing. This is the single point every minutes/cost figure routes through.
-  return (records||[]).reduce((a,r)=>a+(normalizeDisposition(r)==='connected'?billedMinutes(r.dur):0),0);
+  return (records||[]).reduce((a,r)=>a+(isBillableRecord(r)?billedMinutes(r.dur):0),0);
+}
+async function loadBillingPlan(){
+  try{const r=await fetchWithTimeout('data/voice_billing_plan.enc',{cache:'no-cache'},10000);if(!r.ok)throw Error();const bytes=new Uint8Array(await r.arrayBuffer());if(!isEncrypted(bytes))throw Error();const p=JSON.parse(new TextDecoder().decode(await decryptData(bytes,window.DECRYPT_PASSPHRASE||'')));if(!p.startDate||!p.endDate||!(Number(p.includedMinutes)>0))throw Error();BILLING_PLAN=p;paintBundleRunway();return p;}catch(e){BILLING_PLAN=null;paintBundleRunway();return null;}
+}
+function runwayDays(a,b){return Math.max(0,Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000));}
+function runwayAdd(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function billingRunwayStats(plan=BILLING_PLAN,records=ALL_DIALS){
+  if(!plan)return null;const cycle=(records||[]).filter(r=>r.d>=plan.startDate&&r.d<plan.endDate),billable=cycle.filter(isBillableRecord),included=Number(plan.includedMinutes),used=Number(plan.openingUsedMinutes||0)+sumBilledMinutes(billable),talk=sumTalkTimeMinutes(billable),remaining=Math.max(0,included-used),latest=cycle.map(r=>r.d).sort().pop()||plan.startDate,recentStart=[plan.startDate,runwayAdd(latest,-13)].sort().pop(),recent=billable.filter(r=>r.d>=recentStart&&r.d<=latest),daily=sumBilledMinutes(recent)/Math.max(1,runwayDays(recentStart,latest)+1),projected=Math.round(used+daily*runwayDays(latest,plan.endDate)),projectedOver=Math.max(0,projected-included),uplift=used-talk;
+  return{used,talk,remaining,included,daily,projected,projectedOver,uplift,upliftPct:talk?uplift/talk*100:0,usedPct:used/included*100,exhaustion:daily>0&&remaining>0?runwayAdd(latest,Math.ceil(remaining/daily)):used>=included?latest:null,inbound:sumBilledMinutes(billable.filter(r=>normalizeDirection(r.direction)==='inbound')),outbound:sumBilledMinutes(billable.filter(r=>normalizeDirection(r.direction)==='outbound')),allocation:Math.min(used,included)/included*Number(plan.commitmentRupees||0),projectedSpend:Number(plan.commitmentRupees||0)+projectedOver*Number(plan.overageRate||0)};
+}
+function paintBundleRunway(){
+  const el=$('bundleRunway');if(!el)return;if(!BILLING_PLAN){el.innerHTML='<div class="bundle-empty"><b>Billing plan not configured</b><span>Publish the encrypted contract settings from Admin Console.</span></div>';return;}
+  const p=BILLING_PLAN,s=billingRunwayStats(p),fmt=n=>Math.round(Number(n||0)).toLocaleString('en-IN'),money=n=>'₹'+Math.round(Number(n||0)).toLocaleString('en-IN'),selected=sumBilledMinutes(RECORDS),over=s.projectedOver>0,date=x=>new Date(x+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),headline=over?`Bundle likely exhausted ${s.exhaustion?date(s.exhaustion):'before cycle end'}`:`${fmt(Math.max(0,s.included-s.projected))} mins projected unused at cycle end`;
+  el.innerHTML=`<div class="bundle-head"><div><span>Commercial runway</span><h3>${headline}</h3><p>${date(p.startDate)} – ${date(p.endDate)}</p></div><div class="bundle-contract"><b>${money(p.commitmentRupees)}</b><span>${fmt(p.includedMinutes)} included mins</span></div></div><div class="bundle-kpis"><div><b>${fmt(s.talk)}</b><span>Raw talk-time mins</span></div><div><b>${fmt(s.used)}</b><span>Billable mins used</span></div><div><b>${fmt(s.remaining)}</b><span>Included balance</span></div><div><b>+${fmt(s.uplift)}</b><span>Rounding uplift · ${s.upliftPct.toFixed(1)}%</span></div></div><div class="bundle-progress"><div><b>${s.usedPct.toFixed(1)}% used</b><span>${fmt(s.used)} / ${fmt(s.included)} mins</span></div><div class="bundle-track"><i style="width:${Math.min(100,s.usedPct)}%"></i></div></div><div class="bundle-grid"><div><h4>Usage mix</h4><p><b>${fmt(s.inbound)}</b> inbound · <b>${fmt(s.outbound)}</b> outbound</p><p>Current filters contribute <b>${fmt(selected)} billed mins</b>.</p><p>Allocated prepaid value used: <b>${money(s.allocation)}</b> — not an extra invoice.</p></div><div class="bundle-projection"><span>14-day run rate</span><b>${fmt(s.daily)} mins/day</b><p>Projected cycle usage: <b>${fmt(s.projected)} mins</b>.</p><p>${over?`Projected overage: <b>${fmt(s.projectedOver)} mins · ${money(s.projectedOver*Number(p.overageRate||0))}</b>.`:'No post-bundle charge projected.'}</p><p>Projected total cycle spend: <b>${money(s.projectedSpend)}</b>.</p></div></div><div class="bundle-rule"><b>Billing rule:</b> completed or legacy done calls only; each non-zero call rounds up separately. Post-bundle rate: ${money(p.overageRate)}/min.</div>`;
 }
 
 // XSS protection — escape any Excel-sourced string before injecting via innerHTML
@@ -2609,7 +2625,7 @@ function paintManagementBrief(){
     ['good','Enquiries','n','count',()=>true],
     ['hot','Billable minutes','mins','minutes',()=>true],
     ['neut','Talk-time minutes','talkMins','talkMinutes',()=>true],
-    ['hot','Estimated operating cost','cost','currency',()=>true],
+    ['hot','Bundle value used','cost','currency',()=>true],
     ['good','Unique leads','unique','ratio',()=>true],
     ['hot','Follow-up requests','callbacks','ratio',r=>r.callback],
     ['hot','Hot leads','hot','ratio',r=>r.leadTemp==='Hot']
@@ -2657,7 +2673,7 @@ function boot(){
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
-  paintHealth(o);paintManagementBrief();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50;
   runPaintChunks(generation,[
@@ -2699,7 +2715,7 @@ function paintKPIs(o){
   const cards=[
     ["neut",o.n,"Total enquiries","all"],
     ["hot",totalMins+" mins","Billable minutes","all"],
-    ["hot","₹"+totalCost,"Estimated operating cost","all"],
+    ["hot","₹"+totalCost,"Bundle value used","all"],
     ["good",o.india+" India · "+o.intl+" International","India / International","geo"],
     ["good",avgDurMins+"m "+avgDurSecs+"s","Average enquiry duration","all"]
   ];
@@ -3178,7 +3194,7 @@ function ledgerRepeatInfo(r){
   return info||{count:1,latest:Number(r?.ts||0)};
 }
 function ledgerIsSerialCaller(r){return ledgerRepeatInfo(r).count>=2;}
-function ledgerCallCost(r){return normalizeDisposition(r)==='connected'?billedMinutes(r?.dur)*5:0;}
+function ledgerCallCost(r){return isBillableRecord(r)?billedMinutes(r?.dur)*5:0;}
 const _ledgerLeadCostCache=new WeakMap();
 function ledgerLeadCostMap(records){
   if(_ledgerLeadCostCache.has(records))return _ledgerLeadCostCache.get(records);
