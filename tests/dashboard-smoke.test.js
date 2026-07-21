@@ -90,7 +90,7 @@ scripts.forEach(script => vm.runInContext(script, context));
 for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
-  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'paintBundleRunway',
+  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
@@ -180,6 +180,12 @@ const runway=context.billingRunwayStats({startDate:'2030-01-01',endDate:'2031-01
 assert.equal(runway.used,2,'Runway must use strict per-call billed minutes');
 assert.equal(runway.talk,61/60,'Runway raw usage must retain actual talk time');
 assert.equal(runway.remaining,998,'Runway included balance changed');
+assert.equal(runway.recentDays,1,'Runway must expose the exact recent calendar-day window');
+const selectedUsage=context.selectedBillingStats([{d:'2030-01-01',status:'completed',dur:61,direction:'inbound'},{d:'2030-01-02',status:'done',dur:1,direction:'outbound'},{d:'2030-01-03',status:'failed',dur:120,direction:'outbound'}],{startDate:'2030-01-01',endDate:'2031-01-01'});
+assert.equal(selectedUsage.billed,3,'Selected-view billing must respond to the supplied filtered records');
+assert.equal(selectedUsage.inbound,2,'Selected-view inbound billing changed');
+assert.equal(selectedUsage.outbound,1,'Selected-view outbound billing changed');
+assert.equal(context.selectedBillingStats([], {startDate:'2030-01-01',endDate:'2031-01-01'}).billed,0,'An empty filtered view must show zero selected usage');
 assert.equal(context.sumTalkTimeMinutes([
   { status: 'completed', dur: 61, msg: 1, trans: 'connected' },
   { status: 'completed', dur: 3, msg: 1, trans: 'connected' },
@@ -251,6 +257,11 @@ assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard 
 assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);'), 'Management readout and bundle runway must render with the top essentials');
 assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"'), 'Bundle runway section is missing');
 assert(scripts[1].includes('data/voice_billing_plan.enc'), 'Encrypted billing plan path is missing');
+assert(scripts[1].includes('Selected view · updates with filters'), 'Bundle runway must visibly identify its filter-responsive figures');
+assert(scripts[1].includes('Bundle mins remaining'), 'Bundle balance must state that its unit is minutes');
+assert(scripts[1].includes('Recent daily bundle use'), 'Ambiguous 14-day run-rate wording must not return');
+assert(scripts[1].includes('including zero-call days'), 'Recent daily bundle use must define its calendar-day denominator');
+assert(scripts[1].includes("money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})"), 'Contract money display must preserve decimal rates');
 assert(!scripts[1].includes('["Source",SRC]'), 'Header source chip must remain removed');
 assert(scripts[1].includes('function renderHeaderMeta(records)'), 'First-load and filtered header chips must share one renderer');
 assert(scripts[1].includes("['hot','Billable minutes','mins','minutes',()=>true]"), 'Management readout must retain billable minutes');
