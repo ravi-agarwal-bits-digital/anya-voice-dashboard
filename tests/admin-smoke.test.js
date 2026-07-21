@@ -18,6 +18,7 @@ new Function(scripts[0]);
 
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Admin contains duplicate HTML IDs');
+for (const id of ['planStart','planEnd','includedMinutes','commitmentRupees','overageRate','openingUsedMinutes','planConfirm','planPublishBtn','planStatus']) assert(ids.includes(id), `Missing encrypted billing-plan control: ${id}`);
 assert(!html.includes('data:image'), 'Admin must use shared image assets');
 assert(html.includes('../assets/favicon.ico'), 'Admin favicon is missing');
 assert(html.includes('../assets/xlsx.full.min.js'), 'Admin must use local SheetJS');

@@ -90,7 +90,7 @@ scripts.forEach(script => vm.runInContext(script, context));
 for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
-  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes',
+  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
@@ -174,6 +174,12 @@ assert.equal(context.sumBilledMinutes([
   { status: 'failed', dur: 120, msg: 0, trans: '' },
   { status: 'initiated', dur: 60, msg: 0, trans: '' }
 ]), 2, 'Only connected calls should contribute billed minutes');
+assert.equal(context.sumBilledMinutes([{ status: 'done', dur: 61 }]), 2, 'Legacy done calls must follow per-call billing rounding');
+assert.equal(context.sumBilledMinutes([{ status: 'success', dur: 61 }]), 0, 'Non-contract status aliases must not be billed');
+const runway=context.billingRunwayStats({startDate:'2030-01-01',endDate:'2031-01-01',includedMinutes:1000,commitmentRupees:5000,overageRate:2.5,openingUsedMinutes:0},[{d:'2030-01-01',status:'completed',dur:61,direction:'inbound'},{d:'2030-01-01',status:'failed',dur:120,direction:'outbound'}]);
+assert.equal(runway.used,2,'Runway must use strict per-call billed minutes');
+assert.equal(runway.talk,61/60,'Runway raw usage must retain actual talk time');
+assert.equal(runway.remaining,998,'Runway included balance changed');
 assert.equal(context.sumTalkTimeMinutes([
   { status: 'completed', dur: 61, msg: 1, trans: 'connected' },
   { status: 'completed', dur: 3, msg: 1, trans: 'connected' },
@@ -242,13 +248,15 @@ assert(html.includes('Management readout'), 'Management readout must sit in the 
 assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be merged into overview');
 assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
 assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard render must not target the removed KPI strip');
-assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintFunnel(o);'), 'Management readout must render with the top essentials');
+assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);'), 'Management readout and bundle runway must render with the top essentials');
+assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"'), 'Bundle runway section is missing');
+assert(scripts[1].includes('data/voice_billing_plan.enc'), 'Encrypted billing plan path is missing');
 assert(!scripts[1].includes('["Source",SRC]'), 'Header source chip must remain removed');
 assert(scripts[1].includes('function renderHeaderMeta(records)'), 'First-load and filtered header chips must share one renderer');
 assert(scripts[1].includes("['hot','Billable minutes','mins','minutes',()=>true]"), 'Management readout must retain billable minutes');
 assert(scripts[1].includes("['neut','Talk-time minutes','talkMins','talkMinutes',()=>true]"), 'Management readout must show talk-time minutes beside billable minutes');
 assert(scripts[1].includes('Billing clarity:'), 'Management readout must explain the impact of per-call billing rounding');
-assert(scripts[1].includes("['hot','Estimated operating cost','cost','currency',()=>true]"), 'Management readout must retain operating cost');
+assert(scripts[1].includes("['hot','Bundle value used','cost','currency',()=>true]"), 'Management readout must retain prepaid bundle allocation');
 assert(html.includes('class="side-group open" data-group="outbound"'), 'Outbound navigation should be expanded by default');
 assert(html.includes('class="side-group open" data-group="leads"'), 'Leads navigation should be expanded by default');
 assert(html.includes('<optgroup label="Cost exposure">'), 'Ledger needs a clear cost-exposure sort group');

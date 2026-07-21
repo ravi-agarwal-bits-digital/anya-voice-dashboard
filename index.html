@@ -81,6 +81,7 @@
       <button type="button" class="side-group-label"><span>Overview</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link active" href="#sec-overview"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg></span><span>Overview</span></a>
+        <a class="side-link" href="#sec-bundle"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4z"></path><path d="M7 4h10v3"></path><path d="M8 13h8"></path></svg></span><span>Bundle runway</span></a>
         <a class="side-link" href="#sec-anomaly" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"></path></svg></span><span>What moved</span></a>
         <a class="side-link" href="#sec-direction"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M21 7H8"></path><path d="M7 21l-4-4 4-4"></path><path d="M3 17h13"></path></svg></span><span>Call flow</span></a>
       </div>
@@ -206,6 +207,12 @@
       <div id="briefSummary" class="brief-summary-text">Load data to generate a management-ready summary.</div>
       <div class="strip" id="briefKpis"></div>
     </div>
+  </section>
+
+  <section id="sec-bundle" class="bundle-runway-section">
+    <div class="shead"><span class="n">₹</span><h2>Voice usage &amp; runway</h2></div>
+    <div class="cap" style="margin:-10px 0 16px">Contract-cycle usage, billing-rounding impact and projected cash exposure. This section always uses the complete encrypted plan cycle; dashboard filters only affect the small selected-view contribution.</div>
+    <div id="bundleRunway" class="panel bundle-runway"><div class="bundle-empty">Loading encrypted billing plan…</div></div>
   </section>
 
   <section id="sec-anomaly" data-hide-in-reduced-view="true">
