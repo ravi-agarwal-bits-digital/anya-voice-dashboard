@@ -92,7 +92,7 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
-  'istHourFromTs', 'concurrencyStats', 'callPaceRecords', 'paintCallPace',
+  'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'paintCallPace',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isGzipData', 'unpackPublishedData',
@@ -124,6 +124,12 @@ assert.equal(paceStats.attempts,4,'Pace volume must include failed outbound atte
 assert.equal(paceStats.connected,3,'Observed live-call concurrency must use connected calls only');
 assert.equal(paceStats.peak,2,'Calls touching at the same end/start second must not be falsely counted as overlapping');
 assert.equal(paceStats.peakStarts,3,'Peak starts per minute must include every dial attempt');
+assert(context.isCapacityLimitFailure({failReason:'concurrency_limit_reached'}),'Explicit concurrency-limit failures must be detected');
+assert(!context.isCapacityLimitFailure({failReason:'callee_busy'}),'Ordinary callee busy outcomes must not be treated as vendor capacity evidence');
+const capacityFailStats=context.concurrencyStats([{ts:200,dur:0,status:'failed',failReason:'channel capacity exceeded'}]);
+assert.equal(context.capacityEvidenceVerdict(capacityFailStats,37).tone,'fail','Explicit capacity failure below the configured reference must be flagged');
+assert.equal(context.capacityEvidenceVerdict({peak:37,capacityFailures:[]},37).tone,'pass','Observed configured concurrency must count as demonstrated capacity');
+assert.equal(context.capacityEvidenceVerdict({peak:12,capacityFailures:[]},37).unevidenced,25,'Capacity evidence must quantify only the unverified gap');
 context.__paceRows=[
   {d:'2030-01-01',ts:100,dur:60,status:'completed',direction:'inbound',campaign:''},
   {d:'2030-01-01',ts:110,dur:60,status:'completed',direction:'outbound',campaign:'Campaign A'},
@@ -131,7 +137,8 @@ context.__paceRows=[
 ];
 vm.runInContext("ALL_DIALS=__paceRows;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';BILLING_PLAN={concurrentChannels:37};",context);
 context.paintCallPace();
-assert(getElement('callPaceSummary').innerHTML.includes('of 37 configured channels'),'Configured vendor channels must appear in the rendered pace panel');
+assert(getElement('callPaceSummary').innerHTML.includes('of 37 channels demonstrated'),'Configured vendor channels must appear in the rendered evidence verdict');
+assert(getElement('callPaceSummary').innerHTML.includes('Inspect hourly proof')&&getElement('callPaceSummary').innerHTML.includes('openFilteredPanel'),'Capacity evidence must be interactive');
 assert(getElement('callPaceSummary').innerHTML.includes('Inbound')&&getElement('callPaceSummary').innerHTML.includes('Outbound'),'All-calls pace view must compare both directions');
 vm.runInContext("SELECTED_DIRECTION='outbound';",context);context.paintCallPace();
 assert(!getElement('callPaceSummary').innerHTML.includes('>Inbound<'),'Outbound filter must remove the inbound pace card');
@@ -281,9 +288,11 @@ assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard 
 assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);'), 'Management readout and bundle runway must render with the top essentials');
 assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"'), 'Bundle runway section is missing');
 assert(scripts[1].includes('data/voice_billing_plan.enc'), 'Encrypted billing plan path is missing');
-assert(html.includes('id="callPaceSummary"') && html.includes('Call pace &amp; observed concurrency'), 'Visible call pace and concurrency panel is missing');
+assert(html.includes('id="callPaceSummary"') && html.includes('Dialer pace &amp; vendor capacity evidence'), 'Visible vendor capacity evidence panel is missing');
 assert(!html.includes('id="concKpis"'), 'Hidden legacy concurrency panel must not remain duplicated');
 assert(scripts[1].includes('Dials attempted') && scripts[1].includes('Peak starts / min'), 'Outbound pace context is incomplete');
+assert(scripts[1].includes('Capacity-limit signals below the configured commitment'), 'Vendor capacity evidence needs an explicit below-commitment warning');
+assert(scripts[1].includes('channels are not yet evidenced—not disproved'), 'Capacity gap must not be presented as proof of vendor failure');
 assert(scripts[1].includes('connected · ${obAttempts} dials'), 'Direction comparison must expose outbound attempts beside connected calls');
 assert(scripts[1].includes('outboundAttempts.toLocaleString()} total dials attempted'), 'Management outbound KPI must expose attempted dials');
 assert(scripts[1].includes('paintBundleRunway();paintCallPace();'), 'Published capacity configuration must repaint the concurrency comparison');
