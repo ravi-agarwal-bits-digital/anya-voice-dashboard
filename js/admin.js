@@ -2,7 +2,8 @@
 const ADMIN_PASSWORD_HASH =
   "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a";
 const DATA_MAGIC = "AANYAENC1",
-  TOKEN_MAGIC = "ANYATOKEN1";
+  TOKEN_MAGIC = "ANYATOKEN1",
+  PLAN_DRAFT_MAGIC = "ANYAPLAN1";
 const SESSION = {
   auth: "anya_admin_auth_v2",
   started: "anya_admin_started_v2",
@@ -13,7 +14,9 @@ const SESSION = {
 const STORE = {
   vault: "anya_admin_token_vault_v2",
   repo: "anya_admin_repo_settings_v2",
+  plan: "anya_admin_billing_plan_draft_v1",
 };
+const PLAN_FIELDS = ["planStart", "planEnd", "includedMinutes", "commitmentRupees", "overageRate", "openingUsedMinutes", "concurrentChannels"];
 const IDLE_MINS = 60,
   MAX_SESSION_MINS = 720;
 const REQUIRED = [
@@ -51,7 +54,8 @@ let ADMIN_PASSPHRASE = "",
   selectedFile = null,
   validation = null,
   sessionTimer = null,
-  publishing = false;
+  publishing = false,
+  planDraftTimer = null;
 const $ = (id) => document.getElementById(id),
   esc = (s) =>
     String(s ?? "").replace(
@@ -125,6 +129,7 @@ function showApp() {
   loadSettings();
   loadSessionToken();
   refreshVault();
+  restoreBillingPlanForm().catch(() => {});
   startSession();
 }
 async function unlock() {
@@ -691,10 +696,49 @@ function billingPlanPath(s) {
   const slash=s.path.lastIndexOf('/');
   return `${slash>=0?s.path.slice(0,slash+1):''}voice_billing_plan.enc`;
 }
+function billingPlanFormValues(){
+  return Object.fromEntries(PLAN_FIELDS.map(id=>[id,$(id).value]));
+}
+function fillBillingPlanForm(values){
+  if(!values)return;
+  PLAN_FIELDS.forEach(id=>{if(values[id]!==undefined&&values[id]!==null)$(id).value=String(values[id]);});
+}
+async function saveBillingPlanDraft(values=billingPlanFormValues()){
+  if(!ADMIN_PASSPHRASE)return;
+  const encrypted=await encryptBytes(new TextEncoder().encode(JSON.stringify(values)),ADMIN_PASSPHRASE,PLAN_DRAFT_MAGIC);
+  localStorage.setItem(STORE.plan,bytesToBase64(encrypted));
+}
+function scheduleBillingPlanDraft(){
+  clearTimeout(planDraftTimer);
+  planDraftTimer=setTimeout(()=>saveBillingPlanDraft().catch(()=>{}),500);
+}
+async function restoreBillingPlanForm(){
+  if(!ADMIN_PASSPHRASE)return null;
+  const saved=localStorage.getItem(STORE.plan);
+  if(saved){
+    try{
+      const plain=await decryptBytes(base64ToBytes(saved),ADMIN_PASSPHRASE,PLAN_DRAFT_MAGIC),values=JSON.parse(new TextDecoder().decode(plain));
+      fillBillingPlanForm(values);
+      show('planStatus','Restored encrypted billing and capacity settings saved on this device.','ok');
+      return values;
+    }catch(e){/* Try the published encrypted plan below. */}
+  }
+  try{
+    const relative=`../${billingPlanPath(settings())}`;
+    const response=await fetch(`${relative}?t=${Date.now()}`,{cache:'no-store'});
+    if(!response.ok)return null;
+    const encrypted=new Uint8Array(await response.arrayBuffer()),plain=await decryptBytes(encrypted,ADMIN_PASSPHRASE,DATA_MAGIC),plan=JSON.parse(new TextDecoder().decode(plain));
+    const values={planStart:plan.startDate,planEnd:plan.endDate,includedMinutes:plan.includedMinutes,commitmentRupees:plan.commitmentRupees,overageRate:plan.overageRate,openingUsedMinutes:plan.openingUsedMinutes||0,concurrentChannels:plan.concurrentChannels||''};
+    fillBillingPlanForm(values);
+    await saveBillingPlanDraft(values);
+    show('planStatus','Loaded the currently published encrypted billing plan. Add the channel commitment if it is not configured yet.','info');
+    return values;
+  }catch(e){return null;}
+}
 function readBillingPlanForm(){
-  const plan={schemaVersion:1,startDate:$("planStart").value,endDate:$("planEnd").value,includedMinutes:Number($("includedMinutes").value),commitmentRupees:Number($("commitmentRupees").value),overageRate:Number($("overageRate").value),openingUsedMinutes:Number($("openingUsedMinutes").value||0)};
+  const plan={schemaVersion:2,startDate:$("planStart").value,endDate:$("planEnd").value,includedMinutes:Number($("includedMinutes").value),commitmentRupees:Number($("commitmentRupees").value),overageRate:Number($("overageRate").value),openingUsedMinutes:Number($("openingUsedMinutes").value||0),concurrentChannels:Number($("concurrentChannels").value||0)};
   if(!/^\d{4}-\d{2}-\d{2}$/.test(plan.startDate)||!/^\d{4}-\d{2}-\d{2}$/.test(plan.endDate)||plan.endDate<=plan.startDate)throw Error('Enter a valid contract start and later end date.');
-  if(!(plan.includedMinutes>0)||!(plan.commitmentRupees>=0)||!(plan.overageRate>=0)||!(plan.openingUsedMinutes>=0))throw Error('Enter valid non-negative plan amounts and a positive minute allowance.');
+  if(!(plan.includedMinutes>0)||!(plan.commitmentRupees>=0)||!(plan.overageRate>=0)||!(plan.openingUsedMinutes>=0)||!(plan.concurrentChannels>=0)||!Number.isInteger(plan.concurrentChannels))throw Error('Enter valid plan amounts, a positive minute allowance and a whole-number channel commitment.');
   return plan;
 }
 async function publishBillingPlan(){
@@ -716,6 +760,7 @@ async function publishBillingPlan(){
     if(!commitSha)throw Error('GitHub accepted the billing plan but did not return a commit identifier.');
     const verify=await fetch(`${url}?ref=${encodeURIComponent(commitSha)}&t=${Date.now()}`,{cache:'no-store',headers:{...headers,Accept:'application/vnd.github.raw+json'}});
     if(!verify.ok||!equalBytes(new Uint8Array(await verify.arrayBuffer()),encrypted))throw Error('Published billing-plan verification failed. Review the latest repository commit.');
+    await saveBillingPlanDraft({planStart:plan.startDate,planEnd:plan.endDate,includedMinutes:plan.includedMinutes,commitmentRupees:plan.commitmentRupees,overageRate:plan.overageRate,openingUsedMinutes:plan.openingUsedMinutes,concurrentChannels:plan.concurrentChannels||''});
     show('planStatus','Encrypted billing plan published. Refresh the dashboard to view runway.','ok');
     $("planConfirm").checked=false;
   }catch(e){show('planStatus',e.message||String(e),'err');}
@@ -940,6 +985,7 @@ function bind() {
   $("publishBtn").onclick = publish;
   $("planConfirm").onchange=()=>{$("planPublishBtn").disabled=!$("planConfirm").checked;};
   $("planPublishBtn").onclick=publishBillingPlan;
+  PLAN_FIELDS.forEach(id=>{$(id).oninput=scheduleBillingPlanDraft;});
   $("saveSettingsBtn").onclick = saveSettings;
   $("clearTokenBtn").onclick = clearSessionToken;
   $("unlockVaultBtn").onclick = unlockVault;

@@ -229,6 +229,10 @@
       <div class="cap" style="margin-top:-8px;margin-bottom:4px">Same metrics, both directions, side by side &mdash; always shown regardless of the view toggle above.</div>
       <div style="overflow-x:auto" id="dirCompareTable"></div>
     </div>
+    <div class="panel call-pace-panel" style="margin-top:16px">
+      <div class="call-pace-head"><div><h4>Call pace &amp; observed concurrency</h4><div class="cap">Attempts show workload; overlapping connected calls show the minimum live channels proven by the export.</div></div><span id="callPaceScope" class="opf-scope-note"></span></div>
+      <div id="callPaceSummary"></div>
+    </div>
   </section>
 
 
@@ -324,15 +328,14 @@
   </section>
 
   <section id="sec-outbound-cadence" data-hide-in-reduced-view="true">
-    <div class="shead"><span class="n">09</span><h2>Outbound Cadence &amp; Capacity</h2><span id="cadenceScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
-    <div class="cap" style="margin:-10px 0 18px">How many lines you need, whether the dialer is honouring your calling policy, and the retry cadence that actually gets a connection without over-calling.</div>
-    <div class="panel"><h4>Concurrency &amp; capacity</h4><div class="cap">Simultaneous live conversations across the selected range &mdash; peak overlap sets your minimum channel/licence count. Talk time only; a ringing line is also occupied, so treat the peak as a floor.</div><div class="strip" id="concKpis"></div><div class="subh" style="margin-top:18px">Peak concurrent calls by hour of day (IST)</div><div class="conc-chart" id="concChart"></div><div class="conc-axis" id="concAxis"></div></div>
-    <div class="panel" style="margin-top:24px"><h4>Calling-policy compliance</h4><div class="cap">Your rule: after a no-pickup, up to <b>2 more attempts at ~6-hour intervals</b>, only within <b>9am&ndash;9pm</b>. Whether the dialer is actually doing that.</div><div id="cadenceScorecard"></div><div id="cadenceNote" class="opf-bestwin" style="display:none"></div></div>
+    <div class="shead"><span class="n">09</span><h2>Outbound cadence</h2><span id="cadenceScopeNote" class="opf-scope-note" style="display:none">Outbound calls only, even in this view</span></div>
+    <div class="cap" style="margin:-10px 0 18px">Whether the dialer is honouring your calling policy, and the retry cadence that actually gets a connection without over-calling.</div>
+    <div class="panel"><h4>Calling-policy compliance</h4><div class="cap">Your rule: after a no-pickup, up to <b>2 more attempts at ~6-hour intervals</b>, only within <b>9am&ndash;9pm</b>. Whether the dialer is actually doing that.</div><div id="cadenceScorecard"></div><div id="cadenceNote" class="opf-bestwin" style="display:none"></div></div>
     <div class="panel" style="margin-top:24px"><h4>Retry economics &mdash; what cadence actually works</h4><div class="cap">The right policy read off your own data: how many attempts you actually need, and whether the 6-hour gap earns its keep.</div><div class="grid2"><div><div class="subh">Cumulative reach by attempt # <span style="color:var(--faint);font-weight:600">(of everyone ever reached)</span></div><div id="reachBars"></div></div><div><div class="subh">Connect rate of a retry, by gap since last try</div><div id="gapBars"></div></div></div><div id="retryReco" class="reco"></div></div>
   </section>
 
   <section id="sec-outbound-cadence-hidden" style="display:none">
-    <div class="opf-hidden-note">Outbound Cadence &amp; Capacity is hidden in Inbound view &mdash; dial cadence, retry policy, and connect economics only apply to calls you place. It reappears under Outbound or All calls.</div>
+    <div class="opf-hidden-note">Outbound cadence is hidden in Inbound view &mdash; retry policy and connect economics only apply to calls you place. It reappears under Outbound or All calls.</div>
   </section>
 
   <section id="sec-campaigns">

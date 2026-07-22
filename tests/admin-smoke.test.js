@@ -18,9 +18,11 @@ new Function(scripts[0]);
 
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Admin contains duplicate HTML IDs');
-for (const id of ['planStart','planEnd','includedMinutes','commitmentRupees','overageRate','openingUsedMinutes','planConfirm','planPublishBtn','planStatus']) assert(ids.includes(id), `Missing encrypted billing-plan control: ${id}`);
+for (const id of ['planStart','planEnd','includedMinutes','commitmentRupees','overageRate','openingUsedMinutes','concurrentChannels','planConfirm','planPublishBtn','planStatus']) assert(ids.includes(id), `Missing encrypted billing-plan control: ${id}`);
 assert(html.includes('Prior billed mins outside uploaded data'), 'Admin must explain the opening usage adjustment');
 assert(html.includes('Keep 0 when uploaded data covers the contract from its start.'), 'Admin opening usage guidance is missing');
+assert(html.includes('Vendor concurrent channels'), 'Admin vendor channel reference is missing');
+assert(html.includes('encrypted local draft'), 'Admin must explain secure billing-plan persistence');
 assert(!html.includes('data:image'), 'Admin must use shared image assets');
 assert(html.includes('../assets/favicon.ico'), 'Admin favicon is missing');
 assert(html.includes('../assets/xlsx.full.min.js'), 'Admin must use local SheetJS');
@@ -91,7 +93,7 @@ const context = {
   window: {}
 };
 vm.createContext(context);
-vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,gzipBytes,gunzipBytes,validationSheetName};`, context);
+vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,gzipBytes,gunzipBytes,validationSheetName,readBillingPlanForm,billingPlanFormValues,fillBillingPlanForm,saveBillingPlanDraft,restoreBillingPlanForm};`, context);
 
 const required = ['Created At (IST)', 'Call ID', 'Direction', 'Status', 'From', 'To', 'Duration (s)', 'Messages', 'Full Transcript'];
 const baseRow = {
@@ -150,6 +152,17 @@ assert.equal(largeValidation.metrics.dateMax.getDate(), 11, 'Large workbook maxi
   const encrypted = await context.__adminTest.encryptBytes(source, 'test-passphrase', 'AANYAENC1');
   const decrypted = await context.__adminTest.decryptBytes(encrypted, 'test-passphrase', 'AANYAENC1');
   assert(context.__adminTest.equalBytes(source, decrypted), 'Encryption round-trip failed');
+  Object.entries({planStart:'2030-01-01',planEnd:'2031-01-01',includedMinutes:'12345',commitmentRupees:'67890',overageRate:'3.25',openingUsedMinutes:'0',concurrentChannels:'37'}).forEach(([id,value])=>{element(id).value=value;});
+  vm.runInContext(`ADMIN_PASSPHRASE='test-passphrase';`, context);
+  const plan=context.__adminTest.readBillingPlanForm();
+  assert.equal(plan.concurrentChannels,37,'Channel commitment must remain a whole-number encrypted plan field');
+  await context.__adminTest.saveBillingPlanDraft();
+  const encryptedDraft=storage.getItem('anya_admin_billing_plan_draft_v1');
+  assert(encryptedDraft&&!encryptedDraft.includes('12345')&&!encryptedDraft.includes('67890'),'Billing settings must not be stored in plaintext');
+  element('includedMinutes').value='';element('concurrentChannels').value='';
+  await context.__adminTest.restoreBillingPlanForm();
+  assert.equal(element('includedMinutes').value,'12345','Encrypted billing draft must restore commercial values');
+  assert.equal(element('concurrentChannels').value,'37','Encrypted billing draft must restore the channel commitment');
   const repetitiveCsv = new TextEncoder().encode('Created At (IST),Call ID\n'.repeat(300));
   const compressedCsv = await context.__adminTest.gzipBytes(repetitiveCsv);
   assert(compressedCsv.length < repetitiveCsv.length, 'CSV compression should reduce repetitive exports');
