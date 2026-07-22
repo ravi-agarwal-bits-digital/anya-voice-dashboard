@@ -1889,10 +1889,16 @@ function istHourFromTs(ts){
 function formatIstMoment(ts){
   return new Date(Number(ts||0)*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true});
 }
+function capacityFailureText(r){
+  return [r?.failStage,r?.failReason,r?.failDetail,r?.hangupCause].map(v=>String(v||'').trim()).filter(Boolean).join(' ');
+}
+function isCapacityLimitFailure(r){
+  return /concurren|channel[\s_-]*(?:limit|capacity|exhaust)|capacity[\s_-]*(?:limit|exceed|exhaust)|rate[\s_-]*limit|throttl|quota|too many.{0,12}calls?|max(?:imum)?.{0,12}calls?/i.test(capacityFailureText(r));
+}
 function concurrencyStats(records=[]){
   const attempts=(records||[]).filter(r=>Number(r?.ts)>0),connected=attempts.filter(r=>normalizeDisposition(r)==='connected'&&Number(r.dur)>0);
-  const events=[],minuteStarts=new Map(),hourPeak=new Array(24).fill(0);
-  attempts.forEach(r=>{const minute=Math.floor(r.ts/60);minuteStarts.set(minute,(minuteStarts.get(minute)||0)+1);});
+  const events=[],minuteStarts=new Map(),hourPeak=new Array(24).fill(0),hourRecords=Array.from({length:24},()=>[]);
+  attempts.forEach(r=>{const minute=Math.floor(r.ts/60);if(!minuteStarts.has(minute))minuteStarts.set(minute,[]);minuteStarts.get(minute).push(r);hourRecords[istHourFromTs(r.ts)].push(r);});
   connected.forEach(r=>{events.push([r.ts,1]);events.push([r.ts+Number(r.dur),-1]);});
   // [start,end): when one call ends exactly as another starts, end first so they do not overlap.
   events.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
@@ -1902,9 +1908,17 @@ function concurrencyStats(records=[]){
     if(d===1){const h=istHourFromTs(t);hourPeak[h]=Math.max(hourPeak[h],cur);}
     if(cur>peak){peak=cur;peakT=t;}
   }
-  let peakStarts=0,peakStartsT=0;
-  minuteStarts.forEach((count,minute)=>{if(count>peakStarts){peakStarts=count;peakStartsT=minute*60;}});
-  return{attempts:attempts.length,connected:connected.length,peak,peakT,peakStarts,peakStartsT,hourPeak,records:attempts,connectedRecords:connected};
+  let peakStarts=0,peakStartsT=0,peakStartRecords=[];
+  minuteStarts.forEach((rows,minute)=>{if(rows.length>peakStarts){peakStarts=rows.length;peakStartsT=minute*60;peakStartRecords=rows;}});
+  const peakRecords=peakT?connected.filter(r=>r.ts<=peakT&&r.ts+Number(r.dur)>peakT):[];
+  return{attempts:attempts.length,connected:connected.length,peak,peakT,peakStarts,peakStartsT,peakStartRecords,peakRecords,hourPeak,hourRecords,capacityFailures:attempts.filter(isCapacityLimitFailure),records:attempts,connectedRecords:connected};
+}
+function capacityEvidenceVerdict(stats,limit){
+  const configured=Math.max(0,Number(limit||0)),demonstrated=Number(stats?.peak||0),failures=stats?.capacityFailures?.length||0,unevidenced=Math.max(0,configured-demonstrated);
+  if(!configured)return{tone:'missing',title:'Add the channel commitment to test the claim',detail:'Observed concurrency is available, but there is no configured reference yet.',demonstrated,unevidenced:0,failures};
+  if(demonstrated>=configured)return{tone:'pass',title:`Configured capacity demonstrated`,detail:`The export proves ${demonstrated.toLocaleString('en-IN')} simultaneous connected calls against ${configured.toLocaleString('en-IN')} configured channels.${failures?' Explicit limit signals also appeared once the reference was reached.':''}`,demonstrated,unevidenced:0,failures};
+  if(failures)return{tone:'fail',title:'Capacity-limit signals below the configured commitment',detail:`${failures.toLocaleString('en-IN')} call${failures===1?'':'s'} explicitly mention throttling, concurrency, channel or capacity limits while the observed peak remained ${demonstrated.toLocaleString('en-IN')} of ${configured.toLocaleString('en-IN')}. Review these records with the vendor.`,demonstrated,unevidenced,failures};
+  return{tone:'inconclusive',title:`${demonstrated.toLocaleString('en-IN')} of ${configured.toLocaleString('en-IN')} channels demonstrated`,detail:`The remaining ${unevidenced.toLocaleString('en-IN')} channels are not yet evidenced—not disproved. A controlled burst or ringing-duration logs are needed to verify the full commitment.`,demonstrated,unevidenced,failures};
 }
 function callPaceRecords(direction){
   return (ALL_DIALS||[]).filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)===direction);
@@ -1914,17 +1928,18 @@ function paintCallPace(){
   const directions=SELECTED_DIRECTION==='all'?['inbound','outbound']:[SELECTED_DIRECTION],packs=directions.map(direction=>({direction,stats:concurrencyStats(callPaceRecords(direction))})),combined=concurrencyStats(packs.flatMap(p=>p.stats.records)),limit=Math.max(0,Number(BILLING_PLAN?.concurrentChannels||0)),fmt=n=>Number(n||0).toLocaleString('en-IN');
   if(scope)scope.textContent=`${currentDirectionLabel()} · active date${activeCampaigns().size?' & campaign':''} filters`;
   if(!combined.attempts){el.innerHTML=emptyViewHtml('No calls match the current pace view.');return;}
-  const observedPct=limit?Math.round(combined.peak/limit*100):null;
-  const capacity=limit
-    ?`<div class="call-pace-capacity"><div><span>Observed live-call peak</span><b>${fmt(combined.peak)} <small>of ${fmt(limit)} configured channels</small></b></div><div class="call-pace-meter"><i style="width:${Math.min(100,observedPct)}%"></i></div><p>${observedPct}% observed floor${combined.peakT?` · ${formatIstMoment(combined.peakT)} IST`:' · no connected overlap in this view'}</p></div>`
-    :`<div class="call-pace-capacity missing"><div><span>Observed live-call peak</span><b>${fmt(combined.peak)}</b></div><p>Add the vendor channel commitment in Admin to show the reference comparison.</p></div>`;
+  const verdict=capacityEvidenceVerdict(combined,limit),observedPct=limit?Math.round(combined.peak/limit*100):0;
+  window.__pacePeakLive=combined.peakRecords;window.__pacePeakStarts=combined.peakStartRecords;window.__paceCapacityFailures=combined.capacityFailures;
+  const capacity=`<div class="call-pace-capacity ${verdict.tone}"><div class="call-pace-verdict"><span>Capacity evidence</span><strong>${esc(verdict.title)}</strong><p>${esc(verdict.detail)}</p></div>${limit?`<div class="call-pace-meter"><i style="width:${Math.min(100,observedPct)}%"></i></div>`:''}<div class="call-pace-evidence-grid"><button type="button" onclick="openFilteredPanel('Peak simultaneous connected calls',()=>true,window.__pacePeakLive)" ${combined.peakRecords.length?'':'disabled'}><b>${fmt(combined.peak)}</b><span>Channels demonstrated</span><small>${combined.peakT?formatIstMoment(combined.peakT)+' IST':'No connected overlap'}</small></button><div><b>${limit?fmt(verdict.unevidenced):'—'}</b><span>Channels not yet evidenced</span><small>${limit?'Not the same as failed':'Configure a reference'}</small></div><button type="button" onclick="openFilteredPanel('Explicit capacity-limit signals',()=>true,window.__paceCapacityFailures)" ${combined.capacityFailures.length?'':'disabled'}><b>${fmt(combined.capacityFailures.length)}</b><span>Explicit limit signals</span><small>${combined.capacityFailures.length?'Open vendor evidence':'None recorded'}</small></button><button type="button" onclick="openFilteredPanel('Busiest call-start minute',()=>true,window.__pacePeakStarts)" ${combined.peakStartRecords.length?'':'disabled'}><b>${fmt(combined.peakStarts)}</b><span>Starts in busiest minute</span><small>${combined.peakStartsT?formatIstMoment(combined.peakStartsT)+' IST':'No starts'}</small></button></div></div>`;
   const cards=packs.map(({direction,stats})=>{
     const outbound=direction==='outbound',label=outbound?'Outbound':'Inbound',volumeLabel=outbound?'Dials attempted':'Calls received';
-    return `<div class="call-pace-card ${direction}"><div class="call-pace-card-head"><span class="opf-dirdot opf-${direction}"></span><b>${label}</b></div><div class="call-pace-metrics"><div><b>${fmt(stats.attempts)}</b><span>${volumeLabel}</span></div><div><b>${fmt(stats.connected)}</b><span>Connected</span></div><div><b>${fmt(stats.peakStarts)}</b><span>Peak starts / min</span></div><div><b>${fmt(stats.peak)}</b><span>Peak live calls</span></div></div>${stats.peakStartsT?`<p>Fastest minute: ${formatIstMoment(stats.peakStartsT)} IST.</p>`:''}</div>`;
+    const ref=outbound?'Outbound':'Inbound';window[`__pace${ref}`]=stats.records;window[`__pace${ref}Connected`]=stats.connectedRecords;window[`__pace${ref}PeakStarts`]=stats.peakStartRecords;window[`__pace${ref}PeakLive`]=stats.peakRecords;
+    return `<div class="call-pace-card ${direction}"><div class="call-pace-card-head"><span class="opf-dirdot opf-${direction}"></span><b>${label}</b></div><div class="call-pace-metrics"><button type="button" onclick="openFilteredPanel('${volumeLabel} (${label})',()=>true,window.__pace${ref})"><b>${fmt(stats.attempts)}</b><span>${volumeLabel}</span></button><button type="button" onclick="openFilteredPanel('Connected (${label})',()=>true,window.__pace${ref}Connected)" ${stats.connected?'':'disabled'}><b>${fmt(stats.connected)}</b><span>Connected</span></button><button type="button" onclick="openFilteredPanel('Busiest start minute (${label})',()=>true,window.__pace${ref}PeakStarts)" ${stats.peakStartRecords.length?'':'disabled'}><b>${fmt(stats.peakStarts)}</b><span>Peak starts / min</span></button><button type="button" onclick="openFilteredPanel('Peak live calls (${label})',()=>true,window.__pace${ref}PeakLive)" ${stats.peakRecords.length?'':'disabled'}><b>${fmt(stats.peak)}</b><span>Peak live calls</span></button></div>${stats.peakStartsT?`<p>Fastest minute: ${formatIstMoment(stats.peakStartsT)} IST · click any metric for its calls.</p>`:''}</div>`;
   }).join('');
   const max=Math.max(1,...packs.flatMap(p=>p.stats.hourPeak));
-  const bars=Array.from({length:24},(_,hour)=>`<div class="call-pace-hour"><div class="call-pace-bars">${packs.map(p=>`<i class="${p.direction}" style="height:${p.stats.hourPeak[hour]/max*100}%" title="${hour}:00 IST · ${p.direction} peak ${p.stats.hourPeak[hour]}"></i>`).join('')}</div><span>${hour%3===0?String(hour).padStart(2,'0'):''}</span></div>`).join('');
-  el.innerHTML=`${capacity}<div class="call-pace-grid">${cards}</div><details class="call-pace-proof"><summary>View hourly concurrency proof</summary><div class="call-pace-legend">${packs.map(p=>`<span><i class="${p.direction}"></i>${p.direction==='inbound'?'Inbound':'Outbound'}</span>`).join('')}</div><div class="call-pace-chart">${bars}</div></details><div class="call-pace-caveat"><b>Interpretation:</b> peak starts show launch/arrival pace. Live-call concurrency counts overlapping connected talk time only, so it is a proven minimum—not a test of maximum vendor capacity or ringing occupancy.</div>`;
+  window.__paceHourRecords=Array.from({length:24},(_,hour)=>packs.flatMap(p=>p.stats.hourRecords[hour]));
+  const bars=Array.from({length:24},(_,hour)=>`<button type="button" class="call-pace-hour" onclick="openFilteredPanel('${String(hour).padStart(2,'0')}:00–${String((hour+1)%24).padStart(2,'0')}:00 IST call starts',()=>true,window.__paceHourRecords[${hour}])" ${window.__paceHourRecords[hour].length?'':'disabled'} title="Open ${window.__paceHourRecords[hour].length} calls started from ${String(hour).padStart(2,'0')}:00 IST"><span class="call-pace-bars">${packs.map(p=>`<i class="${p.direction}" style="height:${p.stats.hourPeak[hour]/max*100}%" title="${hour}:00 IST · ${p.direction} peak ${p.stats.hourPeak[hour]}"></i>`).join('')}</span><span>${hour%3===0?String(hour).padStart(2,'0'):''}</span></button>`).join('');
+  el.innerHTML=`${capacity}<div class="call-pace-grid">${cards}</div><details class="call-pace-proof"><summary>Inspect hourly proof</summary><div class="call-pace-legend">${packs.map(p=>`<span><i class="${p.direction}"></i>${p.direction==='inbound'?'Inbound':'Outbound'}</span>`).join('')}</div><div class="call-pace-chart">${bars}</div><div class="call-pace-proof-note">Bar height is peak connected-call overlap for calls starting in that IST hour. Click an hour to inspect its call starts.</div></details><div class="call-pace-caveat"><b>What this can prove:</b> achieved connected-call concurrency and explicit capacity-limit failures. <b>What it cannot prove:</b> unused capacity when demand, pickup or ringing occupancy was too low. Use a controlled burst test or vendor ringing logs to verify every configured channel.</div>`;
 }
 
 // ===== OUTBOUND CADENCE & CAPACITY =====
