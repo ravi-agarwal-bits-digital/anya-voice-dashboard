@@ -66,7 +66,9 @@
         <div class="field"><label for="commitmentRupees">Prepaid commitment (₹)</label><input id="commitmentRupees" type="number" min="0" step="1"></div>
         <div class="field"><label for="overageRate">Post-bundle rate (₹/min)</label><input id="overageRate" type="number" min="0" step="0.01"></div>
         <div class="field"><label for="openingUsedMinutes">Prior billed mins outside uploaded data</label><input id="openingUsedMinutes" type="number" min="0" step="1" value="0"><small>Keep 0 when uploaded data covers the contract from its start. Otherwise enter earlier bundle usage not present in the upload.</small></div>
+        <div class="field"><label for="concurrentChannels">Vendor concurrent channels</label><input id="concurrentChannels" type="number" min="1" step="1"><small>Configured channel commitment used only as a reference against observed live-call concurrency.</small></div>
       </div>
+      <p class="help planDraftHelp">These values are restored from an encrypted local draft. On a new browser, Admin loads the currently published encrypted plan.</p>
       <label class="confirm"><input id="planConfirm" type="checkbox"><span>I reviewed the contract cycle, allowance and rates and want to publish this encrypted plan.</span></label>
       <div class="actions"><button class="btn gold" id="planPublishBtn" disabled>Encrypt and publish plan</button></div><div id="planStatus" class="status info hidden"></div>
     </section>

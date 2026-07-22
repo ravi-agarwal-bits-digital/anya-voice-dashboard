@@ -92,6 +92,7 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
+  'istHourFromTs', 'concurrencyStats', 'callPaceRecords', 'paintCallPace',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isGzipData', 'unpackPublishedData',
@@ -112,6 +113,29 @@ assert.equal(context.normalizeDirection('incoming call'), 'inbound');
 assert.equal(context.resolveLeadPhone({ From: '918071436001', To: '919999999999' }, 'outbound'), '919999999999');
 assert.equal(context.resolveLeadPhone({ From: '918888888888', To: '918062912051' }, 'inbound'), '918888888888');
 assert.equal(context.fullPhone("'919999999999"), '+919999999999', 'Excel text markers must not leak into phone values');
+assert.equal(context.istHourFromTs(0),5,'Concurrency hour bucketing must use IST rather than the browser timezone');
+const paceStats=context.concurrencyStats([
+  {ts:100,dur:60,status:'completed',direction:'outbound'},
+  {ts:130,dur:60,status:'completed',direction:'outbound'},
+  {ts:160,dur:60,status:'completed',direction:'outbound'},
+  {ts:161,dur:0,status:'failed',direction:'outbound'}
+]);
+assert.equal(paceStats.attempts,4,'Pace volume must include failed outbound attempts');
+assert.equal(paceStats.connected,3,'Observed live-call concurrency must use connected calls only');
+assert.equal(paceStats.peak,2,'Calls touching at the same end/start second must not be falsely counted as overlapping');
+assert.equal(paceStats.peakStarts,3,'Peak starts per minute must include every dial attempt');
+context.__paceRows=[
+  {d:'2030-01-01',ts:100,dur:60,status:'completed',direction:'inbound',campaign:''},
+  {d:'2030-01-01',ts:110,dur:60,status:'completed',direction:'outbound',campaign:'Campaign A'},
+  {d:'2030-01-01',ts:120,dur:0,status:'failed',direction:'outbound',campaign:'Campaign A'}
+];
+vm.runInContext("ALL_DIALS=__paceRows;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';BILLING_PLAN={concurrentChannels:37};",context);
+context.paintCallPace();
+assert(getElement('callPaceSummary').innerHTML.includes('of 37 configured channels'),'Configured vendor channels must appear in the rendered pace panel');
+assert(getElement('callPaceSummary').innerHTML.includes('Inbound')&&getElement('callPaceSummary').innerHTML.includes('Outbound'),'All-calls pace view must compare both directions');
+vm.runInContext("SELECTED_DIRECTION='outbound';",context);context.paintCallPace();
+assert(!getElement('callPaceSummary').innerHTML.includes('>Inbound<'),'Outbound filter must remove the inbound pace card');
+vm.runInContext("BILLING_PLAN=null;",context);
 
 assert.deepEqual(
   JSON.parse(JSON.stringify(context.parseDateFull('10 Jul 2026, 10:30:00 AM IST'))),
@@ -257,6 +281,12 @@ assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard 
 assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);'), 'Management readout and bundle runway must render with the top essentials');
 assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"'), 'Bundle runway section is missing');
 assert(scripts[1].includes('data/voice_billing_plan.enc'), 'Encrypted billing plan path is missing');
+assert(html.includes('id="callPaceSummary"') && html.includes('Call pace &amp; observed concurrency'), 'Visible call pace and concurrency panel is missing');
+assert(!html.includes('id="concKpis"'), 'Hidden legacy concurrency panel must not remain duplicated');
+assert(scripts[1].includes('Dials attempted') && scripts[1].includes('Peak starts / min'), 'Outbound pace context is incomplete');
+assert(scripts[1].includes('connected · ${obAttempts} dials'), 'Direction comparison must expose outbound attempts beside connected calls');
+assert(scripts[1].includes('outboundAttempts.toLocaleString()} total dials attempted'), 'Management outbound KPI must expose attempted dials');
+assert(scripts[1].includes('paintBundleRunway();paintCallPace();'), 'Published capacity configuration must repaint the concurrency comparison');
 assert(scripts[1].includes('Selected view · updates with filters'), 'Bundle runway must visibly identify its filter-responsive figures');
 assert(scripts[1].includes('Bundle mins remaining'), 'Bundle balance must state that its unit is minutes');
 assert(scripts[1].includes('Recent daily bundle use'), 'Ambiguous 14-day run-rate wording must not return');

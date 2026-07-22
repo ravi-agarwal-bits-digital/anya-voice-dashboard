@@ -118,6 +118,9 @@ const METRIC_DEFINITIONS=Object.freeze({
   'AI confidence':'Average model confidence across final conversation records.',
   'Attention signals':'Final records flagged as frustrated or requiring review.',
   'Dials placed':'Final unique dial-level records, including failed and initiated attempts.',
+  'Conversations':'Final connected conversation records; the outbound split also shows every attempted dial.',
+  'Connected outbound':'Final connected outbound conversations, with total outbound dial attempts shown separately.',
+  'Inbound calls':'Final inbound conversation records in the active scope.',
   'Connect rate':'Connected dial-level records divided by all dial-level records in scope.',
   'Distinct-number reach':'Distinct normalized numbers with at least one connected dial.',
   'Billable minutes':'Connected conversation records, with each call rounded up to the next whole billed minute.',
@@ -662,7 +665,7 @@ function applyFilters(){
   runPaintChunks(generation,[
     ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
     ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
-    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),
+    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintCallPace(),
     ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
     ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}}
@@ -675,12 +678,15 @@ function percentOf(value,total){return total?Math.round(Number(value||0)/total*1
 function renderHeaderMeta(records){
   const meta=$("meta");
   if(!meta)return;
-  if(!records.length){
+  const outboundAttemptRows=SELECTED_DIRECTION!=='inbound'?outboundRecordsInView():[];
+  if(!records.length&&!outboundAttemptRows.length){
     meta.innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
     return;
   }
-  const dts=records.map(r=>r.d).sort(),dmn=dts[0],dmx=dts[dts.length-1],tMins=sumBilledMinutes(records);
-  meta.innerHTML=[["Period",dmn+" – "+dmx],["Calls",records.length+" calls"],["Avg. duration",Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length)+"s avg"],["Minutes",tMins+" mins"],["Bundle value","₹"+tMins*5]].map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
+  const dateRows=records.length?records:outboundAttemptRows,dts=dateRows.map(r=>r.d).sort(),dmn=dts[0],dmx=dts[dts.length-1],tMins=sumBilledMinutes(records),avg=records.length?Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length):0,items=[["Period",dmn+" – "+dmx],[SELECTED_DIRECTION==='outbound'?"Connected":"Conversations",records.length+" calls"]];
+  if(SELECTED_DIRECTION!=='inbound')items.push(["Outbound attempts",outboundAttemptRows.length+" dials"]);
+  items.push(["Avg. duration",avg+"s avg"],["Minutes",tMins+" mins"],["Bundle value","₹"+tMins*5]);
+  meta.innerHTML=items.map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
 }
 function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
 function copyPhoneButton(phone){
@@ -1031,7 +1037,7 @@ function sumBilledMinutes(records){
   return (records||[]).reduce((a,r)=>a+(isBillableRecord(r)?billedMinutes(r.dur):0),0);
 }
 async function loadBillingPlan(){
-  try{const r=await fetchWithTimeout('data/voice_billing_plan.enc',{cache:'no-cache'},10000);if(!r.ok)throw Error();const bytes=new Uint8Array(await r.arrayBuffer());if(!isEncrypted(bytes))throw Error();const p=JSON.parse(new TextDecoder().decode(await decryptData(bytes,window.DECRYPT_PASSPHRASE||'')));if(!p.startDate||!p.endDate||!(Number(p.includedMinutes)>0))throw Error();BILLING_PLAN=p;paintBundleRunway();return p;}catch(e){BILLING_PLAN=null;paintBundleRunway();return null;}
+  try{const r=await fetchWithTimeout('data/voice_billing_plan.enc',{cache:'no-cache'},10000);if(!r.ok)throw Error();const bytes=new Uint8Array(await r.arrayBuffer());if(!isEncrypted(bytes))throw Error();const p=JSON.parse(new TextDecoder().decode(await decryptData(bytes,window.DECRYPT_PASSPHRASE||'')));if(!p.startDate||!p.endDate||!(Number(p.includedMinutes)>0))throw Error();BILLING_PLAN=p;paintBundleRunway();paintCallPace();return p;}catch(e){BILLING_PLAN=null;paintBundleRunway();paintCallPace();return null;}
 }
 function runwayDays(a,b){return Math.max(0,Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000));}
 function runwayAdd(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
@@ -1381,6 +1387,7 @@ function paintDirectionSplit(){
   const n=base.length||0;
   const inbound=base.filter(r=>normalizeDirection(r.direction)==='inbound').length;
   const outbound=base.filter(r=>normalizeDirection(r.direction)==='outbound').length;
+  const outboundAttempts=outboundRecordsInView().length;
   const unknown=Math.max(0,n-inbound-outbound);
   // In the combined view, the comparison table below already owns the direction split.
   // Keep these cards only when a single direction needs a compact scope summary.
@@ -1395,7 +1402,7 @@ function paintDirectionSplit(){
   const selected=currentDirectionLabel();
   el.innerHTML=card('all','Selected scope',RECORDS.length,`${selected} after active date and direction filters.`,()=>true,true)+
     card('inbound','Inbound',inbound,'Calls initiated by prospects/users within the selected date range.',r=>normalizeDirection(r.direction)==='inbound')+
-    card('outbound','Outbound',outbound,'Calls initiated outward for follow-up, counselling, or engagement.',r=>normalizeDirection(r.direction)==='outbound')+
+    card('outbound','Outbound connected',outbound,`${outboundAttempts.toLocaleString()} total dials attempted in this view.`,r=>normalizeDirection(r.direction)==='outbound')+
     (unknown?card('unknown','Unknown',unknown,'Direction missing or unmapped in the export. Included only in All Calls.',r=>{const d=normalizeDirection(r.direction);return d!=='inbound'&&d!=='outbound';}): '');
 }
 
@@ -1492,6 +1499,7 @@ function paintDirectionCompare(){
   const el=$('dirCompareTable');
   if(!el)return;
   const ib=directionStats('inbound'), ob=directionStats('outbound');
+  const obAttempts=outboundRecordsInView().length;
   window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
   window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound');
   if(!ib.n || !ob.n){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
@@ -1510,7 +1518,7 @@ function paintDirectionCompare(){
     :rows;
   el.innerHTML=`<table class="opf-cmp-table direction-glance-table"><thead><tr><th>Metric</th>`+
     `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-inbound"></span>Inbound (${ib.n})</span></th>`+
-    `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n})</span></th></tr></thead>`+
+    `<th><span class="opf-dirlabel"><span class="opf-dirdot opf-outbound"></span>Outbound (${ob.n} connected · ${obAttempts} dials)</span></th></tr></thead>`+
     `<tbody>${visibleRows.map(r=>`<tr><td>${esc(r[0])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}`+
@@ -1871,43 +1879,55 @@ function retryPolicyStatus(calls){
   return {attempts:sorted.length,capLabel,capSeverity,timingLabel,timingSeverity,severity:Math.max(capSeverity,timingSeverity),overCap,early,late};
 }
 
-// ===== OUTBOUND CADENCE & CAPACITY =====
-// Concurrency: each completed call occupies [ts, ts+dur]; peak overlap = channels in use. System-wide
-// (both directions) since a line is shared, date-filtered but not direction-filtered.
-function concurrencyStats(){
-  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && r.dur>0);
-  if(!recs.length)return null;
-  const events=[];
-  recs.forEach(r=>{events.push([r.ts,1]);events.push([r.ts+r.dur,-1]);});
-  events.sort((a,b)=>a[0]-b[0]||b[1]-a[1]);
-  let cur=0,peak=0,peakT=0;const hourPeak=new Array(24).fill(0);
+// ===== CALL PACE & OBSERVED CONCURRENCY =====
+// The export provides talk duration but not ringing duration. Overlapping connected calls therefore
+// prove a minimum achieved concurrency; they do not measure every occupied vendor channel.
+function istHourFromTs(ts){
+  const part=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date(Number(ts||0)*1000)).find(p=>p.type==='hour');
+  return Number(part?.value||0)%24;
+}
+function formatIstMoment(ts){
+  return new Date(Number(ts||0)*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true});
+}
+function concurrencyStats(records=[]){
+  const attempts=(records||[]).filter(r=>Number(r?.ts)>0),connected=attempts.filter(r=>normalizeDisposition(r)==='connected'&&Number(r.dur)>0);
+  const events=[],minuteStarts=new Map(),hourPeak=new Array(24).fill(0);
+  attempts.forEach(r=>{const minute=Math.floor(r.ts/60);minuteStarts.set(minute,(minuteStarts.get(minute)||0)+1);});
+  connected.forEach(r=>{events.push([r.ts,1]);events.push([r.ts+Number(r.dur),-1]);});
+  // [start,end): when one call ends exactly as another starts, end first so they do not overlap.
+  events.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  let cur=0,peak=0,peakT=0;
   for(const [t,d] of events){
     cur+=d;
-    if(d===1){const h=new Date(t*1000).getHours();if(cur>hourPeak[h])hourPeak[h]=cur;}
+    if(d===1){const h=istHourFromTs(t);hourPeak[h]=Math.max(hourPeak[h],cur);}
     if(cur>peak){peak=cur;peakT=t;}
   }
-  return {peak,peakT,hourPeak,n:recs.length};
+  let peakStarts=0,peakStartsT=0;
+  minuteStarts.forEach((count,minute)=>{if(count>peakStarts){peakStarts=count;peakStartsT=minute*60;}});
+  return{attempts:attempts.length,connected:connected.length,peak,peakT,peakStarts,peakStartsT,hourPeak,records:attempts,connectedRecords:connected};
 }
-function paintConcurrency(){
-  const kpiEl=$('concKpis'),chart=$('concChart'),axis=$('concAxis');
-  if(!kpiEl)return;
-  const s=concurrencyStats();
-  if(!s){kpiEl.innerHTML=emptyViewHtml('No completed calls with duration in this range.');if(chart)chart.innerHTML='';if(axis)axis.innerHTML='';return;}
-  const busiestHour=s.hourPeak.indexOf(Math.max(...s.hourPeak));
-  const chLow=Math.ceil(s.peak*1.3),chHigh=Math.ceil(s.peak*1.5);
-  const peakDate=new Date(s.peakT*1000);
-  const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const hh=h=>`${String(h).padStart(2,'0')}:00`;
-  kpiEl.innerHTML=[
-    ['neut',s.peak,`Peak simultaneous calls · ${peakDate.getDate()} ${mon[peakDate.getMonth()]}, ${hh(peakDate.getHours())}`],
-    ['good','~'+chLow+'–'+chHigh,'Recommended channels (peak + ring-time headroom)'],
-    ['hot',hh(busiestHour)+'–'+hh((busiestHour+1)%24),'Busiest hour — size capacity for this']
-  ].map(c=>`<div class="kpi ${c[0]}"><div class="b"></div><div class="v">${c[1]}</div><div class="l">${c[2]}</div></div>`).join('');
-  const maxc=Math.max(...s.hourPeak,s.peak,1);
-  if(chart)chart.innerHTML=`<div class="conc-need" style="bottom:${s.peak/maxc*100}%"><span>peak ${s.peak}</span></div>`+
-    s.hourPeak.map((v,h)=>`<div class="conc-col ${h>=9&&h<21?'biz':''}"><div class="cn">${v||''}</div><div class="cbar" style="height:${v/maxc*100}%"></div></div>`).join('');
-  if(axis)axis.innerHTML=s.hourPeak.map((v,h)=>`<div class="ct">${h%3===0?String(h).padStart(2,'0'):''}</div>`).join('');
+function callPaceRecords(direction){
+  return (ALL_DIALS||[]).filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)===direction);
 }
+function paintCallPace(){
+  const el=$('callPaceSummary'),scope=$('callPaceScope');if(!el)return;
+  const directions=SELECTED_DIRECTION==='all'?['inbound','outbound']:[SELECTED_DIRECTION],packs=directions.map(direction=>({direction,stats:concurrencyStats(callPaceRecords(direction))})),combined=concurrencyStats(packs.flatMap(p=>p.stats.records)),limit=Math.max(0,Number(BILLING_PLAN?.concurrentChannels||0)),fmt=n=>Number(n||0).toLocaleString('en-IN');
+  if(scope)scope.textContent=`${currentDirectionLabel()} · active date${activeCampaigns().size?' & campaign':''} filters`;
+  if(!combined.attempts){el.innerHTML=emptyViewHtml('No calls match the current pace view.');return;}
+  const observedPct=limit?Math.round(combined.peak/limit*100):null;
+  const capacity=limit
+    ?`<div class="call-pace-capacity"><div><span>Observed live-call peak</span><b>${fmt(combined.peak)} <small>of ${fmt(limit)} configured channels</small></b></div><div class="call-pace-meter"><i style="width:${Math.min(100,observedPct)}%"></i></div><p>${observedPct}% observed floor${combined.peakT?` · ${formatIstMoment(combined.peakT)} IST`:' · no connected overlap in this view'}</p></div>`
+    :`<div class="call-pace-capacity missing"><div><span>Observed live-call peak</span><b>${fmt(combined.peak)}</b></div><p>Add the vendor channel commitment in Admin to show the reference comparison.</p></div>`;
+  const cards=packs.map(({direction,stats})=>{
+    const outbound=direction==='outbound',label=outbound?'Outbound':'Inbound',volumeLabel=outbound?'Dials attempted':'Calls received';
+    return `<div class="call-pace-card ${direction}"><div class="call-pace-card-head"><span class="opf-dirdot opf-${direction}"></span><b>${label}</b></div><div class="call-pace-metrics"><div><b>${fmt(stats.attempts)}</b><span>${volumeLabel}</span></div><div><b>${fmt(stats.connected)}</b><span>Connected</span></div><div><b>${fmt(stats.peakStarts)}</b><span>Peak starts / min</span></div><div><b>${fmt(stats.peak)}</b><span>Peak live calls</span></div></div>${stats.peakStartsT?`<p>Fastest minute: ${formatIstMoment(stats.peakStartsT)} IST.</p>`:''}</div>`;
+  }).join('');
+  const max=Math.max(1,...packs.flatMap(p=>p.stats.hourPeak));
+  const bars=Array.from({length:24},(_,hour)=>`<div class="call-pace-hour"><div class="call-pace-bars">${packs.map(p=>`<i class="${p.direction}" style="height:${p.stats.hourPeak[hour]/max*100}%" title="${hour}:00 IST · ${p.direction} peak ${p.stats.hourPeak[hour]}"></i>`).join('')}</div><span>${hour%3===0?String(hour).padStart(2,'0'):''}</span></div>`).join('');
+  el.innerHTML=`${capacity}<div class="call-pace-grid">${cards}</div><details class="call-pace-proof"><summary>View hourly concurrency proof</summary><div class="call-pace-legend">${packs.map(p=>`<span><i class="${p.direction}"></i>${p.direction==='inbound'?'Inbound':'Outbound'}</span>`).join('')}</div><div class="call-pace-chart">${bars}</div></details><div class="call-pace-caveat"><b>Interpretation:</b> peak starts show launch/arrival pace. Live-call concurrency counts overlapping connected talk time only, so it is a proven minimum—not a test of maximum vendor capacity or ringing occupancy.</div>`;
+}
+
+// ===== OUTBOUND CADENCE & CAPACITY =====
 // Cadence: per outbound number, the ordered attempt sequence -> compliance vs the 3-attempt / 6h / 9-9 rule.
 function outboundNumberSequences(){
   const byPhone=groupByPhone(outboundRecordsInView());
@@ -1994,7 +2014,6 @@ function paintOutboundCadence(){
   }
   if(sec)sec.style.display='';if(hidden)hidden.style.display='none';
   const scope=$('cadenceScopeNote');if(scope)scope.style.display=(SELECTED_DIRECTION==='all')?'inline-flex':'none';
-  paintConcurrency();
   paintCadenceCompliance();
   paintRetryEconomics();
 }
@@ -2603,9 +2622,10 @@ function paintManagementBrief(){
   const prevRange=previousRangeFor(range.from,range.to);
   const prev=prevRange?recordsInRange(prevRange.from,prevRange.to):[];
   const cur=briefPack(recs),old=briefPack(prev);
+  const outboundAttempts=(ALL_DIALS||[]).filter(r=>(!range.from||r.d>=range.from)&&(!range.to||r.d<=range.to)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound').length;
   const dateLabel=range.from&&range.to?(range.from===range.to?range.from:`${range.from} to ${range.to}`):currentViewDescription();
   const summary=$('briefSummary'),kpis=$('briefKpis');
-  if(!cur.n){
+  if(!cur.n&&!outboundAttempts){
     if(summary)summary.innerHTML=`No enquiries found for <b>${esc(dateLabel)}</b> in the ${esc(currentDirectionLabel())} view. Try a different date range or direction.`;
     if(kpis)kpis.innerHTML='';
     return;
@@ -2625,8 +2645,9 @@ function paintManagementBrief(){
   const showSplit=SELECTED_DIRECTION==='all';
   const curIn=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='inbound')):null;
   const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
+  const conversationLabel=SELECTED_DIRECTION==='outbound'?'Connected outbound':SELECTED_DIRECTION==='inbound'?'Inbound calls':'Conversations';
   const kpiDefs=[
-    ['good','Enquiries','n','count',()=>true],
+    ['good',conversationLabel,'n','count',()=>true],
     ['hot','Billable minutes','mins','minutes',()=>true],
     ['neut','Talk-time minutes','talkMins','talkMinutes',()=>true],
     ['hot','Bundle value used','cost','currency',()=>true],
@@ -2641,8 +2662,9 @@ function paintManagementBrief(){
     const delta=hasPrev
       ?(()=>{const dc=deltaClass(val,prevVal),arrow=dc==='up'?'&uarr;':dc==='down'?'&darr;':'&rarr;';return `<div class="kpi-delta ${dc}">${arrow} ${esc(deltaPctText(val,prevVal))} vs previous period</div>`;})()
       :`<div class="kpi-delta flat">No prior-period data yet</div>`;
-    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key],curIn)} in<span class="opf-dirdot opf-outbound"></span>${fmt(curOut[key],curOut)} out</div>`:'';
-    return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="${esc(metricDefinition(label))} Click for details" aria-label="${esc(label)}: ${esc(metricDefinition(label))}"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${split}</div>`;
+    const split=showSplit?`<div class="kpi-split"><span class="opf-dirdot opf-inbound"></span>${fmt(curIn[key],curIn)} in<span class="opf-dirdot opf-outbound"></span>${key==='n'?`${fmt(curOut[key],curOut)} connected / ${outboundAttempts.toLocaleString()} dials`:fmt(curOut[key],curOut)} out</div>`:'';
+    const attemptContext=key==='n'&&SELECTED_DIRECTION==='outbound'?`<div class="kpi-attempt-context">${outboundAttempts.toLocaleString()} total dials attempted</div>`:'';
+    return `<div class="kpi ${cls}" onclick="openFilteredPanel('${esc(label)}',${pred},window.__briefRecs)" style="cursor:pointer" title="${esc(metricDefinition(label))} Click for details" aria-label="${esc(label)}: ${esc(metricDefinition(label))}"><div class="b"></div><span style="position:absolute;top:8px;right:10px;font-size:11px;color:var(--faint)">⊕</span><div class="v">${fmt(val)}</div><div class="l">${esc(label)}</div>${delta}${attemptContext}${split}</div>`;
   }).join('');
   window.__briefRecs=recs;
 }
@@ -2683,7 +2705,7 @@ function boot(){
   runPaintChunks(generation,[
     ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
     ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
-    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),
+    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintCallPace(),
     ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
     ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
