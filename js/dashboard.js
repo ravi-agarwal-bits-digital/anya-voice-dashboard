@@ -1448,7 +1448,10 @@ function dispositionCounts(recs){
 // them (date range, campaign, and row count as a data-changed proxy), so the cache self-invalidates
 // the instant any filter or the dataset changes. resetOutboundCaches() clears them on a fresh load.
 let _obViewCache=null,_obViewSig=null,_obDateCache=null,_obDateSig=null;
-function resetOutboundCaches(){_obViewCache=_obViewSig=_obDateCache=_obDateSig=null;}
+function resetOutboundCaches(){
+  _obViewCache=_obViewSig=_obDateCache=_obDateSig=null;
+  resetCallPaceCache();
+}
 function _dateSig(){const f=$('filterFromDate')?$('filterFromDate').value:'';const t=$('filterToDate')?$('filterToDate').value:'';return f+'|'+t+'|'+ALL_DIALS.length;}
 function outboundRecordsInView(){
   // Dial-level: pulls from ALL_DIALS (incl. failed/initiated) so connect rate is real, not the ~100%
@@ -1883,8 +1886,11 @@ function retryPolicyStatus(calls){
 // The export provides talk duration but not ringing duration. Overlapping connected calls therefore
 // prove a minimum achieved concurrency; they do not measure every occupied vendor channel.
 function istHourFromTs(ts){
-  const part=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date(Number(ts||0)*1000)).find(p=>p.type==='hour');
-  return Number(part?.value||0)%24;
+  // IST is a fixed UTC+05:30 offset with no daylight-saving transition. Avoid constructing
+  // Intl.DateTimeFormat for every call/event: large exports otherwise block the browser for
+  // seconds whenever a dashboard filter repaints the capacity evidence.
+  const hour=Math.floor((Number(ts||0)+19800)/3600)%24;
+  return (hour+24)%24;
 }
 function formatIstMoment(ts){
   return new Date(Number(ts||0)*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true});
@@ -1923,9 +1929,20 @@ function capacityEvidenceVerdict(stats,limit){
 function callPaceRecords(direction){
   return (ALL_DIALS||[]).filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)===direction);
 }
+let _callPaceCache=null,_callPaceSig=null;
+function resetCallPaceCache(){_callPaceCache=_callPaceSig=null;}
+function callPaceAnalysis(){
+  const directions=SELECTED_DIRECTION==='all'?['inbound','outbound']:[SELECTED_DIRECTION];
+  const sig=_dateSig()+'|'+campaignSelectionKey()+'|'+SELECTED_DIRECTION;
+  if(_callPaceSig===sig&&_callPaceCache)return _callPaceCache;
+  const packs=directions.map(direction=>({direction,stats:concurrencyStats(callPaceRecords(direction))}));
+  _callPaceSig=sig;
+  _callPaceCache={directions,packs,combined:concurrencyStats(packs.flatMap(p=>p.stats.records))};
+  return _callPaceCache;
+}
 function paintCallPace(){
   const el=$('callPaceSummary'),scope=$('callPaceScope');if(!el)return;
-  const directions=SELECTED_DIRECTION==='all'?['inbound','outbound']:[SELECTED_DIRECTION],packs=directions.map(direction=>({direction,stats:concurrencyStats(callPaceRecords(direction))})),combined=concurrencyStats(packs.flatMap(p=>p.stats.records)),limit=Math.max(0,Number(BILLING_PLAN?.concurrentChannels||0)),fmt=n=>Number(n||0).toLocaleString('en-IN');
+  const {packs,combined}=callPaceAnalysis(),limit=Math.max(0,Number(BILLING_PLAN?.concurrentChannels||0)),fmt=n=>Number(n||0).toLocaleString('en-IN');
   if(scope)scope.textContent=`${currentDirectionLabel()} · active date${activeCampaigns().size?' & campaign':''} filters`;
   if(!combined.attempts){el.innerHTML=emptyViewHtml('No calls match the current pace view.');return;}
   const verdict=capacityEvidenceVerdict(combined,limit),observedPct=limit?Math.round(combined.peak/limit*100):0;

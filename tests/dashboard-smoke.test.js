@@ -92,7 +92,7 @@ for (const fn of [
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
-  'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'paintCallPace',
+  'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'resetCallPaceCache', 'callPaceAnalysis', 'paintCallPace',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isGzipData', 'unpackPublishedData',
@@ -136,11 +136,15 @@ context.__paceRows=[
   {d:'2030-01-01',ts:120,dur:0,status:'failed',direction:'outbound',campaign:'Campaign A'}
 ];
 vm.runInContext("ALL_DIALS=__paceRows;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';BILLING_PLAN={concurrentChannels:37};",context);
+context.resetCallPaceCache();
+const firstPaceAnalysis=context.callPaceAnalysis();
+assert.strictEqual(context.callPaceAnalysis(),firstPaceAnalysis,'Repeated paints for the same filter scope must reuse concurrency analysis');
 context.paintCallPace();
 assert(getElement('callPaceSummary').innerHTML.includes('of 37 channels demonstrated'),'Configured vendor channels must appear in the rendered evidence verdict');
 assert(getElement('callPaceSummary').innerHTML.includes('Inspect hourly proof')&&getElement('callPaceSummary').innerHTML.includes('openFilteredPanel'),'Capacity evidence must be interactive');
 assert(getElement('callPaceSummary').innerHTML.includes('Inbound')&&getElement('callPaceSummary').innerHTML.includes('Outbound'),'All-calls pace view must compare both directions');
 vm.runInContext("SELECTED_DIRECTION='outbound';",context);context.paintCallPace();
+assert.notStrictEqual(context.callPaceAnalysis(),firstPaceAnalysis,'Changing direction must invalidate concurrency analysis');
 assert(!getElement('callPaceSummary').innerHTML.includes('>Inbound<'),'Outbound filter must remove the inbound pace card');
 vm.runInContext("BILLING_PLAN=null;",context);
 
