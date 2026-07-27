@@ -292,6 +292,8 @@ assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the 
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
 assert(html.includes('<h4>Priority contacts</h4>'), 'Priority contacts panel title is missing');
 assert(!html.includes('<h4>Follow-up queue</h4>'), 'Legacy Follow-up queue panel title must not remain');
+assert(html.includes('<h2>Requested callbacks</h2>'), 'Requested callbacks section title is missing');
+assert(!html.includes('<h2>Requested follow-ups</h2>'), 'Legacy Requested follow-ups section title must not remain');
 assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
 assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
 assert(html.includes('Management readout'), 'Management readout must sit in the overview');
@@ -458,7 +460,7 @@ let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
 context.exportCallbacks();
 assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
-assert(exportCapture.name.startsWith('anya_requested-followups_calls_'), 'Requested follow-up export filename is unclear');
+assert(exportCapture.name.startsWith('anya_requested-callbacks_calls_'), 'Requested callback export filename is unclear');
 assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
 context.__callbackExportRows = [
   { ...scopeRecord, callId: 'callback-timed-payment', from: '919999999991', intent: 'Payment', cbPreferred: '15 Jul 2026 · 3:00 PM' },
@@ -532,6 +534,7 @@ assert(!context.campaignMatchesSearch('MBA July Intake', 'august'), 'Campaign se
 context.resetOutboundCaches();
 context.setCampaignLeaderboardSearch('campaign b');
 assert(getElement('campaignLeaderboard').innerHTML.includes('Campaign B') && !getElement('campaignLeaderboard').innerHTML.includes('Campaign A'), 'Leaderboard search must narrow table rows without changing the campaign filter');
+assert(getElement('campaignLeaderboard').innerHTML.includes('campaign-leaderboard-scroll'), 'Campaign leaderboard must keep long campaign lists inside its own scroll region');
 context.setCampaignLeaderboardSearch('');
 vm.runInContext("SELECTED_CAMPAIGNS=new Set(['Campaign A','Campaign B']);", context);
 assert(context.recordMatchesCampaign({ campaign: 'Campaign A' }) && context.recordMatchesCampaign({ campaign: 'Campaign B' }), 'Multiple selected campaigns must remain in scope');

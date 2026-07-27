@@ -20,6 +20,8 @@ assert(html.includes('id="resetAllFilters"'), 'Reset-all-filters control is miss
 assert(html.includes('id="searchMobile"'), 'Mobile lead search control is missing');
 assert(html.includes('id="campaignFilterSearch"') && html.includes('id="campaignLeaderboardSearch"'), 'Campaign search controls are missing');
 assert(css.includes('.campaign-leaderboard-head') && css.includes('.campaign-leaderboard-search'), 'Campaign leaderboard search needs responsive styling');
+assert(css.includes('.campaign-leaderboard-scroll') && css.includes('max-height:min(520px,56vh)'), 'Long operational sections must use a viewport-aware internal scroll');
+assert(css.includes('.campaign-leaderboard-scroll .iq-table thead th{position:sticky'), 'Campaign table headers must stay visible while the section scrolls');
 assert(html.includes('id="kpiPanel"'), 'KPI drawer is missing');
 assert(html.includes('id="userSearchResult"'), 'Profile drawer is missing');
 
