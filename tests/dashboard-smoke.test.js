@@ -451,12 +451,12 @@ context.openRecordProfile(dialOnlyRecord,'drilldown');
 assert.equal(vm.runInContext('LEDGER_SCOPE.rows.length', context), 1, 'Dial-only records must fall back to the ledger instead of opening a missing profile');
 assert.equal(vm.runInContext('LEDGER_SCOPE.title', context), 'Selected dial record', 'Dial-only ledger fallback title changed');
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
-assert(scopedCSV.startsWith('Call ID,Phone,Country,Direction,Call Date (IST),Call Time (IST)'), 'Drawer CSV header changed');
+assert(scopedCSV.startsWith('Call ID,Lead Phone,Country,Call Direction,Call Date (IST),Call Time (IST)'), 'Drawer CSV header changed');
 assert(scopedCSV.includes("'+919999999999,India,Inbound"), 'Drawer CSV record mapping changed');
 assert(!scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV must not repeat filter scope metadata');
-assert(scopedCSV.includes('Requested Time'), 'Standard CSV requested-time column is missing');
-assert(scopedCSV.includes('Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs)'), 'Standard CSV lead context columns are missing');
-assert(scopedCSV.includes(',10,1,1,0,0,10,Hot,'), 'Standard CSV must include per-call cost plus lead call and direction totals');
+assert(scopedCSV.includes('Actual Call Duration,Billable Minutes,Call Cost (Rs)') && scopedCSV.includes('Requested Callback Time'), 'Standard CSV must use human-readable duration and callback labels');
+assert(scopedCSV.includes('Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs)'), 'Standard CSV lead context columns are missing');
+assert(scopedCSV.includes(',1m 15s,2,10,1,1,0,0,10,Hot,'), 'Standard CSV must include actual duration, billable minutes, cost, and lead totals');
 const csvEscaped = context.recordsToCSV([{ ...scopeRecord, summary: 'Needs, "urgent"\nfollow-up' }], 'Demo scope');
 assert(csvEscaped.includes('"Needs, ""urgent""\nfollow-up"'), 'CSV values with commas, quotes, and line breaks must remain valid');
 assert.equal(context.escCSV('=2+2'), "'=2+2", 'CSV formula-like values must be protected for Excel');
@@ -465,9 +465,9 @@ vm.runInContext("$('filterFromDate').value='2026-07-10';$('filterToDate').value=
 assert.equal(context.csvFilename('call ledger', 'calls'), `anya_call-ledger_calls_2026-07-10_to_2026-07-11_outbound_campaign-a_exported-${context.csvDateStamp()}.csv`, 'Export filename must identify its active scope');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
 assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
-assert(scripts[1].includes('Priority Rank,Phone,Priority Basis,Connected Calls,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Priority export must expose its factual ranking basis');
+assert(scripts[1].includes('Priority Rank,Lead Phone,Why Prioritized,Connected Calls,Total Calls,Inbound Calls,Outbound Calls'), 'Priority export must expose its factual ranking basis with readable labels');
 assert(!scripts[1].includes('avgNeed*0.3+avgConf*0.2'), 'Priority ranking must not use hidden AI scores');
-assert(scripts[1].includes('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standard lead count columns');
+assert(scripts[1].includes('Lead Phone,Total Calls,Inbound Calls,Outbound Calls') && scripts[1].includes('Actual Talk Time,Billable Minutes'), 'Repeat engagement export must use readable call, duration, and billing labels');
 assert(context.callbackHasRequestedTime([{ cbPreferred: 'Tomorrow, 2:00 PM' }]), 'Requested-time follow-up classification changed');
 assert(!context.callbackHasRequestedTime([{ cbPreferred: 'Not specified' }]), 'Unscheduled follow-ups must remain identifiable');
 
@@ -480,7 +480,7 @@ assert(getElement('profileSourceNote').textContent.includes('Priority contacts')
 let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
 context.exportCallbacks();
-assert(exportCapture && exportCapture.csv.startsWith('Call ID,Phone,Country,Direction'), 'Callback export must use the standard CSV schema');
+assert(exportCapture && exportCapture.csv.startsWith('Call ID,Lead Phone,Country,Call Direction'), 'Callback export must use the standard CSV schema');
 assert(exportCapture.name.startsWith('anya_requested-callbacks_calls_'), 'Requested callback export filename is unclear');
 assert(!exportCapture.csv.includes('Confidence %') && !exportCapture.csv.includes('Need Score'), 'Callback export must exclude hidden AI score fields');
 context.__callbackExportRows = [
@@ -495,12 +495,12 @@ assert(!exportCapture.csv.includes('callback-timed-programme') && !exportCapture
 assert(exportCapture.name.includes('requested-time-topics-payment'), 'Callback export filename must state its local filter scope');
 vm.runInContext("CB_TIME_FILTER='all'; CB_FILTERS.clear(); RECORDS=[__scopeRecord];", context);
 context.exportHottestLeads();
-assert(exportCapture.csv.startsWith('Priority Rank,Phone,Priority Basis,Connected Calls'), 'Priority export must use an action-ready transparent schema');
+assert(exportCapture.csv.startsWith('Priority Rank,Lead Phone,Why Prioritized,Connected Calls'), 'Priority export must use an action-ready transparent schema');
 assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('Avg Confidence'), 'Follow-up export must exclude hidden heuristic and AI fields');
 context.__compactLeadRecords = compactLeadRecords;
 vm.runInContext('RECORDS=__compactLeadRecords;', context);
 context.exportSerialEngagers();
-assert(exportCapture.csv.startsWith('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standardized action-ready summary schema');
+assert(exportCapture.csv.startsWith('Lead Phone,Total Calls,Inbound Calls,Outbound Calls'), 'Repeat engagement export must use the standardized action-ready summary schema');
 assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('General'), 'Repeat export must exclude hidden breakdown fields');
 
 vm.runInContext("ALL_RECORDS_BACKUP=[{d:'2026-07-10',direction:'outbound',campaign:'Reset campaign'}];ALL_DIALS=ALL_RECORDS_BACKUP;SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGN='Reset campaign';$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-10';resetAllFilters();", context);
@@ -589,7 +589,7 @@ context.__unreachRows = [
 vm.runInContext("ALL_DIALS=__unreachRows; SELECTED_CAMPAIGN='all'; $('filterFromDate').value='2026-07-09'; $('filterToDate').value='2026-07-11';", context);
 context.exportUnreachableCSV();
 assert(unreachableDownload && unreachableDownload.csv.includes("'+919999999999,India,3,"), 'Unreachable CSV must aggregate the complete dial count per number');
-assert(unreachableDownload.csv.includes('3-Attempt Cap Status,Retry Timing Status'), 'Retry-policy CSV must explain both vendor-policy checks');
+assert(unreachableDownload.csv.includes('Attempt Cap Check (Max 3),Retry Interval Check (~6h)'), 'Retry-policy CSV must explain both vendor-policy checks in plain language');
 assert(unreachableDownload.name.includes('retry-policy-watchlist'), 'Retry-policy CSV filename must be meaningful');
 const tooSoonPolicy=context.retryPolicyStatus([{ts:0},{ts:4*3600},{ts:10*3600}]);
 assert.equal(tooSoonPolicy.timingLabel, '1 retry under 5h', 'Retry-policy watchlist must flag retries made before the 5-hour tolerance floor');
