@@ -295,10 +295,10 @@ assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the 
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
 assert(html.includes('<h4>Priority contacts</h4>'), 'Priority contacts panel title is missing');
 assert(!html.includes('<h4>Follow-up queue</h4>'), 'Legacy Follow-up queue panel title must not remain');
-assert(html.includes('requested callbacks first, then the most recent connected call in this view, repeat connected calls, and total talk time'), 'Priority contact ranking rule must be visible');
+assert(html.includes('requested callbacks first, then connected call depth'), 'Priority contact ranking rule must be visible');
 assert(html.includes('<h2>Requested callbacks</h2>'), 'Requested callbacks section title is missing');
 assert(!html.includes('<h2>Requested follow-ups</h2>'), 'Legacy Requested follow-ups section title must not remain');
-assert(scripts[1].includes("const leadCalls=allViewByPhone[ph]||calls;") && scripts[1].includes('total calls') && scripts[1].includes('talk time'), 'Requested callback cards must show lead-level call depth and talk time');
+assert(scripts[1].includes("const leadCalls=allViewByPhone[ph]||calls;") && scripts[1].includes('total calls') && !scripts[1].includes('leadTalkSeconds'), 'Requested callback cards must show only lead-level call depth');
 assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
 assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
 assert(html.includes('Management readout'), 'Management readout must sit in the overview');
@@ -415,18 +415,18 @@ const compactLeadRecords = [
   { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 12, m: 0, ts: 1, dur: 30, status: 'completed', leadTemp: 'Hot', conf: 90, need: 80, frustrated: true, intent: 'Payment', summary: 'Synthetic lead' }
 ];
 const priorityRecords = [
-  { from: '919111111110', direction: 'inbound', d: '2026-07-10', h: 8, m: 0, ts: 100000, dur: 20, status: 'completed', callback: true, conf: 0, need: 0 },
-  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 10, m: 0, ts: 300000, dur: 70, status: 'completed', callback: false, conf: 0, need: 0 },
-  { from: '919111111111', direction: 'inbound', d: '2026-07-10', h: 9, m: 43, ts: 299000, dur: 70, status: 'completed', callback: false, conf: 0, need: 0 },
-  { from: '919111111112', direction: 'inbound', d: '2026-07-10', h: 11, m: 0, ts: 400000, dur: 600, status: 'completed', callback: false, conf: 100, need: 100 }
+  { from: '919111111110', direction: 'inbound', d: '2026-07-10', ts: 100000, dur: 20, status: 'completed', callback: true, conf: 0, need: 0 },
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', ts: 300000, dur: 70, status: 'completed', callback: false, conf: 0, need: 0 },
+  { from: '919111111111', direction: 'inbound', d: '2026-07-10', ts: 299000, dur: 70, status: 'completed', callback: false, conf: 0, need: 0 },
+  { from: '919111111112', direction: 'inbound', d: '2026-07-10', ts: 400000, dur: 600, status: 'completed', callback: false, conf: 100, need: 100 }
 ];
 const priorityLeads = context.priorityLeads(priorityRecords);
 assert.equal(priorityLeads[0].phone, '919111111110', 'Requested callbacks must outrank every other priority signal');
-assert.equal(priorityLeads[1].phone, '919111111112', 'The most recently connected contact must rank ahead of older repeat activity');
-assert(priorityLeads[0].reasons.includes('Requested callback') && priorityLeads[1].reasons.includes('Last connected: 2026-07-10, 11:00 AM'), 'Priority reason labels must use the exact connected timestamp');
+assert.equal(priorityLeads[1].phone, '919111111111', 'Greater connected call depth must rank ahead of a single connection');
+assert(priorityLeads[0].reasons.includes('Requested callback') && priorityLeads[1].reasons.includes('2 connected calls'), 'Priority reason labels must use callback and call depth only');
 assert(!Object.hasOwn(priorityLeads[0], 'avgConf') && !Object.hasOwn(priorityLeads[0], 'avgNeed'), 'Priority ranking must not calculate AI scores');
 context.paintHottestLeads(compactLeadRecords);
-assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Connected calls</span>'), 'Priority cards should retain connected-call depth');
+assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Connected calls</span>'), 'Priority cards should retain call depth only');
 assert(getElement('hottestLeads').innerHTML.includes('Why high:'), 'Priority cards must explain their position');
 assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
 assert(!getElement('hottestLeads').innerHTML.includes('attention'), 'Reduced priority cards must hide attention breakdown');
@@ -462,7 +462,7 @@ vm.runInContext("$('filterFromDate').value='2026-07-10';$('filterToDate').value=
 assert.equal(context.csvFilename('call ledger', 'calls'), `anya_call-ledger_calls_2026-07-10_to_2026-07-11_outbound_campaign-a_exported-${context.csvDateStamp()}.csv`, 'Export filename must identify its active scope');
 assert(scripts[1].includes("recordsToCSV(intl.sort((a,b)=>b.ts-a.ts),scope,RECORDS)"), 'International export must use the standard CSV cost scope');
 assert(scripts[1].includes("recordsToCSV(rows,ledgerExportScope(),LEDGER_SCOPE?.rows||RECORDS)"), 'Call ledger export must include active scope and lead totals');
-assert(scripts[1].includes('Priority Rank,Phone,Priority Basis,Last Connected Time,Connected Calls,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Priority export must expose its factual ranking basis');
+assert(scripts[1].includes('Priority Rank,Phone,Priority Basis,Connected Calls,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Priority export must expose its factual ranking basis');
 assert(!scripts[1].includes('avgNeed*0.3+avgConf*0.2'), 'Priority ranking must not use hidden AI scores');
 assert(scripts[1].includes('Phone,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls'), 'Repeat engagement export must use the standard lead count columns');
 assert(context.callbackHasRequestedTime([{ cbPreferred: 'Tomorrow, 2:00 PM' }]), 'Requested-time follow-up classification changed');
@@ -492,7 +492,7 @@ assert(!exportCapture.csv.includes('callback-timed-programme') && !exportCapture
 assert(exportCapture.name.includes('requested-time-topics-payment'), 'Callback export filename must state its local filter scope');
 vm.runInContext("CB_TIME_FILTER='all'; CB_FILTERS.clear(); RECORDS=[__scopeRecord];", context);
 context.exportHottestLeads();
-assert(exportCapture.csv.startsWith('Priority Rank,Phone,Priority Basis,Last Connected Time,Connected Calls'), 'Priority export must use an action-ready transparent schema');
+assert(exportCapture.csv.startsWith('Priority Rank,Phone,Priority Basis,Connected Calls'), 'Priority export must use an action-ready transparent schema');
 assert(!exportCapture.csv.includes('Frustrated') && !exportCapture.csv.includes('Avg Confidence'), 'Follow-up export must exclude hidden heuristic and AI fields');
 context.__compactLeadRecords = compactLeadRecords;
 vm.runInContext('RECORDS=__compactLeadRecords;', context);

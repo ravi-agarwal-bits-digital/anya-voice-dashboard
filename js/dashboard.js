@@ -2715,7 +2715,6 @@ function paintCallbacks(recs){
   cbList.innerHTML=cbShown.map(([ph,calls])=>{
     const phoneKey=ph.replace(/\W/g,'_');
     const leadCalls=allViewByPhone[ph]||calls;
-    const leadTalkSeconds=leadCalls.filter(c=>normalizeDisposition(c)==='connected'&&Number(c.dur)>0).reduce((sum,c)=>sum+Number(c.dur||0),0);
 
     const renderCall=(c)=>`
       <div style="padding:10px;background:#ffffff;border-radius:6px;border-left:2px solid var(--teal);margin-bottom:6px;font-size:10px">
@@ -2745,7 +2744,7 @@ function paintCallbacks(recs){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:16px">
           <b style="font-family:'Inter',monospace;font-size:12px;color:var(--cream)">${esc(maskPhone(ph))}</b>${copyPhoneButton(ph)}
-          <span style="font-size:10px;color:var(--teal);font-weight:700"><b>${leadCalls.length}</b> total calls · <b>${formatTalkMinutes(leadTalkSeconds/60)}</b> talk time</span>
+          <span style="font-size:10px;color:var(--teal);font-weight:700"><b>${leadCalls.length}</b> total calls</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="profile-link-btn" onclick="event.stopPropagation();openProfileForPhone(${jsArg(ph)},'callback',this.closest('[data-profile-source]')||this)">Open profile</button><span style="background:var(--hot);color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800">${calls.length} request${calls.length>1?"s":""}</span></div>
       </div>
@@ -3762,14 +3761,10 @@ function priorityLeadDetails(calls){
   const connected=(calls||[]).filter(c=>normalizeDisposition(c)==='connected'&&Number(c.dur)>0);
   const callback=(calls||[]).some(c=>c.callback);
   const talkSeconds=connected.reduce((sum,c)=>sum+Number(c.dur||0),0);
-  const lastConnected=connected.reduce((latest,c)=>Number(c.ts||0)>Number(latest?.ts||0)?c:latest,null);
-  const latestTs=Number(lastConnected?.ts||0);
   const reasons=[];
   if(callback)reasons.push('Requested callback');
-  if(lastConnected)reasons.push(`Last connected: ${formatCallTime(lastConnected)}`);
-  if(connected.length>=2)reasons.push(`${connected.length} connected calls`);
-  if(talkSeconds>=60)reasons.push(`${formatTalkMinutes(talkSeconds/60)} min talk time`);
-  return{callback,connected,talkSeconds,lastConnected,latestTs,reasons};
+  if(connected.length)reasons.push(`${connected.length} connected call${connected.length===1?'':'s'}`);
+  return{callback,connected,talkSeconds,reasons};
 }
 function priorityLeads(records){
   const byPhone=groupByPhone(records||[]);
@@ -3778,9 +3773,9 @@ function priorityLeads(records){
     return{phone,total:calls.length,billedMins:sumBilledMinutes(calls),calls:calls.slice().sort((a,b)=>b.ts-a.ts),...details};
   }).sort((a,b)=>
     Number(b.callback)-Number(a.callback)||
-    b.latestTs-a.latestTs||
     b.connected.length-a.connected.length||
-    b.talkSeconds-a.talkSeconds||
+    b.total-a.total||
+    Number(b.calls[0]?.ts||0)-Number(a.calls[0]?.ts||0)||
     a.phone.localeCompare(b.phone)
   ).slice(0,50);
 }
@@ -3791,7 +3786,7 @@ function paintHottestLeads(records){
   window.HOTTEST_LEADS=leads;
 
   $("hottestLeads").innerHTML=leads.map((l,i)=>{
-    const typeEmoji=l.callback?'Callback':l.connected.length>=2?'Repeat':l.talkSeconds>=60?'Long call':'Connected';
+    const typeEmoji=l.callback?'Callback':l.connected.length>=2?'Repeat':'Connected';
     const typeCol=l.callback?'var(--teal)':l.connected.length>=2?'var(--gold)':'var(--indigo)';
     const reason=l.reasons.length?l.reasons.join(' · '):'Latest connected activity';
     return`<article class="follow-up-card drawer-click-card" style="--card-accent:${typeCol}" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(l.phone)},'priority',this)">
@@ -3800,9 +3795,8 @@ function paintHottestLeads(records){
         <span class="follow-up-tier" style="color:${typeCol}">${typeEmoji}</span>
       </div>
       <div class="follow-up-card-stats">
+        <div><b>${l.total}</b><span>Total calls</span></div>
         <div><b>${l.connected.length}</b><span>Connected calls</span></div>
-        <div><b>${formatTalkMinutes(l.talkSeconds/60)}</b><span>Talk time</span></div>
-        <div><b>₹${l.billedMins*5}</b><span>Cost</span></div>
       </div>
       <div class="follow-up-card-meta">${directionMix(l.calls)}${l.callback?'<span class="follow-up-callback">Requested callback</span>':''}</div>
       <div class="follow-up-priority-reason"><b>Why high:</b> ${esc(reason)}</div>
@@ -3907,11 +3901,11 @@ function exportHottestLeads(){
   if(!RECORDS.length){alert("No data to export in the current filter range.");return;}
   const mixes=ledgerLeadDirectionMixMap(RECORDS);
   const leads=priorityLeads(RECORDS);
-  let csv='Priority Rank,Phone,Priority Basis,Last Connected Time,Connected Calls,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Callback Requested,Raw Talk Time (mins),Billable Minutes,Lead Total Cost (Rs),Last Call Time,Last Status,Last Summary\n';
+  let csv='Priority Rank,Phone,Priority Basis,Connected Calls,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Callback Requested,Raw Talk Time (mins),Billable Minutes,Lead Total Cost (Rs),Last Call Time,Last Status,Last Summary\n';
   leads.forEach((l,i)=>{
     const mix=mixes.get(l.phone)||{inbound:0,outbound:0,unknown:0},lastCall=l.calls[0]||{};
     const basis=l.reasons.length?l.reasons.join(' | '):'Latest connected activity';
-    csv+=[i+1,escCSVText(fullPhone(l.phone)),escCSV(basis),escCSV(formatCallTime(l.lastConnected||{})),l.connected.length,l.total,mix.inbound,mix.outbound,mix.unknown,l.callback?'Yes':'No',formatTalkMinutes(l.talkSeconds/60),l.billedMins,l.billedMins*5,escCSV(formatCallTime(lastCall)),escCSV(lastCall.status),escCSV(lastCall.summary)].join(',')+'\n';
+    csv+=[i+1,escCSVText(fullPhone(l.phone)),escCSV(basis),l.connected.length,l.total,mix.inbound,mix.outbound,mix.unknown,l.callback?'Yes':'No',formatTalkMinutes(l.talkSeconds/60),l.billedMins,l.billedMins*5,escCSV(formatCallTime(lastCall)),escCSV(lastCall.status),escCSV(lastCall.summary)].join(',')+'\n';
   });
   downloadCSV(csvFilename('priority-contacts','lead-summary'),csv);
 }
