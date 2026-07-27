@@ -1,4 +1,5 @@
 "use strict";
+/* global XLSX, AdminValidation */
 const ADMIN_PASSWORD_HASH =
   "7c1466118dea24f6b18e2df487245b062b86232bff0ab6d978e8a46f9e36855a";
 const DATA_MAGIC = "AANYAENC1",
@@ -19,40 +20,15 @@ const STORE = {
 const PLAN_FIELDS = ["planStart", "planEnd", "includedMinutes", "commitmentRupees", "overageRate", "openingUsedMinutes", "concurrentChannels"];
 const IDLE_MINS = 60,
   MAX_SESSION_MINS = 720;
-const REQUIRED = [
-  "Created At (IST)",
-  "Call ID",
-  "Direction",
-  "Status",
-  "From",
-  "To",
-  "Duration (s)",
-  "Messages",
-  "Full Transcript",
-];
-const OPTIONAL = [
-  "Created At (UTC)",
-  "Campaign",
-  "Campaign ID",
-  "Failure Stage",
-  "Failure Reason",
-  "Failure Detail",
-  "SIP / Hangup Code",
-  "Hangup Cause",
-  "Tokens Est.",
-  "Lead Temp.",
-  "Review Band",
-  "Bot Conf.",
-  "Need Score",
-  "Summary",
-];
-const KNOWN = [...REQUIRED, ...OPTIONAL],
-  STATUS_RANK = { completed: 3, failed: 2, initiated: 1 },
-  MAX_FILE_BYTES = 90 * 1024 * 1024,
+const { validateRows } = AdminValidation;
+const MAX_CSV_BYTES = 200 * 1024 * 1024,
+  MAX_WORKBOOK_BYTES = 90 * 1024 * 1024,
+  LARGE_CSV_BYTES = 150 * 1024 * 1024,
   MAX_PUBLISH_BYTES = 45 * 1024 * 1024;
 let ADMIN_PASSPHRASE = "",
   selectedFile = null,
   validation = null,
+  validationWorker = null,
   sessionTimer = null,
   publishing = false,
   planDraftTimer = null;
@@ -328,6 +304,9 @@ function isSupportedExport(fileName) {
 function shouldCompressExport(fileName) {
   return /\.csv$/i.test(String(fileName || ""));
 }
+function maxInputBytes(fileName) {
+  return shouldCompressExport(fileName) ? MAX_CSV_BYTES : MAX_WORKBOOK_BYTES;
+}
 async function gzipBytes(bytes) {
   if (typeof CompressionStream !== "function")
     throw Error("This browser cannot compress CSV exports. Use the latest Chrome, Edge, or Safari and try again.");
@@ -352,10 +331,11 @@ function chooseFile(file) {
     show("validationStatus", "Select an .xlsx, .xls, or .csv export.", "err");
     return;
   }
-  if (file.size > MAX_FILE_BYTES) {
+  const isCsv = shouldCompressExport(file.name);
+  if (file.size > maxInputBytes(file.name)) {
     show(
       "validationStatus",
-      `This export is ${formatSize(file.size)}. Local validation is limited to 90 MB to keep browser memory use safe.`,
+      `This ${isCsv ? "CSV" : "workbook"} is ${formatSize(file.size)}. Local validation is limited to ${isCsv ? "200 MB for CSV" : "90 MB for Excel"} to keep browser memory use safe.`,
       "err",
     );
     return;
@@ -366,7 +346,15 @@ function chooseFile(file) {
   $("fileLine").classList.remove("hidden");
   $("validateBtn").disabled = false;
   $("clearFileBtn").disabled = false;
-  if (file.size > 70 * 1024 * 1024)
+  if (isCsv && file.size > LARGE_CSV_BYTES) {
+    const deviceMemory =
+      typeof navigator !== "undefined" ? Number(navigator.deviceMemory || 0) : 0;
+    show(
+      "validationStatus",
+      `Very large CSV: background validation, compression, encryption and publishing may take several minutes. Keep this tab open${deviceMemory && deviceMemory < 8 ? ` and close other tabs; this device reports ${deviceMemory} GB memory` : ""}.`,
+      "warn",
+    );
+  } else if (file.size > 70 * 1024 * 1024)
     show(
       "validationStatus",
       "Large export: validation, compression, encryption and publishing may take several minutes. Keep this tab open.",
@@ -383,6 +371,10 @@ function clearValidation() {
   hide("publishStatus");
 }
 function clearFile() {
+  if (validationWorker) {
+    validationWorker.terminate();
+    validationWorker = null;
+  }
   selectedFile = null;
   $("fileInput").value = "";
   $("fileLine").classList.add("hidden");
@@ -391,187 +383,62 @@ function clearFile() {
   clearValidation();
   hide("validationStatus");
 }
-function parseDate(v) {
-  if (v instanceof Date && !isNaN(v)) return v;
-  const s = String(v || "")
-    .trim()
-    .replace(/\s+IST$/i, "")
-    .replace(/(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4}),/, "$2 $1 $3");
-  const d = new Date(s);
-  return isNaN(d) ? null : d;
+function csvWorkerTimeout(fileSize) {
+  const mb = Number(fileSize || 0) / 1048576;
+  return Math.min(600000, Math.max(120000, 90000 + mb * 1500));
 }
-function usablePhone(v) {
-  const d = String(v || "").replace(/\D/g, "");
-  return d.length >= 6 && !/^0+$/.test(d);
-}
-function completeScore(r) {
-  return OPTIONAL.reduce((n, k) => n + (String(r[k] ?? "").trim() ? 1 : 0), 0);
-}
-function validateRows(rows, headers) {
-  const errors = [],
-    warnings = [],
-    missing = REQUIRED.filter((c) => !headers.includes(c)),
-    missingOpt = OPTIONAL.filter((c) => !headers.includes(c)),
-    extra = headers.filter((c) => !KNOWN.includes(c));
-  if (missing.length)
-    errors.push(`Missing required columns: ${missing.join(", ")}`);
-  if (missingOpt.length)
-    warnings.push(`Optional columns not present: ${missingOpt.join(", ")}`);
-  if (extra.length)
-    warnings.push(
-      `New columns detected and safely ignored: ${extra.join(", ")}`,
+async function validateCsvInWorker(file) {
+  if (typeof Worker !== "function")
+    throw Error(
+      "Background CSV validation is unavailable in this browser. Use the latest Chrome, Edge, or Safari.",
     );
-  if (missing.length)
-    return { errors, warnings, metrics: { raw: rows.length } };
-  let blankId = 0,
-    badDate = 0,
-    badDir = 0,
-    badStatus = 0,
-    badNumber = 0,
-    badNumeric = 0,
-    outbound = 0,
-    inbound = 0;
-  const rawStatusCounts = { completed: 0, failed: 0, initiated: 0, other: 0 };
-  const dates = [],
-    ids = new Map(),
-    idOccurrences = new Map(),
-    outFrom = new Set(),
-    outTo = new Set(),
-    inFrom = new Set();
-  rows.forEach((r, i) => {
-    const id = String(r["Call ID"] || "").trim(),
-      dir = String(r.Direction || "")
-        .trim()
-        .toLowerCase(),
-      st = String(r.Status || "")
-        .trim()
-        .toLowerCase(),
-      dt = parseDate(r["Created At (IST)"]),
-      dur = Number(r["Duration (s)"]),
-      msg = Number(r.Messages);
-    if (Object.prototype.hasOwnProperty.call(rawStatusCounts, st)) rawStatusCounts[st]++;
-    else rawStatusCounts.other++;
-    if (!id) blankId++;
-    if (!dt) badDate++;
-    else dates.push(dt);
-    if (dir === "outbound") {
-      outbound++;
-      outFrom.add(String(r.From));
-      outTo.add(String(r.To));
-      if (!usablePhone(r.To)) badNumber++;
-    } else if (dir === "inbound") {
-      inbound++;
-      inFrom.add(String(r.From));
-      if (!usablePhone(r.From)) badNumber++;
-    } else badDir++;
-    if (!(st in STATUS_RANK)) badStatus++;
-    if (!Number.isFinite(dur) || dur < 0 || !Number.isFinite(msg) || msg < 0)
-      badNumeric++;
-    if (id) {
-      idOccurrences.set(id, (idOccurrences.get(id) || 0) + 1);
-      const candidate = {
-          row: r,
-          status: st,
-          rank: STATUS_RANK[st] || 0,
-          date: dt?.getTime() || 0,
-          score: completeScore(r),
-          i,
-        },
-        prev = ids.get(id);
-      if (
-        !prev ||
-        candidate.rank > prev.rank ||
-        (candidate.rank === prev.rank &&
-          (candidate.date > prev.date ||
-            (candidate.date === prev.date && candidate.score > prev.score)))
-      )
-        ids.set(id, candidate);
+  if (validationWorker) validationWorker.terminate();
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const worker = new Worker("../js/admin-csv-worker.js");
+    validationWorker = worker;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate();
+      if (validationWorker === worker) validationWorker = null;
+      callback(value);
+    };
+    const timer = setTimeout(
+      () =>
+        finish(
+          reject,
+          new Error(
+            "Background CSV validation timed out. Close other tabs and try again.",
+          ),
+        ),
+      csvWorkerTimeout(file.size),
+    );
+    worker.onerror = (event) =>
+      finish(
+        reject,
+        new Error(event.message || "Background CSV validation failed."),
+      );
+    worker.onmessage = (event) => {
+      const result = event.data || {};
+      if (result.type === "progress") {
+        show("validationStatus", result.message, "info");
+        return;
+      }
+      if (result.type === "error") {
+        finish(reject, new Error(result.error || "The CSV could not be validated."));
+        return;
+      }
+      if (result.type === "result") finish(resolve, result.validation);
+    };
+    try {
+      show("validationStatus", "Starting background CSV validation…", "info");
+      worker.postMessage({ file });
+    } catch (error) {
+      finish(reject, error);
     }
   });
-  if (blankId)
-    errors.push(`${blankId.toLocaleString()} rows have a blank Call ID.`);
-  if (badDate)
-    errors.push(
-      `${badDate.toLocaleString()} rows have an invalid IST timestamp.`,
-    );
-  if (badDir)
-    errors.push(
-      `${badDir.toLocaleString()} rows have an unsupported Direction.`,
-    );
-  if (badStatus)
-    errors.push(
-      `${badStatus.toLocaleString()} rows have an unsupported Status.`,
-    );
-  if (badNumber)
-    errors.push(
-      `${badNumber.toLocaleString()} rows do not contain a usable learner phone in the direction-appropriate field.`,
-    );
-  if (badNumeric)
-    errors.push(
-      `${badNumeric.toLocaleString()} rows contain invalid duration or message values.`,
-    );
-  const final = [...ids.values()].map((x) => x.row),
-    counts = { completed: 0, failed: 0, initiated: 0 };
-  const lifecycleDuplicateRows = [...idOccurrences.values()].reduce((n, count) => n + Math.max(0, count - 1), 0);
-  const lifecycleDuplicateIds = [...idOccurrences.values()].filter((count) => count > 1).length;
-  final.forEach((r) => {
-    const status = String(r.Status).toLowerCase();
-    if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status]++;
-  });
-  if (lifecycleDuplicateRows)
-    warnings.push(
-      `${lifecycleDuplicateRows.toLocaleString()} raw rows repeat ${lifecycleDuplicateIds.toLocaleString()} Call IDs; status totals below use one final lifecycle row per Call ID.`,
-    );
-  if (outbound && outFrom.size > Math.max(20, Math.ceil(outbound * 0.02)))
-    warnings.push(
-      `Outbound From contains ${outFrom.size.toLocaleString()} unique numbers; confirm the vendor has not changed phone routing.`,
-    );
-  if (outbound && outTo.size < Math.max(2, Math.ceil(outbound * 0.001)))
-    errors.push(
-      "Outbound To has unexpectedly low learner-number diversity; phone routing may be reversed.",
-    );
-  const missingLead = final.filter(
-    (r) =>
-      String(r.Status).toLowerCase() === "completed" &&
-      (!String(r["Lead Temp."] || "").trim() ||
-        !String(r["Review Band"] || "").trim()),
-  ).length;
-  if (missingLead)
-    warnings.push(
-      `${missingLead.toLocaleString()} completed calls are missing lead-quality fields and will appear as unknown where supported.`,
-    );
-  if (!errors.length)
-    warnings.unshift(
-      "All required columns and critical row-level checks passed.",
-    );
-  let minDate = null;
-  let maxDate = null;
-  for (const date of dates) {
-    const time = date.getTime();
-    if (minDate === null || time < minDate) minDate = time;
-    if (maxDate === null || time > maxDate) maxDate = time;
-  }
-  return {
-    errors,
-    warnings,
-    metrics: {
-      raw: rows.length,
-      rawStatusCounts,
-      unique: ids.size,
-      lifecycleDuplicateRows,
-      lifecycleDuplicateIds,
-      completed: counts.completed,
-      failed: counts.failed,
-      initiated: counts.initiated,
-      inbound,
-      outbound,
-      dateMin: minDate === null ? null : new Date(minDate),
-      dateMax: maxDate === null ? null : new Date(maxDate),
-      outLearners: outTo.size,
-      inLearners: inFrom.size,
-      extra: extra.length,
-    },
-  };
 }
 function fmtDate(d) {
   return d
@@ -632,25 +499,28 @@ function renderReview(v) {
 }
 async function validateWorkbook() {
   if (!selectedFile) return;
+  const file = selectedFile;
   try {
     $("validateBtn").disabled = true;
     show("validationStatus", "Reading and validating export…", "info");
+    const isCsv = shouldCompressExport(file.name);
+    if (isCsv) {
+      validation = await validateCsvInWorker(file);
+      if (selectedFile !== file) return;
+      renderReview(validation);
+      return;
+    }
     if (typeof XLSX === "undefined")
       throw Error("Spreadsheet parser is unavailable. Refresh and try again.");
-    const bytes = new Uint8Array(await selectedFile.arrayBuffer()),
+    const bytes = new Uint8Array(await file.arrayBuffer()),
       wb = XLSX.read(bytes, { type: "array", cellDates: true });
-    const sheetName = validationSheetName(wb, selectedFile.name),
-      isCsv = /\.csv$/i.test(selectedFile.name);
+    const sheetName = validationSheetName(wb, file.name);
     if (!sheetName) {
       validation = {
         errors: [
-          isCsv
-            ? "The CSV export could not be read."
-            : "Required worksheet “Voice Export” was not found.",
+          "Required worksheet “Voice Export” was not found.",
         ],
-        warnings: isCsv
-          ? []
-          : [`Worksheets found: ${wb.SheetNames.join(", ") || "none"}`],
+        warnings: [`Worksheets found: ${wb.SheetNames.join(", ") || "none"}`],
         metrics: { raw: 0 },
       };
       return renderReview(validation);
@@ -661,7 +531,7 @@ async function validateWorkbook() {
     });
     if (!rows.length) {
       validation = {
-        errors: [isCsv ? "The CSV export is empty." : "The Voice Export worksheet is empty."],
+        errors: ["The Voice Export worksheet is empty."],
         warnings: [],
         metrics: { raw: 0 },
       };
@@ -808,19 +678,23 @@ async function publish() {
     $("publishBtn").disabled = true;
     saveSettings();
     const headers = {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-      },
-      plaintextSha256 = await sha256Bytes(validation.bytes);
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+    };
+    let sourceBytes =
+      validation.bytes ||
+      new Uint8Array(await selectedFile.arrayBuffer());
+    const plaintextSha256 = await sha256Bytes(sourceBytes);
     show("publishStatus", "Checking whether this workbook is already published…", "info");
     const publicationMetadata = await readPublicationMetadata(s, headers);
     if (publicationMetadata.value?.plaintextSha256 === plaintextSha256)
       throw Error(
         "This exact workbook is already published. No new encrypted copy was created.",
       );
-    const publishBytes = shouldCompressExport(selectedFile?.name)
-      ? (show("publishStatus", "Compressing CSV locally…", "info"), await gzipBytes(validation.bytes))
-      : validation.bytes;
+    let publishBytes = shouldCompressExport(selectedFile?.name)
+      ? (show("publishStatus", "Compressing CSV locally…", "info"), await gzipBytes(sourceBytes))
+      : sourceBytes;
+    if (shouldCompressExport(selectedFile?.name)) sourceBytes = null;
     if (publishBytes.byteLength > MAX_PUBLISH_BYTES)
       throw Error(
         `This export is still ${formatSize(publishBytes.byteLength)} after preparation, which is too large for reliable GitHub publishing. Split it into a smaller date range or move to the planned large-data storage service.`,
@@ -832,16 +706,19 @@ async function publish() {
       DATA_MAGIC,
     );
     show("publishStatus", "Running encryption self-test…", "info");
-    const decrypted = await decryptBytes(
+    let decrypted = await decryptBytes(
       encrypted,
       ADMIN_PASSPHRASE,
       DATA_MAGIC,
     );
-    const roundTrip = shouldCompressExport(selectedFile?.name)
+    let roundTrip = shouldCompressExport(selectedFile?.name)
       ? await gunzipBytes(decrypted)
       : decrypted;
-    if (!equalBytes(roundTrip, validation.bytes))
+    if ((await sha256Bytes(roundTrip)) !== plaintextSha256)
       throw Error("Encryption self-test failed; nothing was published.");
+    roundTrip = null;
+    decrypted = null;
+    publishBytes = null;
     const base = apiUrl(s);
     show("publishStatus", "Checking the current production file…", "info");
     const current = await fetch(

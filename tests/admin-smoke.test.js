@@ -8,13 +8,19 @@ assert(html.includes('href="../css/admin.css"'), 'Admin stylesheet link is missi
 assert(!/<style(?:\s|>)/i.test(html), 'Admin must not contain embedded style blocks');
 assert(fs.existsSync('css/admin.css'), 'Admin stylesheet file is missing');
 assert(html.includes('src="../js/admin.js"'), 'Admin application script link is missing');
+assert(html.includes('src="../js/admin-validation.js"'), 'Shared Admin validation script link is missing');
 const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
   .map(match => match[1])
   .filter(script => script.trim());
 assert.equal(inlineScripts.length, 0, 'Admin must not contain inline application scripts');
 assert(fs.existsSync('js/admin.js'), 'Admin application script file is missing');
-const scripts = [fs.readFileSync('js/admin.js', 'utf8')];
-new Function(scripts[0]);
+assert(fs.existsSync('js/admin-validation.js'), 'Shared Admin validation module is missing');
+assert(fs.existsSync('js/admin-csv-worker.js'), 'Background CSV worker is missing');
+const scripts = [
+  fs.readFileSync('js/admin-validation.js', 'utf8'),
+  fs.readFileSync('js/admin.js', 'utf8')
+];
+scripts.forEach(script => new Function(script));
 
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Admin contains duplicate HTML IDs');
@@ -93,7 +99,8 @@ const context = {
   window: {}
 };
 vm.createContext(context);
-vm.runInContext(`${scripts[0]};globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,gzipBytes,gunzipBytes,validationSheetName,readBillingPlanForm,billingPlanFormValues,fillBillingPlanForm,saveBillingPlanDraft,restoreBillingPlanForm};`, context);
+scripts.forEach(script => vm.runInContext(script, context));
+vm.runInContext(`globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,maxInputBytes,csvWorkerTimeout,gzipBytes,gunzipBytes,validationSheetName,readBillingPlanForm,billingPlanFormValues,fillBillingPlanForm,saveBillingPlanDraft,restoreBillingPlanForm};`, context);
 
 const required = ['Created At (IST)', 'Call ID', 'Direction', 'Status', 'From', 'To', 'Duration (s)', 'Messages', 'Full Transcript'];
 const baseRow = {
@@ -114,6 +121,9 @@ assert(context.__adminTest.isSupportedExport('voice_analytics.csv'), 'CSV export
 assert(!context.__adminTest.isSupportedExport('voice_analytics.txt'), 'Unsupported exports should be rejected');
 assert(context.__adminTest.shouldCompressExport('voice_analytics.csv'), 'CSV exports should be compressed before publishing');
 assert(!context.__adminTest.shouldCompressExport('voice_analytics.xlsx'), 'Excel exports must retain their existing publish format');
+assert.equal(context.__adminTest.maxInputBytes('voice_analytics.csv'), 200 * 1024 * 1024, 'CSV uploads must support the temporary 200 MB ceiling');
+assert.equal(context.__adminTest.maxInputBytes('voice_analytics.xlsx'), 90 * 1024 * 1024, 'Excel uploads must retain the safer 90 MB ceiling');
+assert(context.__adminTest.csvWorkerTimeout(200 * 1024 * 1024) >= context.__adminTest.csvWorkerTimeout(90 * 1024 * 1024), 'CSV worker timeout must scale for larger files');
 const csv = '\uFEFFCreated At (IST),Call ID,Direction,Status,From,To,Duration (s),Messages,Full Transcript\n"10 Jul 2026, 10:30:00 AM IST",csv-1,outbound,completed,918071436001,919999999999,30,4,"First line\nSecond line"\n"10 Jul 2026, 10:35:00 AM IST",csv-2,outbound,completed,918071436001,918888888888,45,5,"Second call"';
 const csvWorkbook = XLSX.read(Buffer.from(csv), { type: 'buffer', cellDates: true });
 const csvSheetName = context.__adminTest.validationSheetName(csvWorkbook, 'voice_analytics.csv');
