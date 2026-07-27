@@ -30,7 +30,7 @@ assert.deepEqual(hashLinks.filter(id => !idSet.has(id)), [], 'Dashboard contains
 for (const path of [
   'assets/logo.jpg', 'assets/favicon.ico', 'assets/favicon-16.png',
   'assets/favicon-32.png', 'assets/apple-touch-icon.png', 'assets/xlsx.full.min.js',
-  'css/dashboard.css', 'js/workbook-worker.js'
+  'css/dashboard.css', 'js/workbook-worker.js', 'js/dashboard-csv-worker.js'
 ]) {
   assert(fs.existsSync(path), `Missing dashboard asset: ${path}`);
 }
@@ -95,6 +95,7 @@ for (const fn of [
   'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'resetCallPaceCache', 'callPaceAnalysis', 'paintCallPace',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
+  'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
   'isGzipData', 'unpackPublishedData',
   'copyPhoneButton', 'copyPhone',
   'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign',
@@ -178,18 +179,25 @@ assert(!context.isMeaningfulConversation({ status: 'failed', dur: 120 }), 'Faile
 assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
 assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
 assert.equal(context.intentOf('I have a portal login issue'), 'Support');
+context.paintFunnel({n:154014,callbacks:12345,hot:23456,warm:34567,cold:43567});
+assert(getElement('funnel').innerHTML.includes('1,54,014'), 'Demand outcomes must format large raw counts');
+assert(getElement('funnel').innerHTML.includes('fstep-meter'), 'Demand outcomes must keep a full-width readable row with a proportional meter');
+assert(getElement('funnel').innerHTML.includes('100%'), 'Demand outcomes percentages must remain visible');
 context.setDashboardLoadingMessage('Parsing workbook…');
 assert.equal(loadingText.textContent, 'Parsing workbook…', 'Loading stage message changed');
 assert(scripts[1].includes("fetchWithTimeout('data/voice_analytics.xlsx',{cache:'no-cache'}"), 'Workbook fetch must revalidate while allowing cached bytes');
 assert(scripts[1].includes('DATA_FETCH_TIMEOUT_MS=180000'), 'Growing workbook download timeout changed');
 assert(!scripts[1].includes("new File([fileBytes]"), 'Automatic loading must not copy decrypted bytes through File and FileReader');
-assert(scripts[1].includes("const allCalls=await processWorkbookBytes(fileBytes,'voice_analytics.xlsx',meta?.plaintextSha256||meta?.dataCommitSha||'')"), 'Automatic loading must process decrypted bytes directly with the publication version');
+assert(scripts[1].includes("const sourceName=isCsvExportBytes(fileBytes)?'voice_analytics.csv':'voice_analytics.xlsx'"), 'Automatic loading must route CSV exports away from SheetJS');
 assert(scripts[1].includes("const PREPARED_CACHE_DB='anya-dashboard-secure-cache'"), 'Encrypted prepared-data cache is missing');
 assert(scripts[1].includes("crypto.subtle.encrypt({name:'AES-GCM'"), 'Prepared-data cache must remain encrypted at rest');
 assert(scripts[1].includes('Opening saved secure data…'), 'Prepared-data cache load status is missing');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 14 * 1048576 }), 60000, 'Current-size workbook timeout changed');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 90 * 1048576 }), 270000, 'Growing workbook timeout must scale with size');
 assert.equal(context.workbookWorkerTimeout({ byteLength: 200 * 1048576 }), 300000, 'Workbook timeout must remain bounded');
+assert(context.isCsvExportBytes(new TextEncoder().encode('Created At (IST),Call ID,Direction\\n')), 'CSV export detection failed');
+assert(!context.isCsvExportBytes(Uint8Array.from([0x50, 0x4b, 0x03, 0x04])), 'XLSX bytes must not enter the CSV worker');
+assert.equal(context.csvDashboardWorkerTimeout({ byteLength: 200 * 1048576 }), 600000, 'Large CSV processing timeout changed');
 assert(context.isGzipData(Uint8Array.from([0x1f, 0x8b, 0x08])), 'Gzip payload detection is missing');
 assert(!context.isGzipData(Uint8Array.from([0x50, 0x4b, 0x03, 0x04])), 'Excel workbooks must not be mistaken for gzip data');
 

@@ -133,6 +133,8 @@ const METRIC_DEFINITIONS=Object.freeze({
 function metricDefinition(label){return METRIC_DEFINITIONS[label]||'Computed from final records in the active dashboard scope.';}
 const $=id=>document.getElementById(id);
 let RECORDS=[], SRC="", BILLING_PLAN=null;
+let BILLING_CYCLE_CACHE=null,BILLING_CYCLE_CACHE_PLAN=null,CAMPAIGN_OPTIONS_CACHE=null,CAMPAIGN_OPTIONS_SIG=null;
+let RECORDS_DATE_INDEX=new Map(),RECORDS_DATE_INDEX_COUNT=0;
 
 const dz=$("dropZone"),fi=$("fileInput");
 dz.onclick=()=>fi.click();
@@ -235,6 +237,14 @@ async function savePreparedCache(version,allCalls){
   const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);
   await preparedCacheWrite({key:PREPARED_CACHE_KEY,version,salt,iv,ciphertext,savedAt:Date.now()});
 }
+function schedulePreparedCacheSave(version,allCalls){
+  if(!version||!Array.isArray(allCalls)||!preparedCacheSupported())return;
+  const save=()=>savePreparedCache(version,allCalls).catch(error=>console.warn('Could not save secure local cache:',error));
+  // Let the first dashboard paint and user input win. The encrypted cache is an optimization for
+  // subsequent visits and must never delay the first usable frame.
+  if(typeof requestIdleCallback==='function')requestIdleCallback(save,{timeout:8000});
+  else setTimeout(save,1500);
+}
 async function loadPreparedCache(version){
   if(!version||!preparedCacheSupported())return null;
   try{
@@ -254,7 +264,16 @@ async function loadPreparedCache(version){
 function setPreparedRecords(allCalls,sourceName){
   ALL_DIALS=allCalls;
   RECORDS=allCalls.filter(isConversationRecord);
+  RECORDS_DATE_INDEX=new Map();
+  for(const record of RECORDS){
+    if(!record.d)continue;
+    if(!RECORDS_DATE_INDEX.has(record.d))RECORDS_DATE_INDEX.set(record.d,[]);
+    RECORDS_DATE_INDEX.get(record.d).push(record);
+  }
+  RECORDS_DATE_INDEX_COUNT=RECORDS.length;
   SRC=sourceName;
+  BILLING_CYCLE_CACHE=BILLING_CYCLE_CACHE_PLAN=null;
+  CAMPAIGN_OPTIONS_CACHE=CAMPAIGN_OPTIONS_SIG=null;
 }
 
 function autoLoadLatestExcel(){
@@ -307,10 +326,11 @@ function autoLoadLatestExcel(){
       }
       setDashboardLoadingMessage('Reading workbook…');
       const meta=await Promise.race([metadataPromise,delay(0).then(()=>null)]);
-      const allCalls=await processWorkbookBytes(fileBytes,'voice_analytics.xlsx',meta?.plaintextSha256||meta?.dataCommitSha||'');
+      const sourceName=isCsvExportBytes(fileBytes)?'voice_analytics.csv':'voice_analytics.xlsx';
+      const allCalls=await processWorkbookBytes(fileBytes,sourceName,meta?.plaintextSha256||meta?.dataCommitSha||'');
       // Metadata may arrive after a first load. Do not make the dashboard wait just to save an
       // optional cache; once it does arrive, persist the already-normalized records securely.
-      if(!meta&&allCalls)metadataPromise.then(fresh=>savePreparedCache(fresh?.plaintextSha256||fresh?.dataCommitSha||'',allCalls)).catch(()=>{});
+      if(!meta&&allCalls)metadataPromise.then(fresh=>schedulePreparedCacheSave(fresh?.plaintextSha256||fresh?.dataCommitSha||'',allCalls)).catch(()=>{});
     }).catch(err=>{
       const timedOut=err && err.name==='AbortError';
       setDashboardPlaceholder(
@@ -389,6 +409,62 @@ function workbookWorkerTimeout(bytes){
   const megabytes=Math.max(1,Math.ceil(Number(bytes?.byteLength||0)/1048576));
   return Math.min(300000,Math.max(60000,megabytes*3000));
 }
+function isCsvExportBytes(bytes){
+  if(!bytes||!bytes.length)return false;
+  // XLSX is a ZIP container; legacy XLS uses the OLE compound-file signature.
+  if(bytes.length>=4&&bytes[0]===0x50&&bytes[1]===0x4b)return false;
+  if(bytes.length>=4&&bytes[0]===0xd0&&bytes[1]===0xcf&&bytes[2]===0x11&&bytes[3]===0xe0)return false;
+  const sample=new TextDecoder().decode(bytes.subarray(0,Math.min(bytes.length,16384))).replace(/^\uFEFF/,'');
+  const header=(sample.split(/\r?\n/,1)[0]||'').toLowerCase();
+  return header.includes(',')&&header.includes('call id')&&header.includes('created at');
+}
+function csvDashboardWorkerTimeout(bytes){
+  const megabytes=Math.max(1,Math.ceil(Number(bytes?.byteLength||0)/1048576));
+  return Math.min(900000,Math.max(120000,megabytes*3000));
+}
+function parseCsvRecordsInWorker(bytes){
+  return new Promise((resolve,reject)=>{
+    if(typeof Worker!=='function'){reject(new Error('Background CSV processing is unavailable in this browser.'));return;}
+    let worker;
+    try{worker=new Worker('js/dashboard-csv-worker.js');}catch(error){reject(error);return;}
+    let settled=false,rawRows=0,headers=[],records=[];
+    const finish=(callback,value)=>{if(settled)return;settled=true;clearTimeout(timer);worker.terminate();callback(value);};
+    const timer=setTimeout(()=>finish(reject,new Error('Background CSV processing timed out. Close other tabs and try again.')),csvDashboardWorkerTimeout(bytes));
+    worker.onerror=event=>finish(reject,new Error(event.message||'Background CSV processing failed.'));
+    worker.onmessage=event=>{
+      try{
+        const result=event.data||{};
+        if(result.type==='error'){finish(reject,new Error(result.error||'The CSV could not be processed.'));return;}
+        if(result.type==='progress'){
+          setDashboardLoadingMessage(`Reading secure CSV… ${Number(result.percent||0)}%`);
+          return;
+        }
+        if(result.type==='ready'){
+          rawRows=Number(result.rawRows||0);headers=result.headers||[];
+          setDashboardLoadingMessage(`Preparing ${Number(result.finalRows||0).toLocaleString()} calls…`);
+          worker.postMessage({type:'next'});
+          return;
+        }
+        if(result.type==='rows'){
+          for(const row of result.rows||[]){
+            const record=rowToRecord(row);
+            if(record&&record.d)records.push(record);
+          }
+          setDashboardLoadingMessage(`Preparing dashboard… ${Number(result.processed||0).toLocaleString()} / ${Number(result.total||0).toLocaleString()} calls`);
+          requestAnimationFrame(()=>{if(!settled)worker.postMessage({type:'next'});});
+          return;
+        }
+        if(result.type==='complete')finish(resolve,{records,rawRows,headers});
+      }catch(error){finish(reject,error);}
+    };
+    const buffer=bytes.byteOffset===0&&bytes.byteLength===bytes.buffer.byteLength
+      ?bytes.buffer
+      :bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+    // CSV has no main-thread fallback: transfer ownership so the decompressed export is not retained
+    // on both threads while the worker parses it.
+    try{worker.postMessage({bytes:buffer},[buffer]);}catch(error){finish(reject,error);}
+  });
+}
 function parseWorkbookOnMainThread(bytes){
   const wb=XLSX.read(bytes,{type:'array',cellDates:true,dense:true});
   return chooseWorkbookRows(wb);
@@ -425,11 +501,25 @@ async function parseWorkbookBytes(bytes){
 }
 async function processWorkbookBytes(bytes,sourceName,cacheVersion=''){
   if($('err'))$('err').textContent='';
-  if(typeof XLSX==='undefined'){
+  const csv=isCsvExportBytes(bytes);
+  if(!csv&&typeof XLSX==='undefined'){
     setDashboardPlaceholder('Spreadsheet engine unavailable','The spreadsheet parser did not load. Please check internet/CDN access and refresh the dashboard.');
     return;
   }
   try{
+    if(csv){
+      setDashboardLoadingMessage('Reading secure CSV in the background…');
+      const parsed=await parseCsvRecordsInWorker(bytes);
+      const allCalls=parsed.records;
+      setPreparedRecords(allCalls,sourceName);
+      if(!RECORDS.length){
+        setDashboardPlaceholder('No valid call records','The CSV loaded, but the dashboard could not identify valid call dates.<br><br><b>Columns seen:</b> '+esc((parsed.headers||[]).slice(0,12).join(', ')||'none'));
+        return;
+      }
+      boot();
+      schedulePreparedCacheSave(cacheVersion,allCalls);
+      return allCalls;
+    }
     setDashboardLoadingMessage('Parsing workbook…');
     const chosen=await parseWorkbookBytes(bytes);
     if(!chosen){setDashboardPlaceholder('No records found','The workbook loaded, but no worksheet contains rows. Please publish an export with call records.');return;}
@@ -445,7 +535,7 @@ async function processWorkbookBytes(bytes,sourceName,cacheVersion=''){
     boot();
     // Saving is deliberately best-effort and happens after the dashboard is usable. The cache is
     // encrypted with the current session passphrase and invalidated by each new publication fingerprint.
-    savePreparedCache(cacheVersion,allCalls).catch(error=>console.warn('Could not save secure local cache:',error));
+    schedulePreparedCacheSave(cacheVersion,allCalls);
     return allCalls;
   }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
 }
@@ -596,11 +686,16 @@ function focusManagementSummary(){
 // frame is a long freeze and sections pop in progressively. Guarded by renderGeneration: if a newer
 // render (e.g. another filter toggle) starts, the stale batch stops immediately.
 function runPaintChunks(generation, thunks, done){
+  if(!thunks.length){if(done)done();return;}
   let i=0;
   const step=()=>{
     if(generation!==renderGeneration)return;
-    const end=Math.min(i+3, thunks.length);
-    for(;i<end;i++){ try{thunks[i]();}catch(e){console.warn('paint chunk error:',e);} }
+    const started=typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
+    let painted=0;
+    do{
+      try{thunks[i]();}catch(e){console.warn('paint chunk error:',e);}
+      i++;painted++;
+    }while(i<thunks.length&&painted<2&&((typeof performance!=='undefined'&&performance.now?performance.now():Date.now())-started)<8);
     if(i<thunks.length){requestAnimationFrame(step);} else if(done){done();}
   };
   requestAnimationFrame(step);
@@ -683,7 +778,10 @@ function renderHeaderMeta(records){
     meta.innerHTML=`<div style="background:rgba(255,85,85,0.08);border:1px solid rgba(255,85,85,0.3);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--hot)"><b>No calls match current view</b><span style="margin-left:8px;color:var(--muted)">${currentViewDescription()}</span></div>`;
     return;
   }
-  const dateRows=records.length?records:outboundAttemptRows,dts=dateRows.map(r=>r.d).sort(),dmn=dts[0],dmx=dts[dts.length-1],tMins=sumBilledMinutes(records),avg=records.length?Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length):0,items=[["Period",dmn+" – "+dmx],[SELECTED_DIRECTION==='outbound'?"Connected":"Conversations",records.length+" calls"]];
+  const dateRows=records.length?records:outboundAttemptRows;
+  let dmn='',dmx='';
+  for(const row of dateRows){if(!row.d)continue;if(!dmn||row.d<dmn)dmn=row.d;if(!dmx||row.d>dmx)dmx=row.d;}
+  const tMins=sumBilledMinutes(records),avg=records.length?Math.round(records.reduce((a,r)=>a+r.dur,0)/records.length):0,items=[["Period",dmn+" – "+dmx],[SELECTED_DIRECTION==='outbound'?"Connected":"Conversations",records.length+" calls"]];
   if(SELECTED_DIRECTION!=='inbound')items.push(["Outbound attempts",outboundAttemptRows.length+" dials"]);
   items.push(["Avg. duration",avg+"s avg"],["Minutes",tMins+" mins"],["Bundle value","₹"+tMins*5]);
   meta.innerHTML=items.map(m=>`<div style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--teal);white-space:nowrap">${esc(m[0])} <b style="color:#e8e8e8">${esc(m[1])}</b></div>`).join("");
@@ -1042,16 +1140,48 @@ async function loadBillingPlan(){
 function runwayDays(a,b){return Math.max(0,Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000));}
 function runwayAdd(iso,n){const d=new Date(iso+'T00:00:00');d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
 function billingRunwayStats(plan=BILLING_PLAN,records=ALL_DIALS){
-  if(!plan)return null;const cycle=(records||[]).filter(r=>r.d>=plan.startDate&&r.d<plan.endDate),billable=cycle.filter(isBillableRecord),included=Number(plan.includedMinutes),used=Number(plan.openingUsedMinutes||0)+sumBilledMinutes(billable),talk=sumTalkTimeMinutes(billable),remaining=Math.max(0,included-used),latest=cycle.map(r=>r.d).sort().pop()||plan.startDate,recentStart=[plan.startDate,runwayAdd(latest,-13)].sort().pop(),recent=billable.filter(r=>r.d>=recentStart&&r.d<=latest),recentDays=Math.max(1,runwayDays(recentStart,latest)+1),daily=sumBilledMinutes(recent)/recentDays,projected=Math.round(used+daily*runwayDays(latest,plan.endDate)),projectedOver=Math.max(0,projected-included),uplift=used-talk;
-  return{used,talk,remaining,included,daily,projected,projectedOver,uplift,upliftPct:talk?uplift/talk*100:0,usedPct:used/included*100,exhaustion:daily>0&&remaining>0?runwayAdd(latest,Math.ceil(remaining/daily)):used>=included?latest:null,inbound:sumBilledMinutes(billable.filter(r=>normalizeDirection(r.direction)==='inbound')),outbound:sumBilledMinutes(billable.filter(r=>normalizeDirection(r.direction)==='outbound')),allocation:Math.min(used,included)/included*Number(plan.commitmentRupees||0),projectedSpend:Number(plan.commitmentRupees||0)+projectedOver*Number(plan.overageRate||0),latest,recentDays};
+  if(!plan)return null;
+  const included=Number(plan.includedMinutes),opening=Number(plan.openingUsedMinutes||0),billedByDate=new Map();
+  let billed=0,talk=0,inbound=0,outbound=0,latest=plan.startDate;
+  for(const r of records||[]){
+    if(!r.d||r.d<plan.startDate||r.d>=plan.endDate)continue;
+    if(r.d>latest)latest=r.d;
+    if(!isBillableRecord(r))continue;
+    const minutes=billedMinutes(r.dur),direction=normalizeDirection(r.direction);
+    billed+=minutes;talk+=Number(r.dur||0)/60;
+    billedByDate.set(r.d,(billedByDate.get(r.d)||0)+minutes);
+    if(direction==='inbound')inbound+=minutes;
+    if(direction==='outbound')outbound+=minutes;
+  }
+  const used=opening+billed,remaining=Math.max(0,included-used),recentStart=[plan.startDate,runwayAdd(latest,-13)].sort().pop(),recentDays=Math.max(1,runwayDays(recentStart,latest)+1);
+  let recentMinutes=0;billedByDate.forEach((minutes,date)=>{if(date>=recentStart&&date<=latest)recentMinutes+=minutes;});
+  const daily=recentMinutes/recentDays,projected=Math.round(used+daily*runwayDays(latest,plan.endDate)),projectedOver=Math.max(0,projected-included),uplift=used-talk;
+  return{used,talk,remaining,included,daily,projected,projectedOver,uplift,upliftPct:talk?uplift/talk*100:0,usedPct:used/included*100,exhaustion:daily>0&&remaining>0?runwayAdd(latest,Math.ceil(remaining/daily)):used>=included?latest:null,inbound,outbound,allocation:Math.min(used,included)/included*Number(plan.commitmentRupees||0),projectedSpend:Number(plan.commitmentRupees||0)+projectedOver*Number(plan.overageRate||0),latest,recentDays};
+}
+function cachedBillingRunwayStats(plan=BILLING_PLAN){
+  if(!plan)return null;
+  const signature=[plan.startDate,plan.endDate,plan.includedMinutes,plan.openingUsedMinutes,plan.commitmentRupees,plan.overageRate,ALL_DIALS.length].join('|');
+  if(BILLING_CYCLE_CACHE&&BILLING_CYCLE_CACHE_PLAN===signature)return BILLING_CYCLE_CACHE;
+  BILLING_CYCLE_CACHE_PLAN=signature;
+  BILLING_CYCLE_CACHE=billingRunwayStats(plan,ALL_DIALS);
+  return BILLING_CYCLE_CACHE;
 }
 function selectedBillingStats(records=RECORDS,plan=BILLING_PLAN){
-  const rows=(records||[]).filter(r=>!plan||(r.d>=plan.startDate&&r.d<plan.endDate)),billable=rows.filter(isBillableRecord),talk=sumTalkTimeMinutes(billable),billed=sumBilledMinutes(billable),uplift=billed-talk;
-  return{talk,billed,uplift,upliftPct:talk?uplift/talk*100:0,inbound:sumBilledMinutes(billable.filter(r=>normalizeDirection(r.direction)==='inbound')),outbound:sumBilledMinutes(billable.filter(r=>normalizeDirection(r.direction)==='outbound'))};
+  let talk=0,billed=0,inbound=0,outbound=0;
+  for(const r of records||[]){
+    if(plan&&(r.d<plan.startDate||r.d>=plan.endDate))continue;
+    if(!isBillableRecord(r))continue;
+    const minutes=billedMinutes(r.dur),direction=normalizeDirection(r.direction);
+    talk+=Number(r.dur||0)/60;billed+=minutes;
+    if(direction==='inbound')inbound+=minutes;
+    if(direction==='outbound')outbound+=minutes;
+  }
+  const uplift=billed-talk;
+  return{talk,billed,uplift,upliftPct:talk?uplift/talk*100:0,inbound,outbound};
 }
 function paintBundleRunway(){
   const el=$('bundleRunway');if(!el)return;if(!BILLING_PLAN){el.innerHTML='<div class="bundle-empty"><b>Billing plan not configured</b><span>Publish the encrypted contract settings from Admin Console.</span></div>';return;}
-  const p=BILLING_PLAN,s=billingRunwayStats(p),selected=selectedBillingStats(RECORDS,p),fmt=n=>Math.round(Number(n||0)).toLocaleString('en-IN'),decimal=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}),money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}),over=s.projectedOver>0,date=x=>new Date(x+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),headline=over?`Bundle likely exhausted ${s.exhaustion?date(s.exhaustion):'before cycle end'}`:`${fmt(Math.max(0,s.included-s.projected))} mins projected unused at cycle end`,selectedShare=s.used?selected.billed/s.used*100:0;
+  const p=BILLING_PLAN,s=cachedBillingRunwayStats(p),selected=selectedBillingStats(RECORDS,p),fmt=n=>Math.round(Number(n||0)).toLocaleString('en-IN'),decimal=n=>Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1}),money=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}),over=s.projectedOver>0,date=x=>new Date(x+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),headline=over?`Bundle likely exhausted ${s.exhaustion?date(s.exhaustion):'before cycle end'}`:`${fmt(Math.max(0,s.included-s.projected))} mins projected unused at cycle end`,selectedShare=s.used?selected.billed/s.used*100:0;
   el.innerHTML=`<div class="bundle-head"><div><span>Commercial runway</span><h3>${headline}</h3><p>${date(p.startDate)} – ${date(p.endDate)} · full contract cycle</p></div><div class="bundle-contract"><b>${money(p.commitmentRupees)}</b><span>${fmt(p.includedMinutes)} included mins</span></div></div><div class="bundle-scope-note"><b>Contract position</b> remains cycle-wide so filters cannot distort the true bundle balance. <b>Selected view</b> below responds to every dashboard filter.</div><div class="bundle-kpis"><div><b>${fmt(s.talk)}</b><span>Raw talk-time mins</span></div><div><b>${fmt(s.used)}</b><span>Billable mins used</span></div><div><b>${fmt(s.remaining)}</b><span>Bundle mins remaining</span></div><div><b>+${fmt(s.uplift)}</b><span>Rounding uplift · ${s.upliftPct.toFixed(1)}%</span></div></div><div class="bundle-progress"><div><b>${s.usedPct.toFixed(1)}% used</b><span>${fmt(s.used)} / ${fmt(s.included)} mins</span></div><div class="bundle-track"><i style="width:${Math.min(100,s.usedPct)}%"></i></div></div><div class="bundle-grid"><div><span class="bundle-panel-label">Contract-cycle usage mix</span><h4>${fmt(s.inbound)} inbound · ${fmt(s.outbound)} outbound</h4><p>Allocated prepaid value used: <b>${money(s.allocation)}</b> — not an extra invoice.</p></div><div class="bundle-selected"><span class="bundle-panel-label">Selected view · updates with filters</span><h4>${fmt(selected.billed)} billable mins</h4><p><b>${decimal(selected.talk)}</b> raw talk-time mins · <b>+${decimal(selected.uplift)}</b> rounding (${selected.upliftPct.toFixed(1)}%).</p><p><b>${fmt(selected.inbound)}</b> inbound · <b>${fmt(selected.outbound)}</b> outbound · ${selectedShare.toFixed(1)}% of cycle usage.</p></div><div class="bundle-projection"><span>Recent daily bundle use</span><b>${fmt(s.daily)} billed mins/day</b><p>Average across ${s.recentDays} calendar days ending ${date(s.latest)}, including zero-call days. Used only for this runway projection.</p><p>Projected cycle usage: <b>${fmt(s.projected)} mins</b>.</p><p>${over?`Projected overage: <b>${fmt(s.projectedOver)} mins · ${money(s.projectedOver*Number(p.overageRate||0))}</b>.`:'No post-bundle charge projected.'} Projected total spend: <b>${money(s.projectedSpend)}</b>.</p></div></div><div class="bundle-rule"><b>Billing rule:</b> completed or legacy done calls only; each non-zero call rounds up separately. Post-bundle rate: ${money(p.overageRate)}/min.</div>`;
 }
 
@@ -1325,21 +1455,27 @@ function clearCampaignFilter(){
 function populateCampaignFilter(){
   const filter=$('campaignFilter'),options=$('campaignFilterOptions');
   if(!filter||!options)return;
-  const contacts={};
-  ALL_DIALS.forEach(r=>{
-    const campaign=(r.campaign||'').trim(),phone=ledgerPhoneKey(r);
-    if(campaign&&normalizeDirection(r.direction)==='outbound'){
-      if(!contacts[campaign])contacts[campaign]=new Set();
-      if(phone&&recordMatchesDate(r)){
-        contacts[campaign].add(phone);
+  const fromDate=$('filterFromDate')?$('filterFromDate').value:'',toDate=$('filterToDate')?$('filterToDate').value:'';
+  const signature=`${fromDate}|${toDate}|${ALL_DIALS.length}`;
+  if(CAMPAIGN_OPTIONS_SIG!==signature||!CAMPAIGN_OPTIONS_CACHE){
+    const contacts={};
+    ALL_DIALS.forEach(r=>{
+      const campaign=(r.campaign||'').trim(),phone=ledgerPhoneKey(r);
+      if(campaign&&normalizeDirection(r.direction)==='outbound'){
+        if(!contacts[campaign])contacts[campaign]=new Set();
+        if(phone&&recordMatchesDate(r)){
+          contacts[campaign].add(phone);
+        }
       }
-    }
-  });
-  const names=Object.keys(contacts).sort((a,b)=>a.localeCompare(b));
+    });
+    CAMPAIGN_OPTIONS_SIG=signature;
+    CAMPAIGN_OPTIONS_CACHE=Object.keys(contacts).sort((a,b)=>a.localeCompare(b)).map(name=>({name,count:contacts[name].size}));
+  }
+  const campaignOptions=CAMPAIGN_OPTIONS_CACHE,names=campaignOptions.map(option=>option.name);
   const selected=activeCampaigns();
   filter.dataset.count=String(names.length);
   if(!names.length){filter.open=false;updateCampaignFilterVisibility();return;}
-  options.innerHTML=names.map(name=>`<label class="campaign-filter-option"><input type="checkbox" value="${esc(name)}" ${CAMPAIGN_DRAFT.has(name)?'checked':''} onchange="toggleCampaignOption(this.value,this.checked)"><span>${esc(name)}</span><small>${contacts[name].size.toLocaleString()} contact${contacts[name].size===1?'':'s'}</small></label>`).join('');
+  options.innerHTML=campaignOptions.map(({name,count})=>`<label class="campaign-filter-option"><input type="checkbox" value="${esc(name)}" ${CAMPAIGN_DRAFT.has(name)?'checked':''} onchange="toggleCampaignOption(this.value,this.checked)"><span>${esc(name)}</span><small>${count.toLocaleString()} contact${count===1?'':'s'}</small></label>`).join('');
   const label=$('campaignFilterLabel'),hint=$('campaignFilterHint');
   if(label)label.textContent=campaignSelectionLabel();
   if(hint)hint.textContent=selected.size?`${selected.size} selected`:'All campaigns';
@@ -2424,12 +2560,15 @@ function rowToRecord(r){
   else if(/eligib|qualify|require/.test(low))cbReason='Eligibility check';
   const dateObj=dt?new Date(Number(dt.iso.split('-')[0]),Number(dt.iso.split('-')[1])-1,Number(dt.iso.split('-')[2]),dt.h,dt.m,0):new Date();
   const cbWindow=resolveCallbackWindow(r,trans,summary,dt?dt.iso:null);
+  const duration=Number(pickField(r,['Duration (s)','Duration','Duration Seconds','Duration(s)','Call Duration']))||0;
+  const status=String(pickField(r,['Status','Call Status'])||'').toLowerCase();
+  const billMins=/^(completed|done)$/i.test(status)&&duration>0?billedMinutes(duration):0;
   return{
     d:dt?dt.iso:null,h:dt?dt.h:0,m:dt?dt.m:0,
     callId:String(pickField(r,['Call ID','CallId','ID','Conversation ID','Session ID'])||''),ts:Math.floor(dateObj.getTime()/1000),
-    dur:Number(pickField(r,['Duration (s)','Duration','Duration Seconds','Duration(s)','Call Duration']))||0,
+    dur:duration,billMins,
     msg:Number(pickField(r,['Messages','Message Count','Total Messages','Turns']))||0,
-    status:String(pickField(r,['Status','Call Status'])||'').toLowerCase(),leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
+    status,leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
     conf:Number(pickField(r,['Bot Conf.','Bot Conf','Bot Confidence','AI Confidence','Confidence','Model Confidence']))||0,need,
     band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:cbWindow.label,cbPreferredDate:cbWindow.date,frustrated,summary,
     campaign:String(pickField(r,['Campaign','Campaign Name'])||'').trim(),
@@ -2439,7 +2578,7 @@ function rowToRecord(r){
     failDetail:String(pickField(r,['Failure Detail'])||'').trim(),
     sipCode:String(pickField(r,['SIP / Hangup Code','SIP/Hangup Code','SIP Code','Hangup Code'])||'').trim(),
     hangupCause:String(pickField(r,['Hangup Cause'])||'').trim(),
-    from:leadPhone,leadPhone,rawFrom,rawTo,trans
+    from:leadPhone,leadPhone,leadKey:String(leadPhone||'').replace(/\D/g,''),isIntl:classifyPhone(leadPhone).intl,rawFrom,rawTo,trans
   };
 }
 
@@ -2448,13 +2587,14 @@ function aggregate(recs){
     totalDur:0,totalMsg:0,avgConf:0,avgNeed:0,green:0,amber:0,red:0,india:0,intl:0,
     hourly:{},daily:{},intent:{},durBands:{},confBands:{}};
   const confQual={Hot:{conf:0,need:0,n:0},Warm:{conf:0,need:0,n:0},Cold:{conf:0,need:0,n:0}};
-  const msgQual=[[],[],[]]; // <5msg, 5-20msg, >20msg
+  const msgQual=[{hot:0,n:0},{hot:0,n:0},{hot:0,n:0}]; // <5msg, 5-20msg, >20msg
   // Hot-lead conversion grouped by Anya confidence band (low/mid/high)
   const confConv={low:{hot:0,n:0},mid:{hot:0,n:0},high:{hot:0,n:0}};
   recs.forEach(r=>{
     if(r.leadTemp==="Hot")o.hot++;else if(r.leadTemp==="Warm")o.warm++;else o.cold++;
     if(r.callback)o.callbacks++;
-    if(classifyPhone(r.from).intl)o.intl++;else o.india++;
+    const international=typeof r.isIntl==='boolean'?r.isIntl:classifyPhone(r.from).intl;
+    if(international)o.intl++;else o.india++;
     o.totalDur+=r.dur;o.totalMsg+=r.msg;o.avgConf+=r.conf;o.avgNeed+=r.need;
     if(r.band==="Green")o.green++;else if(r.band==="Amber")o.amber++;else if(r.band==="Red")o.red++;
     o.hourly[r.h]=(o.hourly[r.h]||0)+1;
@@ -2464,7 +2604,8 @@ function aggregate(recs){
     o.durBands[db]=(o.durBands[db]||0)+1;
     const cb=Math.round(r.conf/20)*20;o.confBands[cb]=(o.confBands[cb]||0)+1;
     if(r.leadTemp in confQual){confQual[r.leadTemp].conf+=r.conf;confQual[r.leadTemp].need+=r.need;confQual[r.leadTemp].n++;}
-    if(r.msg<5)msgQual[0].push(r.leadTemp);else if(r.msg<=20)msgQual[1].push(r.leadTemp);else msgQual[2].push(r.leadTemp);
+    const msgBand=r.msg<5?msgQual[0]:r.msg<=20?msgQual[1]:msgQual[2];
+    msgBand.n++;if(r.leadTemp==="Hot")msgBand.hot++;
     // Confidence conversion bands
     const cband=r.conf<50?"low":r.conf<80?"mid":"high";
     confConv[cband].n++;if(r.leadTemp==="Hot")confConv[cband].hot++;
@@ -2472,7 +2613,7 @@ function aggregate(recs){
   o.avgConf=o.n?o.avgConf/o.n:0;o.avgNeed=o.n?o.avgNeed/o.n:0;
   o.confQual=confQual;
   o.confConv=confConv;
-  o.msgQual=msgQual.map(m=>{const h=m.length?(m.filter(x=>x==="Hot").length/m.length)*100:0;return{hot:h,n:m.length};});
+  o.msgQual=msgQual.map(m=>({hot:m.n?m.hot/m.n*100:0,n:m.n}));
   return o;
 }
 
@@ -2607,17 +2748,30 @@ function previousRangeFor(fromIso,toIso){
   return{from:isoFromDate(prevFrom),to:isoFromDate(prevTo),days};
 }
 function recordsInRange(fromIso,toIso){
-  return (ALL_RECORDS_BACKUP||[]).filter(r=>{
-    if(!r.d)return false;
-    if(fromIso && r.d<fromIso)return false;
-    if(toIso && r.d>toIso)return false;
-    if(SELECTED_DIRECTION!=='all' && normalizeDirection(r.direction)!==SELECTED_DIRECTION)return false;
-    if(!recordMatchesCampaign(r))return false;
-    return true;
+  if(!RECORDS_DATE_INDEX.size||RECORDS_DATE_INDEX_COUNT!==(ALL_RECORDS_BACKUP||[]).length){
+    return (ALL_RECORDS_BACKUP||[]).filter(r=>{
+      if(!r.d)return false;
+      if(fromIso&&r.d<fromIso)return false;
+      if(toIso&&r.d>toIso)return false;
+      if(SELECTED_DIRECTION!=='all'&&normalizeDirection(r.direction)!==SELECTED_DIRECTION)return false;
+      if(!recordMatchesCampaign(r))return false;
+      return true;
+    });
+  }
+  const rows=[];
+  RECORDS_DATE_INDEX.forEach((dateRows,date)=>{
+    if(fromIso&&date<fromIso)return;
+    if(toIso&&date>toIso)return;
+    for(const r of dateRows){
+      if(SELECTED_DIRECTION!=='all'&&normalizeDirection(r.direction)!==SELECTED_DIRECTION)continue;
+      if(!recordMatchesCampaign(r))continue;
+      rows.push(r);
+    }
   });
+  return rows;
 }
 function keyForBriefLead(r){
-  const key=(typeof ledgerPhoneKey==='function')?ledgerPhoneKey(r):String(r&&r.from||'').replace(/\D/g,'');
+  const key=String(r?.leadKey||'')||((typeof ledgerPhoneKey==='function')?ledgerPhoneKey(r):String(r&&r.from||'').replace(/\D/g,''));
   return key&&key.length>=6?key:'';
 }
 function uniqueLeadCount(recs){return new Set(recs.map(keyForBriefLead).filter(Boolean)).size;}
@@ -2631,10 +2785,58 @@ function topIntentFor(recs){
   const top=Object.entries(m).sort((a,b)=>b[1]-a[1])[0];
   return top?{name:top[0],count:top[1]}:{name:'None',count:0};
 }
+function newBriefAccumulator(){
+  return{n:0,mins:0,talkMins:0,callbacks:0,hot:0,friction:0,confidence:0,leads:new Map(),intents:new Map()};
+}
+function addBriefRecord(state,r){
+    state.n++;
+    const minutes=Number.isFinite(r.billMins)?r.billMins:(isBillableRecord(r)?billedMinutes(r.dur):0);
+    if(minutes){state.mins+=minutes;state.talkMins+=Number(r.dur||0)/60;}
+    if(r.callback)state.callbacks++;
+    if(r.leadTemp==='Hot')state.hot++;
+    if(r.frustrated)state.friction++;
+    state.confidence+=Number(r.conf||0);
+    const lead=keyForBriefLead(r);if(lead)state.leads.set(lead,(state.leads.get(lead)||0)+1);
+    state.intents.set(r.intent,(state.intents.get(r.intent)||0)+1);
+}
+function finishBriefAccumulator(state){
+  let serial=0,topIntent={name:'None',count:0};
+  state.leads.forEach(count=>{if(count>=2)serial++;});
+  state.intents.forEach((count,name)=>{if(count>topIntent.count)topIntent={name,count};});
+  const roundingMins=state.mins-state.talkMins,roundingPct=state.talkMins?roundingMins/state.talkMins*100:0;
+  return{n:state.n,mins:state.mins,talkMins:state.talkMins,roundingMins,roundingPct,cost:state.mins*5,unique:state.leads.size,callbacks:state.callbacks,hot:state.hot,serial,friction:state.friction,avgConf:state.n?Math.round(state.confidence/state.n):0,topIntent};
+}
 function briefPack(recs){
-  const mins=sumBilledMinutes(recs);
-  const talkMins=sumTalkTimeMinutes(recs),roundingMins=mins-talkMins,roundingPct=talkMins?roundingMins/talkMins*100:0;
-  return{n:recs.length,mins,talkMins,roundingMins,roundingPct,cost:mins*5,unique:uniqueLeadCount(recs),callbacks:recs.filter(r=>r.callback).length,hot:recs.filter(r=>r.leadTemp==='Hot').length,serial:serialLeadCount(recs),friction:recs.filter(r=>r.frustrated).length,avgConf:recs.length?Math.round(recs.reduce((a,r)=>a+Number(r.conf||0),0)/recs.length):0,topIntent:topIntentFor(recs)};
+  const state=newBriefAccumulator();
+  for(const r of recs||[])addBriefRecord(state,r);
+  return finishBriefAccumulator(state);
+}
+function newBriefSplitAccumulator(){
+  return{n:0,mins:0,talkMins:0,callbacks:0,hot:0,friction:0,confidence:0,leads:new Set()};
+}
+function addBriefSplitRecord(state,r){
+  state.n++;
+  const minutes=Number.isFinite(r.billMins)?r.billMins:(isBillableRecord(r)?billedMinutes(r.dur):0);
+  if(minutes){state.mins+=minutes;state.talkMins+=Number(r.dur||0)/60;}
+  if(r.callback)state.callbacks++;
+  if(r.leadTemp==='Hot')state.hot++;
+  if(r.frustrated)state.friction++;
+  state.confidence+=Number(r.conf||0);
+  const lead=keyForBriefLead(r);if(lead)state.leads.add(lead);
+}
+function finishBriefSplitAccumulator(state){
+  const roundingMins=state.mins-state.talkMins,roundingPct=state.talkMins?roundingMins/state.talkMins*100:0;
+  return{n:state.n,mins:state.mins,talkMins:state.talkMins,roundingMins,roundingPct,cost:state.mins*5,unique:state.leads.size,callbacks:state.callbacks,hot:state.hot,serial:0,friction:state.friction,avgConf:state.n?Math.round(state.confidence/state.n):0,topIntent:{name:'None',count:0}};
+}
+function briefPacksByDirection(recs){
+  const all=newBriefAccumulator(),inbound=newBriefSplitAccumulator(),outbound=newBriefSplitAccumulator();
+  for(const r of recs||[]){
+    addBriefRecord(all,r);
+    const direction=normalizeDirection(r.direction);
+    if(direction==='inbound')addBriefSplitRecord(inbound,r);
+    if(direction==='outbound')addBriefSplitRecord(outbound,r);
+  }
+  return{all:finishBriefAccumulator(all),inbound:finishBriefSplitAccumulator(inbound),outbound:finishBriefSplitAccumulator(outbound)};
 }
 function formatTalkMinutes(minutes){
   return Number(minutes||0).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -2653,8 +2855,10 @@ function paintManagementBrief(){
   const recs=recordsInRange(range.from,range.to);
   const prevRange=previousRangeFor(range.from,range.to);
   const prev=prevRange?recordsInRange(prevRange.from,prevRange.to):[];
-  const cur=briefPack(recs),old=briefPack(prev);
-  const outboundAttempts=(ALL_DIALS||[]).filter(r=>(!range.from||r.d>=range.from)&&(!range.to||r.d<=range.to)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound').length;
+  const showSplit=SELECTED_DIRECTION==='all';
+  const currentPacks=showSplit?briefPacksByDirection(recs):null;
+  const cur=currentPacks?currentPacks.all:briefPack(recs),old=briefPack(prev);
+  const outboundAttempts=outboundRecordsInView().length;
   const dateLabel=range.from&&range.to?(range.from===range.to?range.from:`${range.from} to ${range.to}`):currentViewDescription();
   const summary=$('briefSummary'),kpis=$('briefKpis');
   if(!cur.n&&!outboundAttempts){
@@ -2674,9 +2878,8 @@ function paintManagementBrief(){
   // Bifurcate by direction so a leader can see the inbound/outbound mix behind each headline number
   // without having to flip the All/Inbound/Outbound toggle -- only meaningful in the "All calls" view,
   // since under a single-direction filter the split would trivially be 100/0.
-  const showSplit=SELECTED_DIRECTION==='all';
-  const curIn=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='inbound')):null;
-  const curOut=showSplit?briefPack(recs.filter(r=>normalizeDirection(r.direction)==='outbound')):null;
+  const curIn=showSplit?currentPacks.inbound:null;
+  const curOut=showSplit?currentPacks.outbound:null;
   const conversationLabel=SELECTED_DIRECTION==='outbound'?'Connected outbound':SELECTED_DIRECTION==='inbound'?'Inbound calls':'Conversations';
   const kpiDefs=[
     ['good',conversationLabel,'n','count',()=>true],
@@ -2947,13 +3150,13 @@ function paintFunnel(o){
   if(!o.n){$("funnel").innerHTML=emptyViewHtml("No calls available for this view");return;}
   const pct=a=>Math.round(a/o.n*100);
   const F=[
-    [o.n,"Calls started","#5a9bd8",100,()=>true],
-    [o.callbacks,"Follow-up requested — intent signal",C.teal,Math.round(o.callbacks/o.n*60)+24,r=>r.callback],
-    [o.hot,"Hot leads (conversion)",C.hot,Math.round(o.hot/o.n*60)+30,r=>r.leadTemp==='Hot'],
-    [o.warm,"Warm (nurture)",C.warm,Math.round(o.warm/o.n*50)+20,r=>r.leadTemp==='Warm'],
-    [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",Math.round(o.cold/o.n*40)+12,r=>r.leadTemp!=='Hot'&&r.leadTemp!=='Warm']
+    [o.n,"Calls started","#5a9bd8",()=>true],
+    [o.callbacks,"Follow-up requested — intent signal",C.teal,r=>r.callback],
+    [o.hot,"Hot leads (conversion)",C.hot,r=>r.leadTemp==='Hot'],
+    [o.warm,"Warm (nurture)",C.warm,r=>r.leadTemp==='Warm'],
+    [o.cold,"Cold (low intent)",C.cold||"#5a7a9a",r=>r.leadTemp!=='Hot'&&r.leadTemp!=='Warm']
   ];
-  let h="";F.forEach((f,i)=>{h+=`<div class="fstep" style="background:${f[2]};width:${f[3]}%;cursor:pointer" onclick="openFilteredPanel('${esc(f[1])}',${f[4]})"><span class="fn">${f[0]}</span><span class="ft">${f[1]}</span><span class="fp">${pct(f[0])}%</span></div>`;});
+  let h="";F.forEach(f=>{const share=pct(f[0]);h+=`<div class="fstep" style="background:${f[2]};cursor:pointer" onclick="openFilteredPanel('${esc(f[1])}',${f[3]})"><span class="fn">${Number(f[0]||0).toLocaleString('en-IN')}</span><span class="ft">${f[1]}</span><span class="fp">${share}%</span><span class="fstep-meter" aria-hidden="true"><i style="width:${share}%"></i></span></div>`;});
   $("funnel").innerHTML=h;
 }
 
@@ -3219,6 +3422,8 @@ function invalidateLedgerRepeatCache(){
   LEDGER_REPEAT_CACHE_LENGTH=-1;
 }
 function ledgerPhoneKey(r){
+  const prepared=String(r?.leadKey||'');
+  if(prepared&&prepared.length>=6)return prepared;
   const c=classifyPhone(r?.from);
   const normalized=String((c.cc||"")+(c.national||"")).replace(/\D/g,"");
   const raw=String(r?.from||"").replace(/\D/g,"");
