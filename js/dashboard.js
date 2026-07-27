@@ -2884,6 +2884,13 @@ function briefPacksByDirection(recs){
 function formatTalkMinutes(minutes){
   return Number(minutes||0).toLocaleString('en-IN',{minimumFractionDigits:1,maximumFractionDigits:1});
 }
+function formatTalkDuration(seconds){
+  const total=Math.max(0,Math.round(Number(seconds)||0));
+  const hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60),remainingSeconds=total%60;
+  if(hours)return `${hours}h ${minutes}m`;
+  if(minutes)return remainingSeconds?`${minutes}m ${remainingSeconds}s`:`${minutes}m`;
+  return `${remainingSeconds}s`;
+}
 function pctBrief(num,den){return den?Math.round(num/den*100):0;}
 function deltaClass(cur,prev){if(cur>prev)return'up';if(cur<prev)return'down';return'flat';}
 function deltaPctText(cur,prev){
@@ -3803,7 +3810,7 @@ function paintHottestLeads(records){
       </div>
       <div class="follow-up-card-stats">
         <div><b>${l.total}</b><span>Total calls</span></div>
-        <div><b>${formatTalkMinutes(l.talkSeconds/60)}</b><span>Talk time</span></div>
+        <div><b>${formatTalkDuration(l.talkSeconds)}</b><span>Actual talk time</span></div>
         <div><b>₹${l.billedMins*5}</b><span>Lead total cost</span></div>
       </div>
       <div class="follow-up-card-meta">${directionMix(l.calls)}${l.callback?'<span class="follow-up-callback">Requested callback</span>':''}</div>
