@@ -96,6 +96,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
     updateDirectionButtons();
   }
+  document.addEventListener('pointerdown',closeCampaignFilterOnOutsidePress);
   syncSidebarActive('sec-overview');
   updateMobileNavShadow();
 });
@@ -1439,6 +1440,12 @@ function campaignSelectionKey(){return [...activeCampaigns()].sort().join('|');}
 function campaignSelectionLabel(){
   const count=activeCampaigns().size;
   return count?`${count} campaign${count===1?'':'s'}`:'Campaigns';
+}
+function closeCampaignFilterOnOutsidePress(event){
+  const filter=$('campaignFilter');
+  if(!filter||!filter.open)return;
+  if(event?.target&&filter.contains(event.target))return;
+  filter.open=false;
 }
 function campaignSearchText(value){return String(value||'').trim().toLocaleLowerCase();}
 function campaignMatchesSearch(name,query){return !query||String(name||'').toLocaleLowerCase().includes(query);}
@@ -3796,6 +3803,7 @@ function paintHottestLeads(records){
       </div>
       <div class="follow-up-card-stats">
         <div><b>${l.total}</b><span>Total calls</span></div>
+        <div><b>${formatTalkMinutes(l.talkSeconds/60)}</b><span>Talk time</span></div>
         <div><b>₹${l.billedMins*5}</b><span>Lead total cost</span></div>
       </div>
       <div class="follow-up-card-meta">${directionMix(l.calls)}${l.callback?'<span class="follow-up-callback">Requested callback</span>':''}</div>

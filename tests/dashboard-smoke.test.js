@@ -98,7 +98,7 @@ for (const fn of [
   'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
   'isGzipData', 'unpackPublishedData',
   'copyPhoneButton', 'copyPhone',
-  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch',
+  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'closeCampaignFilterOnOutsidePress', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters', 'sortCampaignLeaderboardRows', 'setCampaignLeaderboardSort', 'campaignLeaderboardHeader',
@@ -426,7 +426,7 @@ assert.equal(priorityLeads[1].phone, '919111111111', 'Greater connected call dep
 assert(priorityLeads[0].reasons.includes('Requested callback') && priorityLeads[1].reasons.includes('2 connected calls'), 'Priority reason labels must use callback and call depth only');
 assert(!Object.hasOwn(priorityLeads[0], 'avgConf') && !Object.hasOwn(priorityLeads[0], 'avgNeed'), 'Priority ranking must not calculate AI scores');
 context.paintHottestLeads(compactLeadRecords);
-assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>₹15</b><span>Lead total cost</span>'), 'Priority cards should show call depth and total cost without repeating connected calls');
+assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>1.5</b><span>Talk time</span>') && getElement('hottestLeads').innerHTML.includes('<b>₹15</b><span>Lead total cost</span>'), 'Priority cards should show call depth, raw talk time, and total cost without repeating connected calls');
 assert(!getElement('hottestLeads').innerHTML.includes('<span>Connected calls</span>'), 'Priority cards must not repeat connected-call depth in the stat row');
 assert(getElement('hottestLeads').innerHTML.includes('Why high:'), 'Priority cards must explain their position');
 assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
@@ -548,6 +548,13 @@ assert(vm.runInContext("CAMPAIGN_DRAFT.has('Campaign A')", context), 'Campaign f
 context.setCampaignFilterSearch('not found');
 assert(getElement('campaignFilterOptions').innerHTML.includes('Selected campaigns stay selected'), 'Campaign filter search must explain an empty result without clearing selection');
 context.setCampaignFilterSearch('');
+const campaignFilter=getElement('campaignFilter'),campaignInside={};
+campaignFilter.contains=target=>target===campaignInside;
+campaignFilter.open=true;
+context.closeCampaignFilterOnOutsidePress({target:campaignInside});
+assert.equal(campaignFilter.open,true,'Campaign picker must stay open when a choice inside it is pressed');
+context.closeCampaignFilterOnOutsidePress({target:{}});
+assert.equal(campaignFilter.open,false,'Campaign picker must close when pressing outside it');
 assert(context.campaignMatchesSearch('MBA July Intake', 'july int'), 'Campaign search must support case-insensitive partial matches');
 assert(!context.campaignMatchesSearch('MBA July Intake', 'august'), 'Campaign search must exclude non-matches');
 context.resetOutboundCaches();
