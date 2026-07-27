@@ -838,6 +838,8 @@ function searchUserByMobile(mobile, source="search"){
 
   const resolved=resolveLeadSearch(mobile),userCalls=resolved.calls;
   const activeCalls=userCalls.filter(recordMatchesCurrentFilters);
+  const useActiveSummary=['priority','callback','repeat','ledger','brief','drilldown'].includes(source);
+  const summaryCalls=useActiveSummary?activeCalls:userCalls;
   window.__profileCalls=userCalls;
   const pexp=$("profileExport"); if(pexp){pexp.style.display=userCalls.length?'inline-flex':'none';pexp.textContent=`Export full history · ${userCalls.length.toLocaleString()} call${userCalls.length===1?'':'s'}`;}
   const pledger=$("profileLedger"); if(pledger)pledger.style.display=userCalls.length?'inline-flex':'none';
@@ -860,14 +862,10 @@ function searchUserByMobile(mobile, source="search"){
   }
 
   // Calculate stats
-  const frustrated=userCalls.filter(c=>c.frustrated).length;
-  const avgConf=Math.round(userCalls.reduce((a,c)=>a+c.conf,0)/userCalls.length);
-  const avgNeed=Math.round(userCalls.reduce((a,c)=>a+c.need,0)/userCalls.length);
-  const totalDur=sumBilledMinutes(userCalls);
-  const totalCost=totalDur*5;
-  const inboundCalls=userCalls.filter(c=>normalizeDirection(c.direction)==='inbound').length;
-  const outboundCalls=userCalls.filter(c=>normalizeDirection(c.direction)==='outbound').length;
-  const otherCalls=userCalls.length-inboundCalls-outboundCalls;
+  const summary=profileSummaryStats(summaryCalls);
+  const inboundCalls=summary.inbound;
+  const outboundCalls=summary.outbound;
+  const otherCalls=summary.other;
   const callMix=[inboundCalls?`<span class="profile-call-mix inbound">In ${inboundCalls}</span>`:'',outboundCalls?`<span class="profile-call-mix outbound">Out ${outboundCalls}</span>`:'',otherCalls?`<span class="profile-call-mix other">Other ${otherCalls}</span>`:''].filter(Boolean).join('');
 
   // Lead temperature breakdown
@@ -881,25 +879,12 @@ function searchUserByMobile(mobile, source="search"){
   if(hotRatio>=0.6){leadType="Hot";leadEmoji="Hot";leadColor="var(--hot)";}
   else if(hotRatio>=0.3){leadType="Warm";leadEmoji="Warm";leadColor="var(--warm)";}
 
-  // Intent breakdown
-  const intents={};
-  userCalls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
-  const intentList=Object.entries(intents).sort((a,b)=>b[1]-a[1]).map(([i,cnt])=>`${esc(i)} (${cnt})`).join(" • ");
-
-  // Engagement score
-  const engagementScore=userCalls.length*2+frustrated*3+avgNeed*0.5;
-  const engagement=engagementScore>20?"Very high":engagementScore>12?"High":"Normal";
-  const reducedView=reducedAiViewEnabled();
-
   $("userSearchPhone").innerHTML=`<span style="font-family:'Inter',monospace;font-size:16px;font-weight:700">${esc(maskPhone(userCalls[0].from))}</span>${copyPhoneButton(userCalls[0].from)}<span style="margin-left:8px;background:${leadColor};color:#fff;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${esc(leadType)}</span><span style="margin-left:8px">${directionPill(userCalls[0].direction)}</span>`;
   $("userSearchStats").innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
-      <div class="profile-call-stat" style="grid-column:1/-1"><b>Calls:</b> ${userCalls.length}<span class="profile-call-mix-list">${callMix}</span></div>
-      <div><b>Engagement:</b> ${engagement}</div>
-      <div><b>Duration:</b> ${totalDur} mins</div>
-      <div><b>Total cost:</b> ₹${totalCost}</div>
-      ${reducedView?'':`<div><b>Avg Confidence:</b> ${avgConf}%</div><div><b>Avg Need Score:</b> ${avgNeed}</div>`}
-      ${reducedView?'':`<div style="grid-column:1/-1"><b>Intents:</b> ${intentList}</div>`}
+      <div class="profile-call-stat" style="grid-column:1/-1"><b>Total calls:</b> ${summary.total}<span class="profile-call-mix-list">${callMix}</span></div>
+      <div><b>Actual talk time:</b> ${formatTalkDuration(summary.talkSeconds)}</div>
+      <div><b>Total cost:</b> ₹${summary.totalCost}</div>
     </div>
   `;
 
@@ -914,7 +899,7 @@ function searchUserByMobile(mobile, source="search"){
         <span style="color:var(--muted)">${date}</span>
       </div>
       <div class="profile-call-meta">
-        ${reducedView?`<b>Temp:</b> ${esc(c.leadTemp)}`:`<b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}`}<br>
+        ${reducedAiViewEnabled()?`<b>Temp:</b> ${esc(c.leadTemp)}`:`<b>Intent:</b> ${esc(c.intent)} | <b>Temp:</b> ${esc(c.leadTemp)} | <b>Conf:</b> ${Math.round(c.conf)}% | <b>Need:</b> ${Math.round(c.need)}`}<br>
         <b>Duration:</b> ${formatDuration(c.dur)} | <b>Reason:</b> ${esc(c.cbReason)}<br>
         <b>Requested time:</b> ${esc(c.cbPreferred||"Not specified")}<br>
         <span class="profile-call-summary">${esc(c.summary)}</span>
@@ -931,10 +916,20 @@ function searchUserByMobile(mobile, source="search"){
   const note=$("profileSourceNote");
   if(note){
     const label=source==="callback"?"Opened from Requested callbacks":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from Priority contacts":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
-    const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
-    note.textContent=label+`. Full call history is available below. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
+    const scope=useActiveSummary
+      ?`The overview matches the selected dashboard view (${summary.total} of ${userCalls.length} calls). Full call history is available below.`
+      :'The overview and timeline show full call history.';
+    note.textContent=label+`. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
   revealUserProfile(source);
+}
+
+function profileSummaryStats(calls){
+  const rows=calls||[];
+  const talkSeconds=rows.filter(c=>normalizeDisposition(c)==='connected'&&Number(c.dur)>0).reduce((sum,c)=>sum+Number(c.dur||0),0);
+  const inbound=rows.filter(c=>normalizeDirection(c.direction)==='inbound').length;
+  const outbound=rows.filter(c=>normalizeDirection(c.direction)==='outbound').length;
+  return{total:rows.length,talkSeconds,totalCost:sumBilledMinutes(rows)*5,inbound,outbound,other:rows.length-inbound-outbound};
 }
 
 function revealUserProfile(source){

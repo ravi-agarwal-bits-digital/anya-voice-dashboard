@@ -100,7 +100,7 @@ for (const fn of [
   'copyPhoneButton', 'copyPhone',
   'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'closeCampaignFilterOnOutsidePress', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
-  'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
+  'resolveLeadSearch', 'searchUserByMobile', 'profileSummaryStats', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters', 'sortCampaignLeaderboardRows', 'setCampaignLeaderboardSort', 'campaignLeaderboardHeader',
   'activeFilterScopeLabel', 'ledgerExportScope', 'metricDefinition', 'recordsToCSV', 'reducedAiViewEnabled', 'applyReducedAiControlVisibility', 'visibleCallbackGroups', 'callbackExportScope', 'callbackFilenameExtra', 'repeatedlyUnreachableGroups', 'retryPolicyStatus', 'csvFilename', 'escCSVText', 'updateExportButton',
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
@@ -476,6 +476,12 @@ vm.runInContext('ALL_RECORDS_BACKUP=[__scopeRecord]; RECORDS=[__scopeRecord];', 
 context.searchUserByMobile('919999999999', 'priority');
 assert.equal(getElement('userSearchResult').style.display, 'block', 'Follow-up card click must open the profile drawer');
 assert(getElement('profileSourceNote').textContent.includes('Priority contacts'), 'Profile drawer must identify the priority-contact source');
+assert(getElement('userSearchStats').innerHTML.includes('Actual talk time:') && !getElement('userSearchStats').innerHTML.includes('Billable minutes'), 'Profile overview must use actual talk time rather than billable minutes');
+context.__profileScopeRows=[scopeRecord,{...scopeRecord,d:'2026-07-01',ts:1,dur:600,summary:'Older full-history call'}];
+vm.runInContext("ALL_RECORDS_BACKUP=__profileScopeRows;RECORDS=[__scopeRecord];$('filterFromDate').value='2026-07-10';$('filterToDate').value='2026-07-10';SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
+context.searchUserByMobile('919999999999', 'priority');
+assert(getElement('userSearchStats').innerHTML.includes('1m 15s') && !getElement('userSearchStats').innerHTML.includes('11m 15s'), 'Priority profile overview must match the selected-view talk time, not full history');
+assert(getElement('profileSourceNote').textContent.includes('1 of 2 calls'), 'Priority profile must disclose its selected-view summary scope');
 
 let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
