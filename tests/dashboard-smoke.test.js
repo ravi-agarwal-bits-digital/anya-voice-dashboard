@@ -426,7 +426,8 @@ assert.equal(priorityLeads[1].phone, '919111111111', 'Greater connected call dep
 assert(priorityLeads[0].reasons.includes('Requested callback') && priorityLeads[1].reasons.includes('2 connected calls'), 'Priority reason labels must use callback and call depth only');
 assert(!Object.hasOwn(priorityLeads[0], 'avgConf') && !Object.hasOwn(priorityLeads[0], 'avgNeed'), 'Priority ranking must not calculate AI scores');
 context.paintHottestLeads(compactLeadRecords);
-assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Connected calls</span>'), 'Priority cards should retain call depth only');
+assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>₹15</b><span>Lead total cost</span>'), 'Priority cards should show call depth and total cost without repeating connected calls');
+assert(!getElement('hottestLeads').innerHTML.includes('<span>Connected calls</span>'), 'Priority cards must not repeat connected-call depth in the stat row');
 assert(getElement('hottestLeads').innerHTML.includes('Why high:'), 'Priority cards must explain their position');
 assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
 assert(!getElement('hottestLeads').innerHTML.includes('attention'), 'Reduced priority cards must hide attention breakdown');

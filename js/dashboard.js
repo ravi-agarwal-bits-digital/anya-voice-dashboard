@@ -3796,7 +3796,7 @@ function paintHottestLeads(records){
       </div>
       <div class="follow-up-card-stats">
         <div><b>${l.total}</b><span>Total calls</span></div>
-        <div><b>${l.connected.length}</b><span>Connected calls</span></div>
+        <div><b>₹${l.billedMins*5}</b><span>Lead total cost</span></div>
       </div>
       <div class="follow-up-card-meta">${directionMix(l.calls)}${l.callback?'<span class="follow-up-callback">Requested callback</span>':''}</div>
       <div class="follow-up-priority-reason"><b>Why high:</b> ${esc(reason)}</div>
