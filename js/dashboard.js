@@ -789,7 +789,7 @@ function renderHeaderMeta(records){
 }
 function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
 function copyPhoneButton(phone){
-  return `<button type="button" class="phone-copy-btn" onclick="event.stopPropagation();copyPhone(${jsArg(phone)},this)" title="Copy full mobile number" aria-label="Copy mobile number">Copy</button>`;
+  return `<button type="button" class="phone-copy-btn" onclick="event.stopPropagation();copyPhone(${jsArg(phone)},this)" title="Copy full mobile number" aria-label="Copy mobile number"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"></path></svg></button>`;
 }
 async function copyPhone(phone,button){
   const value=fullPhone(phone);
@@ -799,7 +799,12 @@ async function copyPhone(phone,button){
     else{
       const input=document.createElement('textarea');input.value=value;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();
     }
-    if(button){const original=button.textContent;button.textContent='Copied';setTimeout(()=>{button.textContent=original;},1200);}
+    if(button){
+      const original=button.innerHTML;
+      button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>';
+      button.classList.add('is-copied');button.title='Copied';button.setAttribute('aria-label','Mobile number copied');
+      setTimeout(()=>{button.innerHTML=original;button.classList.remove('is-copied');button.title='Copy full mobile number';button.setAttribute('aria-label','Copy mobile number');},1200);
+    }
   }catch(error){console.warn('Could not copy phone number',error);}
 }
 function phoneSearchVariants(value){
@@ -3751,48 +3756,58 @@ function findSerialCallers(records){
   return serial;
 }
 
+function priorityLeadDetails(calls,latestConnectedTs=0){
+  const connected=(calls||[]).filter(c=>normalizeDisposition(c)==='connected'&&Number(c.dur)>0);
+  const callback=(calls||[]).some(c=>c.callback);
+  const talkSeconds=connected.reduce((sum,c)=>sum+Number(c.dur||0),0);
+  const latestTs=connected.reduce((latest,c)=>Math.max(latest,Number(c.ts||0)),0);
+  const hoursSinceLatest=latestConnectedTs&&latestTs?Math.max(0,(latestConnectedTs-latestTs)/3600):Infinity;
+  const recencyRank=hoursSinceLatest<=24?2:hoursSinceLatest<=72?1:0;
+  const reasons=[];
+  if(callback)reasons.push('Requested callback');
+  if(recencyRank===2)reasons.push('Connected in latest 24h of this view');
+  else if(recencyRank===1)reasons.push('Connected in latest 3 days of this view');
+  if(connected.length>=2)reasons.push(`${connected.length} connected calls`);
+  if(talkSeconds>=60)reasons.push(`${formatTalkMinutes(talkSeconds/60)} min talk time`);
+  return{callback,connected,talkSeconds,latestTs,recencyRank,reasons};
+}
+function priorityLeads(records){
+  const byPhone=groupByPhone(records||[]);
+  const latestConnectedTs=(records||[]).filter(c=>normalizeDisposition(c)==='connected'&&Number(c.dur)>0).reduce((latest,c)=>Math.max(latest,Number(c.ts||0)),0);
+  return Object.entries(byPhone).map(([phone,calls])=>{
+    const details=priorityLeadDetails(calls,latestConnectedTs);
+    return{phone,total:calls.length,billedMins:sumBilledMinutes(calls),calls:calls.slice().sort((a,b)=>b.ts-a.ts),...details};
+  }).sort((a,b)=>
+    Number(b.callback)-Number(a.callback)||
+    b.recencyRank-a.recencyRank||
+    b.connected.length-a.connected.length||
+    b.talkSeconds-a.talkSeconds||
+    b.latestTs-a.latestTs||
+    a.phone.localeCompare(b.phone)
+  ).slice(0,50);
+}
 function paintHottestLeads(records){
-  const byPhone=groupByPhone(records);
-
-  const leads=Object.entries(byPhone).map(([ph,calls])=>{
-    const hot=calls.filter(c=>c.leadTemp==="Hot").length;
-    const warm=calls.filter(c=>c.leadTemp==="Warm").length;
-    const cold=calls.filter(c=>c.leadTemp==="Cold").length;
-    const frustrated=calls.filter(c=>c.frustrated).length;
-    const avgConf=Math.round(calls.reduce((a,c)=>a+c.conf,0)/calls.length);
-    const avgNeed=Math.round(calls.reduce((a,c)=>a+c.need,0)/calls.length);
-    const totalDur=sumBilledMinutes(calls);
-
-    // Lead score: Hot=3, Warm=2, Cold=1 + call frequency + need + confidence
-    const leadScore=(hot*3+warm*2+cold)*2+calls.length*1.5+avgNeed*0.3+avgConf*0.2;
-
-    const intents={};
-    calls.forEach(c=>{intents[c.intent]=(intents[c.intent]||0)+1;});
-    const topIntent=Object.entries(intents).sort((a,b)=>b[1]-a[1])[0];
-
-    return{phone:ph,total:calls.length,hot,warm,cold,frustrated,avgConf,avgNeed,totalDur,leadScore,topIntent:topIntent?topIntent[0]:"General",calls:calls.sort((a,b)=>b.ts-a.ts)};
-  }).sort((a,b)=>b.leadScore-a.leadScore).slice(0,50);
-
+  const leads=priorityLeads(records);
   updateExportButton('hottestExport','Export lead summary',leads.length,'leads');
   if(!leads.length){$("hottestLeads").innerHTML="<div style='grid-column:1/-1;padding:20px;text-align:center;color:var(--faint);font-size:13px'>No leads found.</div>";return;}
   window.HOTTEST_LEADS=leads;
 
   $("hottestLeads").innerHTML=leads.map((l,i)=>{
-    let typeEmoji="Cold",typeCol="var(--cold)";
-    if(l.hot>=Math.ceil(l.total*0.6)){typeEmoji="Hot";typeCol="var(--hot)";}
-    else if(l.hot>=Math.ceil(l.total*0.3)){typeEmoji="Warm";typeCol="var(--warm)";}
-    const callback=l.calls.some(c=>c.callback);
+    const typeEmoji=l.callback?'Callback':l.recencyRank?'Recent':l.connected.length>=2?'Repeat':l.talkSeconds>=60?'Long call':'Active';
+    const typeCol=l.callback?'var(--teal)':l.recencyRank?'var(--indigo)':l.connected.length>=2?'var(--gold)':'var(--indigo)';
+    const reason=l.reasons.length?l.reasons.join(' · '):'Latest connected activity';
     return`<article class="follow-up-card drawer-click-card" style="--card-accent:${typeCol}" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(l.phone)},'priority',this)">
       <div class="follow-up-card-head">
         <div><div class="follow-up-rank">Priority #${i+1}</div><b class="follow-up-phone">${esc(maskPhone(l.phone))}</b>${copyPhoneButton(l.phone)}</div>
         <span class="follow-up-tier" style="color:${typeCol}">${typeEmoji}</span>
       </div>
       <div class="follow-up-card-stats">
-        <div><b>${l.total}</b><span>Calls</span></div>
-        <div><b>${l.totalDur}</b><span>Minutes</span></div>
-        <div><b>₹${l.totalDur*5}</b><span>Cost</span></div>
+        <div><b>${l.connected.length}</b><span>Connected calls</span></div>
+        <div><b>${formatTalkMinutes(l.talkSeconds/60)}</b><span>Talk time</span></div>
+        <div><b>₹${l.billedMins*5}</b><span>Cost</span></div>
       </div>
-      <div class="follow-up-card-meta">${directionMix(l.calls)}${callback?'<span class="follow-up-callback">Follow-up requested</span>':''}</div>
+      <div class="follow-up-card-meta">${directionMix(l.calls)}${l.callback?'<span class="follow-up-callback">Requested callback</span>':''}</div>
+      <div class="follow-up-priority-reason"><b>Why high:</b> ${esc(reason)}</div>
       <div class="drawer-action-hint">Open full profile</div>
     </article>`;
   }).join("");
@@ -3892,23 +3907,15 @@ function ledgerExportScope(){
 
 function exportHottestLeads(){
   if(!RECORDS.length){alert("No data to export in the current filter range.");return;}
-  const byPhone=groupByPhone(RECORDS);
   const mixes=ledgerLeadDirectionMixMap(RECORDS);
-  const leads=Object.entries(byPhone).map(([ph,calls])=>{
-    const hot=calls.filter(c=>c.leadTemp==="Hot").length;
-    const warm=calls.filter(c=>c.leadTemp==="Warm").length;
-    const cold=calls.filter(c=>c.leadTemp==="Cold").length;
-    const totalDur=sumBilledMinutes(calls);
-    const lastCall=calls.sort((a,b)=>b.ts-a.ts)[0];
-    const followUpScore=(hot*3+warm*2+cold)*2+calls.length*1.5+Math.round(calls.reduce((a,c)=>a+Number(c.need||0),0)/calls.length)*0.3+Math.round(calls.reduce((a,c)=>a+Number(c.conf||0),0)/calls.length)*0.2;
-    const tier=hot>=Math.ceil(calls.length*0.6)?'Hot':hot>=Math.ceil(calls.length*0.3)?'Warm':'Cold';
-    const mix=mixes.get(ph)||{inbound:0,outbound:0,unknown:0};
-    return{ph,total:calls.length,tier,totalDur,followUpScore,callback:calls.some(c=>c.callback),mix,lastCallTime:formatCallTime(lastCall),lastStatus:lastCall.status,lastSummary:lastCall.summary};
-  }).sort((a,b)=>b.followUpScore-a.followUpScore).slice(0,50);
-
-  let csv='Follow-up Rank,Phone,Lead Tier,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Callback Requested,Lead Total Duration (mins),Lead Total Cost (Rs),Last Call Time,Last Status,Last Summary\n';
-  leads.forEach((l,i)=>{csv+=[i+1,escCSVText(fullPhone(l.ph)),escCSV(l.tier),l.total,l.mix.inbound,l.mix.outbound,l.mix.unknown,l.callback?'Yes':'No',l.totalDur,l.totalDur*5,escCSV(l.lastCallTime),escCSV(l.lastStatus),escCSV(l.lastSummary)].join(',')+'\n';});
-  downloadCSV(csvFilename('followup-queue','lead-summary'),csv);
+  const leads=priorityLeads(RECORDS);
+  let csv='Priority Rank,Phone,Priority Basis,Connected Calls,Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Callback Requested,Raw Talk Time (mins),Billable Minutes,Lead Total Cost (Rs),Last Call Time,Last Status,Last Summary\n';
+  leads.forEach((l,i)=>{
+    const mix=mixes.get(l.phone)||{inbound:0,outbound:0,unknown:0},lastCall=l.calls[0]||{};
+    const basis=l.reasons.length?l.reasons.join(' | '):'Latest connected activity';
+    csv+=[i+1,escCSVText(fullPhone(l.phone)),escCSV(basis),l.connected.length,l.total,mix.inbound,mix.outbound,mix.unknown,l.callback?'Yes':'No',formatTalkMinutes(l.talkSeconds/60),l.billedMins,l.billedMins*5,escCSV(formatCallTime(lastCall)),escCSV(lastCall.status),escCSV(lastCall.summary)].join(',')+'\n';
+  });
+  downloadCSV(csvFilename('priority-contacts','lead-summary'),csv);
 }
 
 function exportSerialEngagers(){
