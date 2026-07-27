@@ -4,6 +4,9 @@ const assert = require('assert');
 const html = fs.readFileSync('index.html', 'utf8');
 const css = fs.readFileSync('css/dashboard.css', 'utf8');
 
+assert(css.includes('grid-template-columns:minmax(86px,auto) minmax(0,1fr) auto'), 'Demand outcomes must reserve visible columns for count, label and percentage');
+assert(css.includes('.fstep-meter'), 'Demand outcomes proportional meter styling is missing');
+
 for (const breakpoint of ['max-width:900px', 'max-width:720px', 'max-width:560px']) {
   assert(css.includes(`@media screen and (${breakpoint})`), `Missing responsive breakpoint: ${breakpoint}`);
 }
