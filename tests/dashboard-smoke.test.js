@@ -90,7 +90,7 @@ scripts.forEach(script => vm.runInContext(script, context));
 for (const fn of [
   'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
-  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
+  'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'formatTalkDuration', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'resetCallPaceCache', 'callPaceAnalysis', 'paintCallPace',
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
@@ -111,6 +111,8 @@ assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`
 assert(context.copyPhoneButton('919111111111').includes('aria-label="Copy mobile number"'), 'Phone copy control must remain accessible');
 assert(context.copyPhoneButton('919111111111').includes('<svg'), 'Phone copy control must use a compact icon');
 assert(!context.copyPhoneButton('919111111111').includes('>Copy</button>'), 'Phone copy control must not use the long Copy text label');
+assert.equal(context.formatTalkDuration(6144),'1h 42m','Priority talk time must use a human-readable duration');
+assert.equal(context.formatTalkDuration(90),'1m 30s','Short priority talk time must retain seconds');
 
 assert.equal(context.normalizeDirection('OUTBOUND'), 'outbound');
 assert.equal(context.normalizeDirection('incoming call'), 'inbound');
@@ -426,7 +428,7 @@ assert.equal(priorityLeads[1].phone, '919111111111', 'Greater connected call dep
 assert(priorityLeads[0].reasons.includes('Requested callback') && priorityLeads[1].reasons.includes('2 connected calls'), 'Priority reason labels must use callback and call depth only');
 assert(!Object.hasOwn(priorityLeads[0], 'avgConf') && !Object.hasOwn(priorityLeads[0], 'avgNeed'), 'Priority ranking must not calculate AI scores');
 context.paintHottestLeads(compactLeadRecords);
-assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>1.5</b><span>Talk time</span>') && getElement('hottestLeads').innerHTML.includes('<b>₹15</b><span>Lead total cost</span>'), 'Priority cards should show call depth, raw talk time, and total cost without repeating connected calls');
+assert(getElement('hottestLeads').innerHTML.includes('<b>3</b><span>Total calls</span>') && getElement('hottestLeads').innerHTML.includes('<b>1m 30s</b><span>Actual talk time</span>') && getElement('hottestLeads').innerHTML.includes('<b>₹15</b><span>Lead total cost</span>'), 'Priority cards should show call depth, human-readable actual talk time, and total cost without repeating connected calls');
 assert(!getElement('hottestLeads').innerHTML.includes('<span>Connected calls</span>'), 'Priority cards must not repeat connected-call depth in the stat row');
 assert(getElement('hottestLeads').innerHTML.includes('Why high:'), 'Priority cards must explain their position');
 assert(!getElement('hottestLeads').innerHTML.includes('<b>Lead:</b>'), 'Reduced priority cards must hide lead breakdown');
