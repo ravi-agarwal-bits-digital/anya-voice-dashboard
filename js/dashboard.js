@@ -789,7 +789,7 @@ function renderHeaderMeta(records){
 }
 function phoneDigits(value){return String(value||'').replace(/\D/g,'').replace(/^00/,'');}
 function copyPhoneButton(phone){
-  return `<button type="button" class="phone-copy-btn" onclick="event.stopPropagation();copyPhone(${jsArg(phone)},this)" title="Copy full mobile number" aria-label="Copy mobile number">Copy</button>`;
+  return `<button type="button" class="phone-copy-btn" onclick="event.stopPropagation();copyPhone(${jsArg(phone)},this)" title="Copy full mobile number" aria-label="Copy mobile number"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"></path></svg></button>`;
 }
 async function copyPhone(phone,button){
   const value=fullPhone(phone);
@@ -799,7 +799,12 @@ async function copyPhone(phone,button){
     else{
       const input=document.createElement('textarea');input.value=value;input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();
     }
-    if(button){const original=button.textContent;button.textContent='Copied';setTimeout(()=>{button.textContent=original;},1200);}
+    if(button){
+      const original=button.innerHTML;
+      button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>';
+      button.classList.add('is-copied');button.title='Copied';button.setAttribute('aria-label','Mobile number copied');
+      setTimeout(()=>{button.innerHTML=original;button.classList.remove('is-copied');button.title='Copy full mobile number';button.setAttribute('aria-label','Copy mobile number');},1200);
+    }
   }catch(error){console.warn('Could not copy phone number',error);}
 }
 function phoneSearchVariants(value){

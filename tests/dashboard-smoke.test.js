@@ -106,8 +106,11 @@ for (const fn of [
   'exportGeo', 'exportExplorer', 'exportHottestLeads', 'exportSerialEngagers', 'exportCallbacks',
   'priorityLeadDetails', 'priorityLeads', 'paintHottestLeads', 'paintSerialCallers', 'paintFailureBreakdown', 'ledgerCallCost', 'ledgerLeadCostMap', 'ledgerLeadCost', 'isLeadCostLedgerSort', 'latestLedgerRowPerLead', 'getExplorerRows', 'ledgerLeadDirectionMixMap', 'ledgerLeadDirectionMix'
 ]) {
-  assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
+assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
+assert(context.copyPhoneButton('919111111111').includes('aria-label="Copy mobile number"'), 'Phone copy control must remain accessible');
+assert(context.copyPhoneButton('919111111111').includes('<svg'), 'Phone copy control must use a compact icon');
+assert(!context.copyPhoneButton('919111111111').includes('>Copy</button>'), 'Phone copy control must not use the long Copy text label');
 
 assert.equal(context.normalizeDirection('OUTBOUND'), 'outbound');
 assert.equal(context.normalizeDirection('incoming call'), 'inbound');
