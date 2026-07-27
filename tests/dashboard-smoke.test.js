@@ -37,7 +37,7 @@ for (const path of [
 
 for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
-  'campaignFilter', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-overview',
+  'campaignFilter', 'campaignFilterSearch', 'campaignLeaderboardSearch', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-overview',
   'resetAllFilters', 'metricDefinitions',
   'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
 ]) {
@@ -98,7 +98,7 @@ for (const fn of [
   'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
   'isGzipData', 'unpackPublishedData',
   'copyPhoneButton', 'copyPhone',
-  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign',
+  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters', 'sortCampaignLeaderboardRows', 'setCampaignLeaderboardSort', 'campaignLeaderboardHeader',
@@ -290,7 +290,8 @@ assert(html.includes('id="timingMetricControls"'), 'Outbound timing metric toggl
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
-assert(html.includes('<h4>Follow-up queue</h4>'), 'Follow-up queue panel title is missing');
+assert(html.includes('<h4>Priority contacts</h4>'), 'Priority contacts panel title is missing');
+assert(!html.includes('<h4>Follow-up queue</h4>'), 'Legacy Follow-up queue panel title must not remain');
 assert(html.includes('<h4 style="margin:0">Repeat engagement</h4>'), 'Repeat engagement panel title is missing');
 assert(html.includes('<h2>Call ledger</h2>'), 'Call ledger title is missing');
 assert(html.includes('Management readout'), 'Management readout must sit in the overview');
@@ -337,7 +338,7 @@ assert(!html.includes('data-f="has_transcript"'), 'Ledger must not expose transc
 assert(!html.includes('data-f="no_transcript"'), 'Ledger must not expose transcript-completeness filters');
 assert(html.includes('id="hottestExport"') && html.includes('Export lead summary'), 'Follow-up export label is missing');
 assert(scripts[1].includes('reducedAiViewEnabled'), 'Dynamic reduced-view visibility contract is missing');
-assert(scripts[1].includes('Opened from the Follow-up queue'), 'Follow-up queue profile source label is missing');
+assert(scripts[1].includes('Opened from Priority contacts'), 'Priority contacts profile source label is missing');
 assert(!scripts[1].includes('<b style="color:var(--hot)">Attention</b>'), 'Profile timeline must not surface Attention labels in the reduced view');
 assert(!scripts[1].includes('<b>Lead tier:</b>'), 'Profile drawer must not repeat lead-tier breakdowns');
 assert(scripts[1].includes('profile-call-mix-list'), 'Profile drawer must show inbound/outbound call mix');
@@ -451,7 +452,7 @@ context.__scopeRecord = scopeRecord;
 vm.runInContext('ALL_RECORDS_BACKUP=[__scopeRecord]; RECORDS=[__scopeRecord];', context);
 context.searchUserByMobile('919999999999', 'priority');
 assert.equal(getElement('userSearchResult').style.display, 'block', 'Follow-up card click must open the profile drawer');
-assert(getElement('profileSourceNote').textContent.includes('Follow-up queue'), 'Profile drawer must identify the follow-up source');
+assert(getElement('profileSourceNote').textContent.includes('Priority contacts'), 'Profile drawer must identify the priority-contact source');
 
 let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
@@ -519,6 +520,19 @@ vm.runInContext("ALL_DIALS=__campaignFilterRows;ALL_RECORDS_BACKUP=__campaignFil
 context.populateCampaignFilter();
 assert(getElement('campaignFilterOptions').innerHTML.includes('2 contacts'), 'Campaign labels must show unique contacts, not dials');
 assert(!getElement('campaignFilterOptions').innerHTML.includes('calls'), 'Campaign labels must not show dial counts');
+vm.runInContext("CAMPAIGN_DRAFT=new Set(['Campaign A']);", context);
+context.setCampaignFilterSearch('campaign b');
+assert(getElement('campaignFilterOptions').innerHTML.includes('Campaign B') && !getElement('campaignFilterOptions').innerHTML.includes('Campaign A'), 'Campaign filter search must narrow visible checkbox options only');
+assert(vm.runInContext("CAMPAIGN_DRAFT.has('Campaign A')", context), 'Campaign filter search must preserve selections hidden by the query');
+context.setCampaignFilterSearch('not found');
+assert(getElement('campaignFilterOptions').innerHTML.includes('Selected campaigns stay selected'), 'Campaign filter search must explain an empty result without clearing selection');
+context.setCampaignFilterSearch('');
+assert(context.campaignMatchesSearch('MBA July Intake', 'july int'), 'Campaign search must support case-insensitive partial matches');
+assert(!context.campaignMatchesSearch('MBA July Intake', 'august'), 'Campaign search must exclude non-matches');
+context.resetOutboundCaches();
+context.setCampaignLeaderboardSearch('campaign b');
+assert(getElement('campaignLeaderboard').innerHTML.includes('Campaign B') && !getElement('campaignLeaderboard').innerHTML.includes('Campaign A'), 'Leaderboard search must narrow table rows without changing the campaign filter');
+context.setCampaignLeaderboardSearch('');
 vm.runInContext("SELECTED_CAMPAIGNS=new Set(['Campaign A','Campaign B']);", context);
 assert(context.recordMatchesCampaign({ campaign: 'Campaign A' }) && context.recordMatchesCampaign({ campaign: 'Campaign B' }), 'Multiple selected campaigns must remain in scope');
 assert(!context.recordMatchesCampaign({ campaign: 'Campaign C' }), 'Unselected campaigns must be excluded from scope');
