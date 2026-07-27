@@ -135,6 +135,7 @@ const $=id=>document.getElementById(id);
 let RECORDS=[], SRC="", BILLING_PLAN=null;
 let BILLING_CYCLE_CACHE=null,BILLING_CYCLE_CACHE_PLAN=null,CAMPAIGN_OPTIONS_CACHE=null,CAMPAIGN_OPTIONS_SIG=null;
 let RECORDS_DATE_INDEX=new Map(),RECORDS_DATE_INDEX_COUNT=0;
+let CAMPAIGN_FILTER_QUERY='',CAMPAIGN_LEADERBOARD_QUERY='';
 
 const dz=$("dropZone"),fi=$("fileInput");
 dz.onclick=()=>fi.click();
@@ -923,7 +924,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
-    const label=source==="callback"?"Opened from the Follow-up queue":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from the Follow-up queue":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
+    const label=source==="callback"?"Opened from Requested follow-ups":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from Priority contacts":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
     const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
     note.textContent=label+`. Full call history is available below. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
@@ -1434,11 +1435,26 @@ function campaignSelectionLabel(){
   const count=activeCampaigns().size;
   return count?`${count} campaign${count===1?'':'s'}`:'Campaigns';
 }
+function campaignSearchText(value){return String(value||'').trim().toLocaleLowerCase();}
+function campaignMatchesSearch(name,query){return !query||String(name||'').toLocaleLowerCase().includes(query);}
 function syncCampaignFilterDraft(open){
-  if(open){CAMPAIGN_DRAFT=new Set(activeCampaigns());populateCampaignFilter();}
+  if(open){
+    CAMPAIGN_DRAFT=new Set(activeCampaigns());
+    CAMPAIGN_FILTER_QUERY='';
+    const search=$('campaignFilterSearch');if(search)search.value='';
+    populateCampaignFilter();
+  }
 }
 function toggleCampaignOption(name,checked){
   if(checked)CAMPAIGN_DRAFT.add(name);else CAMPAIGN_DRAFT.delete(name);
+}
+function setCampaignFilterSearch(value){
+  CAMPAIGN_FILTER_QUERY=campaignSearchText(value);
+  renderCampaignFilterOptions();
+}
+function setCampaignLeaderboardSearch(value){
+  CAMPAIGN_LEADERBOARD_QUERY=campaignSearchText(value);
+  paintCampaignLeaderboard();
 }
 function applyCampaignFilter(){
   SELECTED_CAMPAIGN='all';
@@ -1449,6 +1465,18 @@ function applyCampaignFilter(){
 function clearCampaignFilter(){
   CAMPAIGN_DRAFT.clear();
   applyCampaignFilter();
+}
+function renderCampaignFilterOptions(){
+  const options=$('campaignFilterOptions'),hint=$('campaignFilterHint');if(!options)return;
+  const query=CAMPAIGN_FILTER_QUERY,all=CAMPAIGN_OPTIONS_CACHE||[];
+  const visible=all.filter(({name})=>campaignMatchesSearch(name,query));
+  if(!visible.length){
+    options.innerHTML=`<div class="campaign-filter-empty">No campaigns match <b>${esc(query)}</b>. Selected campaigns stay selected.</div>`;
+  }else{
+    options.innerHTML=visible.map(({name,count})=>`<label class="campaign-filter-option"><input type="checkbox" value="${esc(name)}" ${CAMPAIGN_DRAFT.has(name)?'checked':''} onchange="toggleCampaignOption(this.value,this.checked)"><span>${esc(name)}</span><small>${count.toLocaleString()} contact${count===1?'':'s'}</small></label>`).join('');
+  }
+  const selected=activeCampaigns();
+  if(hint){const scope=selected.size?`${selected.size} selected`:'All campaigns';hint.textContent=query?`${scope} · ${visible.length} shown`:scope;}
 }
 // Populate the campaign multi-select from outbound campaigns. Counts are active-date unique contacts.
 // Hidden entirely when the export carries no campaign column (older files), so nothing regresses.
@@ -1472,13 +1500,11 @@ function populateCampaignFilter(){
     CAMPAIGN_OPTIONS_CACHE=Object.keys(contacts).sort((a,b)=>a.localeCompare(b)).map(name=>({name,count:contacts[name].size}));
   }
   const campaignOptions=CAMPAIGN_OPTIONS_CACHE,names=campaignOptions.map(option=>option.name);
-  const selected=activeCampaigns();
   filter.dataset.count=String(names.length);
   if(!names.length){filter.open=false;updateCampaignFilterVisibility();return;}
-  options.innerHTML=campaignOptions.map(({name,count})=>`<label class="campaign-filter-option"><input type="checkbox" value="${esc(name)}" ${CAMPAIGN_DRAFT.has(name)?'checked':''} onchange="toggleCampaignOption(this.value,this.checked)"><span>${esc(name)}</span><small>${count.toLocaleString()} contact${count===1?'':'s'}</small></label>`).join('');
-  const label=$('campaignFilterLabel'),hint=$('campaignFilterHint');
+  renderCampaignFilterOptions();
+  const label=$('campaignFilterLabel');
   if(label)label.textContent=campaignSelectionLabel();
-  if(hint)hint.textContent=selected.size?`${selected.size} selected`:'All campaigns';
   updateCampaignFilterVisibility();
 }
 function recordMatchesDate(r){
@@ -2248,8 +2274,12 @@ function campaignLeaderboardHeader(key,label,numeric=false){
 }
 function paintCampaignLeaderboard(){
   const el=$('campaignLeaderboard');if(!el)return;
-  const rows=sortCampaignLeaderboardRows(campaignStats());
-  if(!rows.length){el.innerHTML=emptyViewHtml('No outbound campaigns in this range.');return;}
+  const allRows=campaignStats();
+  const rows=sortCampaignLeaderboardRows(allRows.filter(row=>campaignMatchesSearch(row.campaign,CAMPAIGN_LEADERBOARD_QUERY)));
+  if(!rows.length){
+    const message=allRows.length?`No campaigns match ${esc(CAMPAIGN_LEADERBOARD_QUERY)}.`:'No outbound campaigns in this range.';
+    el.innerHTML=emptyViewHtml(message);return;
+  }
   window.__campaignRows={};
   const base=outboundDialsInDateView();
   rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
@@ -2870,7 +2900,7 @@ function paintManagementBrief(){
   const serialPhrase=cur.serial?`${cur.serial} repeat lead${cur.serial>1?'s':''}`:'no repeat callers';
   if(summary){
     const operatingSummary=reducedAiViewEnabled()
-      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} is summarized below as an operating view. The main action areas are callback demand and the follow-up queue; the period showed <b>${serialPhrase}</b>.`
+      ?`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} is summarized below as an operating view. The main action areas are callback demand and priority contacts; the period showed <b>${serialPhrase}</b>.`
       :`For <b>${esc(dateLabel)}</b>, ${esc(currentDirectionLabel())} recorded <b>${cur.n} enquiries</b> from <b>${cur.unique} unique leads</b>, with a compact quality score of <b>${healthScore(aggregate(recs))}/100</b>. Callback demand stood at <b>${cur.callbacks}</b> requests (${cbPct}%), priority prospects were <b>${cur.hot}</b> (${hotPct}%), and the period showed <b>${serialPhrase}</b>. Top demand theme was <b>${esc(cur.topIntent.name)}</b>, with ${cur.friction} attention/friction signals for counsellor review.`;
     summary.innerHTML=operatingSummary+`<span class="billing-clarity-note"><b>Billing clarity:</b> ${cur.mins.toLocaleString('en-IN')} billable mins vs ${formatTalkMinutes(cur.talkMins)} talk-time mins — <b>+${formatTalkMinutes(cur.roundingMins)} mins (${cur.roundingPct.toFixed(1)}%)</b> from per-call rounding.</span>`;
   }
@@ -2970,7 +3000,7 @@ function paintKPIs(o){
   const avgMsg=o.n?Math.round(o.totalMsg/o.n):0;
   // 4th field = drill-down key -- every KPI here is now a count/set over the same "all" record set,
   // even the averages (minutes, cost, duration), so clicking any of them shows what it was computed from.
-  // Operational headline row. The follow-up queue and AI confidence intentionally live in the Management
+  // Operational headline row. Priority contacts and AI confidence intentionally live in the Management
   // Summary just below (with period-over-period trend + inbound/outbound split), so they're not repeated
   // here -- this row stays volume/cost/quality to avoid the top of the dashboard saying the same thing twice.
   const cards=[
@@ -3095,7 +3125,7 @@ function defaultDrillStats(rows){
   const avgConf=Math.round(rows.reduce((a,r)=>a+r.conf,0)/n);
   const avgNeed=Math.round(rows.reduce((a,r)=>a+r.need,0)/n);
   const ratio=v=>`${v} (${percentOf(v,n)}%)`,hot=rows.filter(r=>r.leadTemp==="Hot").length,callbacks=rows.filter(r=>r.callback).length,intl=rows.filter(r=>classifyPhone(r.from).intl).length;
-  const stats=[["Matching calls",n],["Follow-up queue",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
+  const stats=[["Matching calls",n],["Priority contacts",ratio(hot)],["Callbacks",ratio(callbacks)],["International",ratio(intl)]];
   if(!reducedAiViewEnabled())stats.splice(1,0,["Avg confidence",avgConf+"%"],["Avg need",avgNeed]);
   return stats;
 }
@@ -3110,7 +3140,7 @@ function openKpiPanel(key){
   // Build the record set + title for each drill-down key
   let title="",rows=[],stats=[];
   if(key==="all"){title="All Calls";rows=RECORDS.slice();}
-  else if(key==="hot"){title="Follow-up queue";rows=RECORDS.filter(r=>r.leadTemp==="Hot");}
+  else if(key==="hot"){title="Priority contacts";rows=RECORDS.filter(r=>r.leadTemp==="Hot");}
   else if(key==="green"){title="Quality-pass calls (Green)";rows=RECORDS.filter(r=>r.band==="Green");}
   else if(key==="geo"){title="Reach by geography";rows=RECORDS.filter(r=>classifyPhone(r.from).intl);} // intl records listed; india summarized in stats
   else if(key==="conf"){title="Assistant confidence";rows=RECORDS.slice();}
@@ -3120,12 +3150,12 @@ function openKpiPanel(key){
   if(key==="all"){
     const mins=sumBilledMinutes(RECORDS);
     const ratio=v=>`${v} (${percentOf(v,RECORDS.length)}%)`;
-    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Follow-up queue",ratio(RECORDS.filter(r=>r.leadTemp==="Hot").length)],["Callbacks",ratio(RECORDS.filter(r=>r.callback).length)],["International",ratio(RECORDS.filter(r=>classifyPhone(r.from).intl).length)]];
+    stats=[["Total enquiries",RECORDS.length],["Total minutes",mins],["Priority contacts",ratio(RECORDS.filter(r=>r.leadTemp==="Hot").length)],["Callbacks",ratio(RECORDS.filter(r=>r.callback).length)],["International",ratio(RECORDS.filter(r=>classifyPhone(r.from).intl).length)]];
     if(!reducedAiViewEnabled())stats.splice(3,0,["Attention signals",ratio(RECORDS.filter(r=>r.frustrated).length)]);
   }else if(key==="hot"){
     const h=rows;const avgC=h.length?Math.round(h.reduce((a,r)=>a+r.conf,0)/h.length):0;
     const callbacks=h.filter(r=>r.callback).length,intl=h.filter(r=>classifyPhone(r.from).intl).length;
-    stats=[["Follow-up queue",`${h.length} (${percentOf(h.length,n)}%)`],["With callback",`${callbacks} (${percentOf(callbacks,h.length)}%)`],["International",`${intl} (${percentOf(intl,h.length)}%)`]];
+    stats=[["Priority contacts",`${h.length} (${percentOf(h.length,n)}%)`],["With callback",`${callbacks} (${percentOf(callbacks,h.length)}%)`],["International",`${intl} (${percentOf(intl,h.length)}%)`]];
     if(!reducedAiViewEnabled())stats.splice(1,0,["Avg confidence",avgC+"%"]);
   }else if(key==="green"){
     stats=[["Green (pass)",RECORDS.filter(r=>r.band==="Green").length],["Amber",RECORDS.filter(r=>r.band==="Amber").length],["Red",RECORDS.filter(r=>r.band==="Red").length],["Pass rate",Math.round(RECORDS.filter(r=>r.band==="Green").length/n*100)+"%"]];
@@ -3754,7 +3784,7 @@ function paintHottestLeads(records){
     const callback=l.calls.some(c=>c.callback);
     return`<article class="follow-up-card drawer-click-card" style="--card-accent:${typeCol}" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openProfileForPhone(${jsArg(l.phone)},'priority',this)">
       <div class="follow-up-card-head">
-        <div><div class="follow-up-rank">Follow-up #${i+1}</div><b class="follow-up-phone">${esc(maskPhone(l.phone))}</b>${copyPhoneButton(l.phone)}</div>
+        <div><div class="follow-up-rank">Priority #${i+1}</div><b class="follow-up-phone">${esc(maskPhone(l.phone))}</b>${copyPhoneButton(l.phone)}</div>
         <span class="follow-up-tier" style="color:${typeCol}">${typeEmoji}</span>
       </div>
       <div class="follow-up-card-stats">

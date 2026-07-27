@@ -18,6 +18,8 @@ assert(css.includes('#reportView .direction-switch'), 'Direction filter needs a 
 assert(css.includes('#resetAllFilters'), 'Reset-all-filters control needs responsive styling');
 assert(html.includes('id="resetAllFilters"'), 'Reset-all-filters control is missing from the dashboard');
 assert(html.includes('id="searchMobile"'), 'Mobile lead search control is missing');
+assert(html.includes('id="campaignFilterSearch"') && html.includes('id="campaignLeaderboardSearch"'), 'Campaign search controls are missing');
+assert(css.includes('.campaign-leaderboard-head') && css.includes('.campaign-leaderboard-search'), 'Campaign leaderboard search needs responsive styling');
 assert(html.includes('id="kpiPanel"'), 'KPI drawer is missing');
 assert(html.includes('id="userSearchResult"'), 'Profile drawer is missing');
 
