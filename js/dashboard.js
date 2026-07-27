@@ -924,7 +924,7 @@ function searchUserByMobile(mobile, source="search"){
   $("userSearchResult").style.display="block";
   const note=$("profileSourceNote");
   if(note){
-    const label=source==="callback"?"Opened from Requested follow-ups":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from Priority contacts":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
+    const label=source==="callback"?"Opened from Requested callbacks":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from Priority contacts":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
     const scope=activeCalls.length===userCalls.length?'All calls are inside the active filters.':activeCalls.length?`${activeCalls.length} of ${userCalls.length} calls are inside the active filters.`:'This lead is outside the active filters.';
     note.textContent=label+`. Full call history is available below. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
   }
@@ -2284,7 +2284,7 @@ function paintCampaignLeaderboard(){
   const base=outboundDialsInDateView();
   rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
   const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
-  el.innerHTML=`<div style="overflow-x:auto"><table class="iq-table"><thead><tr>${campaignLeaderboardHeader('campaign','Campaign')}${campaignLeaderboardHeader('dials','Dials',true)}${campaignLeaderboardHeader('connectPct','Connect %',true)}${campaignLeaderboardHeader('reachPct','Reach %',true)}${campaignLeaderboardHeader('hotPct','Hot %',true)}</tr></thead><tbody>`+
+  el.innerHTML=`<div class="campaign-leaderboard-scroll"><table class="iq-table"><thead><tr>${campaignLeaderboardHeader('campaign','Campaign')}${campaignLeaderboardHeader('dials','Dials',true)}${campaignLeaderboardHeader('connectPct','Connect %',true)}${campaignLeaderboardHeader('reachPct','Reach %',true)}${campaignLeaderboardHeader('hotPct','Hot %',true)}</tr></thead><tbody>`+
     rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel(${jsArg(`${x.campaign} (outbound)`)},()=>true,window.__campaignRows[${jsArg(x.campaign)}])">`+
       `<td><span class="iq-name">${esc(x.campaign)}</span><div class="iq-sub">${x.numbers.toLocaleString()} numbers dialed</div></td>`+
       `<td class="num">${x.dials.toLocaleString()}</td>`+
@@ -2409,13 +2409,13 @@ function paintAnomalyCards(){
   el.innerHTML=cards.slice(0,4).map(c=>`<div class="anom ${c.cls}"><span class="anom-tag">${c.tag}</span><h3>${c.title}</h3><div class="anom-metric">${c.metric}</div><div class="anom-why">${c.why}</div></div>`).join('');
 }
 
-// Requested follow-ups are signals extracted from conversations. This dashboard does not know task
+// Requested callbacks are signals extracted from conversations. This dashboard does not know task
 // assignment or completion, so it deliberately shows readiness rather than a misleading SLA.
 let CB_TIME_FILTER='all'; // 'all' | 'timed' | 'unscheduled'
 function callbackHasRequestedTime(calls){
   return calls.some(r=>r.cbPreferred&&r.cbPreferred!=='Not specified');
 }
-// Keep the Requested follow-ups canvas and CSV on one source of truth. The global dashboard
+// Keep the Requested callbacks canvas and CSV on one source of truth. The global dashboard
 // filters are already represented by `recs`; these two local controls narrow that set further.
 function visibleCallbackGroups(recs=RECORDS){
   const allByPhone=groupByPhone((recs||[]).filter(r=>r.callback));
@@ -2428,7 +2428,7 @@ function visibleCallbackGroups(recs=RECORDS){
   ]).filter(([,calls])=>calls.length).sort((a,b)=>b[1].length-a[1].length);
 }
 function callbackExportScope(){
-  const parts=[activeFilterScopeLabel(),'Requested follow-ups'];
+  const parts=[activeFilterScopeLabel(),'Requested callbacks'];
   if(CB_TIME_FILTER==='timed')parts.push('Requested time');
   if(CB_TIME_FILTER==='unscheduled')parts.push('Needs scheduling');
   if(CB_FILTERS.size)parts.push(`Topics: ${[...CB_FILTERS].join(' + ')}`);
@@ -2668,7 +2668,7 @@ function paintCallbacks(recs){
   if(!cbCount||!cbList||!cbFilters){console.warn("paintCallbacks: missing DOM elements");return;}
   const cbsAll=recs.filter(r=>r.callback);
   const readiness=$('cbReadiness');
-  if(!cbsAll.length){updateExportButton('callbacksExport','Export visible calls',0,'calls');cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No requested follow-ups detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");if(readiness)readiness.innerHTML="";return;}
+  if(!cbsAll.length){updateExportButton('callbacksExport','Export visible calls',0,'calls');cbCount.textContent="0 leads";cbList.innerHTML=emptyViewHtml("No requested callbacks detected");cbFilters.innerHTML="";cbFilters.removeAttribute("data-active");if(readiness)readiness.innerHTML="";return;}
   const allByPhone=groupByPhone(cbsAll);
   paintFollowUpReadiness(allByPhone,recs);
   const byPhone=Object.fromEntries(Object.entries(allByPhone).filter(([,calls])=>CB_TIME_FILTER==='all'||(CB_TIME_FILTER==='timed'?callbackHasRequestedTime(calls):!callbackHasRequestedTime(calls))));
@@ -3926,6 +3926,6 @@ function exportSerialEngagers(){
 
 function exportCallbacks(){
   const cbs=visibleCallbackGroups(RECORDS).flatMap(([,calls])=>calls).sort((a,b)=>b.ts-a.ts);
-  if(!cbs.length){alert("No requested follow-ups match the active filters.");return;}
-  downloadCSV(csvFilename('requested-followups','calls',callbackFilenameExtra()),recordsToCSV(cbs,callbackExportScope(),RECORDS));
+  if(!cbs.length){alert("No requested callbacks match the active filters.");return;}
+  downloadCSV(csvFilename('requested-callbacks','calls',callbackFilenameExtra()),recordsToCSV(cbs,callbackExportScope(),RECORDS));
 }
