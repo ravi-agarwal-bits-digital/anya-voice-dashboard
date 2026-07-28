@@ -340,8 +340,8 @@ assert(scripts[1].includes('cost_asc:(a,b)=>ledgerCallCost(a)-ledgerCallCost(b)'
 assert(scripts[1].includes('lead_cost_desc:(a,b)=>'), 'Ledger must support highest lead-total-cost sorting');
 assert(scripts[1].includes('lead_cost_asc:(a,b)=>'), 'Ledger must support lowest lead-total-cost sorting');
 assert(scripts[1].includes("leadView?'Export visible leads':'Export visible calls'"), 'Lead-cost mode must label its export as a lead view');
-assert(scripts[1].includes('Cost ₹${billedCost} · ${billedMins} billed min'), 'Ledger must explain the billed cost behind cost sorting');
-assert(scripts[1].includes('Lead total ₹${leadCost}'), 'Ledger must show cumulative lead cost behind lead-total sorting');
+assert(scripts[1].includes('This call · ₹${billedCost} · ${billedMins} billed min'), 'Ledger must distinguish the selected-call cost behind cost sorting');
+assert(scripts[1].includes('Lead total in this view · ₹${leadCost}'), 'Ledger must show cumulative lead cost with its scope');
 assert(scripts[1].includes('Lead mix: ${esc(leadMixLabel)}'), 'Ledger must show the inbound/outbound mix behind cumulative lead cost');
 assert(!html.includes('data-f="has_transcript"'), 'Ledger must not expose transcript-completeness filters');
 assert(!html.includes('data-f="no_transcript"'), 'Ledger must not expose transcript-completeness filters');
@@ -390,6 +390,8 @@ const searchRows = [
 ];
 assert.equal(context.resolveLeadSearch('99999-99999', searchRows).calls.length, 2, 'Phone search must normalize formatting and return full lead history');
 assert.equal(context.resolveLeadSearch('+91 88888 88888', searchRows).calls.length, 1, 'Phone search must support country-code input');
+assert.equal(context.resolveLeadSearch('+918368330337', [...searchRows, { from: '+918071436002', ts: 4 }]).calls.length, 0, 'A full mobile lookup must never fall back to another lead');
+assert(context.resolveLeadSearch('9999', searchRows).ambiguous, 'Partial mobile searches must require an explicit lead choice');
 assert.equal(context.percentOf(2, 5), 40, 'Applicable count percentages changed');
 assert(context.metricDefinition('Enquiries').includes('Call-ID'), 'Enquiry definition must document final Call-ID grain');
 
@@ -482,6 +484,19 @@ vm.runInContext("ALL_RECORDS_BACKUP=__profileScopeRows;RECORDS=[__scopeRecord];$
 context.searchUserByMobile('919999999999', 'priority');
 assert(getElement('userSearchStats').innerHTML.includes('1m 15s') && !getElement('userSearchStats').innerHTML.includes('11m 15s'), 'Priority profile overview must match the selected-view talk time, not full history');
 assert(getElement('profileSourceNote').textContent.includes('1 of 2 calls'), 'Priority profile must disclose its selected-view summary scope');
+context.searchUserByMobile('918368330337', 'search');
+assert(getElement('userSearchPhone').innerHTML.includes('No calls found'), 'A failed full-number search must replace rather than retain the previous profile');
+assert.equal(vm.runInContext('window.__profileCalls.length', context), 0, 'A failed full-number search must clear stale profile state');
+
+context.__ledgerLeadRows=[
+  {...scopeRecord, from:'918368330337', leadKey:'918368330337', callId:'ledger-current', dur:1391, d:'2026-07-10', ts:20},
+  {...scopeRecord, from:'918368330337', leadKey:'918368330337', callId:'ledger-earlier', dur:720, d:'2026-07-09', ts:10},
+  {...scopeRecord, from:'918368330337', leadKey:'918368330337', callId:'full-history-extra', dur:60, d:'2026-07-01', ts:1}
+];
+vm.runInContext("ALL_RECORDS_BACKUP=__ledgerLeadRows;RECORDS=[__ledgerLeadRows[0]];LEDGER_SCOPE={title:'Selected ledger calls',rows:__ledgerLeadRows.slice(0,2)};", context);
+context.openRecordProfile(context.__ledgerLeadRows[0], 'ledger');
+assert(getElement('userSearchStats').innerHTML.includes('Total cost:</b> ₹180'), 'Ledger profile total cost must match the ledger lead total in its selected scope');
+assert(getElement('profileSourceNote').textContent.includes('Call ledger scope (2 of 3 calls)'), 'Ledger profile must disclose its ledger-specific summary scope');
 
 let exportCapture = null;
 context.downloadCSV = (name, csv) => { exportCapture = { name, csv }; };
