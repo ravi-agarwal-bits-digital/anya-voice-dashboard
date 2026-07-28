@@ -770,7 +770,7 @@ function applyFilters(){
   closeUserSearch();
 }
 
-let searchTimer;
+let searchTimer,searchGeneration=0;
 function percentOf(value,total){return total?Math.round(Number(value||0)/total*100):0;}
 function renderHeaderMeta(records){
   const meta=$("meta");
@@ -815,43 +815,62 @@ function phoneSearchVariants(value){
 function resolveLeadSearch(query,rows=ALL_RECORDS_BACKUP){
   const qVariants=phoneSearchVariants(query),q=phoneDigits(query);
   if(!qVariants.length)return{calls:[],matches:[],ambiguous:false};
+  // A full mobile number is an identity lookup, never a suffix/fuzzy lookup. Partial
+  // searches remain available for convenience, but require the operator to choose a lead.
+  const fullNumber=qVariants.some(v=>v.length>=10);
   const groups=new Map();
   (rows||[]).forEach(r=>{
     const variants=phoneSearchVariants(r.from);
-    if(!variants.some(v=>qVariants.some(term=>v===term||v.endsWith(term)||term.endsWith(v))))return;
+    const matches=fullNumber
+      ?variants.some(v=>qVariants.includes(v))
+      :variants.some(v=>qVariants.some(term=>v.startsWith(term)||v.endsWith(term)));
+    if(!matches)return;
     const key=ledgerPhoneKey(r)||variants[0];if(!groups.has(key))groups.set(key,[]);groups.get(key).push(r);
   });
   const matches=[...groups.entries()].map(([key,calls])=>({key,calls:calls.sort((a,b)=>b.ts-a.ts)}));
   const exact=matches.filter(m=>phoneSearchVariants(m.calls[0]?.from).includes(q));
-  const chosen=exact.length===1?exact[0]:matches.length===1?matches[0]:null;
-  return{calls:chosen?chosen.calls:[],matches,ambiguous:!chosen&&matches.length>1};
+  const chosen=exact.length===1?exact[0]:null;
+  return{calls:chosen?chosen.calls:[],matches,ambiguous:!chosen&&matches.length>0,partial:!fullNumber};
 }
 function debouncedSearch(val){
+  const generation=++searchGeneration;
   clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>searchUserByMobile(val),250);
+  if(phoneDigits(val).length<4){closeUserSearch();return;}
+  searchTimer=setTimeout(()=>{if(generation===searchGeneration)searchUserByMobile(val);},250);
 }
 
-function searchUserByMobile(mobile, source="search"){
+function profileCallsInScope(userCalls,scopeRows){
+  if(!scopeRows)return null;
+  const keys=new Set((userCalls||[]).map(ledgerPhoneKey).filter(Boolean));
+  return (scopeRows||[]).filter(r=>keys.has(ledgerPhoneKey(r)));
+}
+function searchUserByMobile(mobile, source="search", summaryScopeRows=null){
   mobile=mobile.trim();
-  // Hide results for empty/short input — but DON'T clear the input (user is still typing)
-  if(!mobile||mobile.length<4){$("userSearchResult").style.display="none";return;}
+  if(!mobile||phoneDigits(mobile).length<4){closeUserSearch();return;}
 
   const resolved=resolveLeadSearch(mobile),userCalls=resolved.calls;
   const activeCalls=userCalls.filter(recordMatchesCurrentFilters);
   const useActiveSummary=['priority','callback','repeat','ledger','brief','drilldown'].includes(source);
-  const summaryCalls=useActiveSummary?activeCalls:userCalls;
+  const scopedCalls=profileCallsInScope(userCalls,summaryScopeRows);
+  const summaryCalls=scopedCalls|| (useActiveSummary?activeCalls:userCalls);
   window.__profileCalls=userCalls;
   const pexp=$("profileExport"); if(pexp){pexp.style.display=userCalls.length?'inline-flex':'none';pexp.textContent=`Export full history · ${userCalls.length.toLocaleString()} call${userCalls.length===1?'':'s'}`;}
   const pledger=$("profileLedger"); if(pledger)pledger.style.display=userCalls.length?'inline-flex':'none';
   if(resolved.ambiguous){
+    window.__profileCalls=[];
+    const pexp=$("profileExport");if(pexp)pexp.style.display='none';
+    const pledger=$("profileLedger");if(pledger)pledger.style.display='none';
     $("userSearchResult").style.display="block";
-    $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">Multiple leads match “${esc(mobile)}”</span>`;
+    $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">${resolved.partial?'Possible':'Multiple'} lead match${resolved.matches.length===1?'':'es'} for “${esc(mobile)}”</span>`;
     $("userSearchStats").innerHTML=`<div class="profile-match-list">${resolved.matches.slice(0,8).map(m=>`<button type="button" onclick="openProfileForPhone(${jsArg(m.calls[0].from)},'search')">${esc(maskPhone(m.calls[0].from))} <span>${m.calls.length} call${m.calls.length===1?'':'s'}</span></button>`).join('')}</div>`;
     $("userSearchTimeline").innerHTML="";
-    const note=$("profileSourceNote");if(note)note.textContent="More than one lead shares those digits. Select a match or enter more of the number.";
+    const note=$("profileSourceNote");if(note)note.textContent="Select the exact lead. Partial mobile searches never open a profile automatically.";
     revealUserProfile("search");return;
   }
   if(!userCalls.length){
+    window.__profileCalls=[];
+    const pexp=$("profileExport");if(pexp)pexp.style.display='none';
+    const pledger=$("profileLedger");if(pledger)pledger.style.display='none';
     $("userSearchResult").style.display="block";
     $("userSearchPhone").innerHTML=`<span style="color:var(--muted);font-size:13px">No calls found for "${esc(mobile)}"</span>`;
     $("userSearchStats").innerHTML="";
@@ -916,7 +935,9 @@ function searchUserByMobile(mobile, source="search"){
   const note=$("profileSourceNote");
   if(note){
     const label=source==="callback"?"Opened from Requested callbacks":source==="ledger"?"Opened from the Call ledger":source==="priority"?"Opened from Priority contacts":source==="repeat"?"Opened from Repeat engagement":source==="brief"?"Opened from the Executive summary":"Opened from mobile search";
-    const scope=useActiveSummary
+    const scope=scopedCalls
+      ?`The overview matches this Call ledger scope (${summary.total} of ${userCalls.length} calls). Full call history is available below.`
+      :useActiveSummary
       ?`The overview matches the selected dashboard view (${summary.total} of ${userCalls.length} calls). Full call history is available below.`
       :'The overview and timeline show full call history.';
     note.textContent=label+`. ${scope} Active dashboard scope: ${activeFilterScopeLabel()}.`;
@@ -994,13 +1015,14 @@ function handleDrawerCardKey(event){
   }
 }
 
-function openProfileForPhone(phone,source='search',el=null){
+function openProfileForPhone(phone,source='search',el=null,summaryScopeRows=null){
   if(el)markProfileSource(el);
   const raw=String(phone||'').trim();
   if(!raw)return;
+  clearTimeout(searchTimer);searchGeneration++;
   const search=$('searchMobile');
   if(search)search.value=maskPhone(raw);
-  searchUserByMobile(raw,source);
+  searchUserByMobile(raw,source,summaryScopeRows);
 }
 
 // KPI drill-downs can include unsuccessful outbound attempts from ALL_DIALS. Those attempts do
@@ -1014,7 +1036,7 @@ function openRecordProfile(record,source='drilldown'){
   for(const phone of candidates){
     const resolved=resolveLeadSearch(phone);
     if(resolved.calls.length){
-      openProfileForPhone(resolved.calls[0].from,source);
+      openProfileForPhone(resolved.calls[0].from,source,null,source==='ledger'?(LEDGER_SCOPE?.rows||RECORDS):null);
       return;
     }
   }
@@ -3467,11 +3489,12 @@ function invalidateLedgerRepeatCache(){
   LEDGER_REPEAT_CACHE_LENGTH=-1;
 }
 function ledgerPhoneKey(r){
-  const prepared=String(r?.leadKey||'');
-  if(prepared&&prepared.length>=6)return prepared;
-  const c=classifyPhone(r?.from);
+  // `leadKey` is retained from import for compatibility, but may preserve the source's
+  // formatting (10-digit India mobile vs 91-prefixed). Always canonicalize it before grouping.
+  const candidate=String(r?.leadKey||r?.from||'');
+  const c=classifyPhone(candidate);
   const normalized=String((c.cc||"")+(c.national||"")).replace(/\D/g,"");
-  const raw=String(r?.from||"").replace(/\D/g,"");
+  const raw=candidate.replace(/\D/g,"");
   const key=normalized || raw;
   // Do not group blank/weak/unknown phone values as serial callers.
   // Short keys create false repeat groups and can make the ledger feel broken.
@@ -3683,8 +3706,8 @@ function renderExplorer(resetLimit){
       <div style="text-align:right;font-size:10px;color:var(--muted);white-space:nowrap">
         <div style="color:${tempCol};font-weight:600;font-size:11px">${esc(r.leadTemp||"—")}</div>
         <div>${formatDuration(r.dur)}</div>
-        <div style="color:var(--navy);font-weight:800">Cost ₹${billedCost} · ${billedMins} billed min${billedMins===1?'':'s'}</div>
-        <div style="color:var(--gold);font-weight:850">Lead total ₹${leadCost}</div>
+        <div style="color:var(--navy);font-weight:800">This call · ₹${billedCost} · ${billedMins} billed min${billedMins===1?'':'s'}</div>
+        <div style="color:var(--gold);font-weight:850">Lead total in this view · ₹${leadCost}</div>
         <div>Conf ${Math.round(r.conf)}%</div>
         <div style="color:var(--faint)">${formatCallTime(r)}</div>
       </div>
@@ -3697,7 +3720,7 @@ function renderExplorer(resetLimit){
 
 function explorerOpen(phone){
   const search=$("searchMobile"); if(search)search.value=maskPhone(phone);
-  searchUserByMobile(phone,"ledger");
+  openProfileForPhone(phone,"ledger",null,LEDGER_SCOPE?.rows||RECORDS);
 }
 
 function exportExplorer(){
