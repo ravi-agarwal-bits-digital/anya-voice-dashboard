@@ -392,6 +392,13 @@ assert.equal(context.resolveLeadSearch('99999-99999', searchRows).calls.length, 
 assert.equal(context.resolveLeadSearch('+91 88888 88888', searchRows).calls.length, 1, 'Phone search must support country-code input');
 assert.equal(context.resolveLeadSearch('+918368330337', [...searchRows, { from: '+918071436002', ts: 4 }]).calls.length, 0, 'A full mobile lookup must never fall back to another lead');
 assert(context.resolveLeadSearch('9999', searchRows).ambiguous, 'Partial mobile searches must require an explicit lead choice');
+const mixedIndiaPhoneRows=[
+  { from:'917668373476', leadKey:'917668373476', ts:2, d:'2026-07-10', direction:'inbound', status:'completed', dur:60 },
+  { from:'7668373476', leadKey:'7668373476', ts:1, d:'2026-07-09', direction:'outbound', status:'completed', dur:60 }
+];
+assert.equal(context.resolveLeadSearch('917668373476', mixedIndiaPhoneRows).calls.length, 2, 'Country-code variants of one Indian mobile must resolve to one profile');
+assert.equal(context.resolveLeadSearch('917668373476', mixedIndiaPhoneRows).matches.length, 1, 'Country-code variants must not create duplicate match choices');
+assert.equal(Object.keys(context.groupByPhone(mixedIndiaPhoneRows)).length, 1, 'Priority and repeat cards must group Indian phone-format variants as one lead');
 assert.equal(context.percentOf(2, 5), 40, 'Applicable count percentages changed');
 assert(context.metricDefinition('Enquiries').includes('Call-ID'), 'Enquiry definition must document final Call-ID grain');
 

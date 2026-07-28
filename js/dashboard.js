@@ -3489,11 +3489,12 @@ function invalidateLedgerRepeatCache(){
   LEDGER_REPEAT_CACHE_LENGTH=-1;
 }
 function ledgerPhoneKey(r){
-  const prepared=String(r?.leadKey||'');
-  if(prepared&&prepared.length>=6)return prepared;
-  const c=classifyPhone(r?.from);
+  // `leadKey` is retained from import for compatibility, but may preserve the source's
+  // formatting (10-digit India mobile vs 91-prefixed). Always canonicalize it before grouping.
+  const candidate=String(r?.leadKey||r?.from||'');
+  const c=classifyPhone(candidate);
   const normalized=String((c.cc||"")+(c.national||"")).replace(/\D/g,"");
-  const raw=String(r?.from||"").replace(/\D/g,"");
+  const raw=candidate.replace(/\D/g,"");
   const key=normalized || raw;
   // Do not group blank/weak/unknown phone values as serial callers.
   // Short keys create false repeat groups and can make the ledger feel broken.
