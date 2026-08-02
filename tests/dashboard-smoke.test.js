@@ -308,7 +308,7 @@ assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be m
 assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
 assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard render must not target the removed KPI strip');
 assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);'), 'Management readout and bundle runway must render with the top essentials');
-assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"') && html.includes('Anya Voice Usage &amp; Balance'), 'Anya Voice Usage & Balance section is missing');
+assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"') && html.includes('Anya Usage &amp; Runway'), 'Anya Usage & Runway section is missing');
 assert(scripts[1].includes('data/voice_billing_plan.enc'), 'Encrypted billing plan path is missing');
 assert(html.includes('id="callPaceSummary"') && html.includes('Dialer pace &amp; vendor capacity evidence'), 'Visible vendor capacity evidence panel is missing');
 assert(!html.includes('id="concKpis"'), 'Hidden legacy concurrency panel must not remain duplicated');

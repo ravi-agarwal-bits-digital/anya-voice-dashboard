@@ -631,7 +631,7 @@ async function publishBillingPlan(){
     const verify=await fetch(`${url}?ref=${encodeURIComponent(commitSha)}&t=${Date.now()}`,{cache:'no-store',headers:{...headers,Accept:'application/vnd.github.raw+json'}});
     if(!verify.ok||!equalBytes(new Uint8Array(await verify.arrayBuffer()),encrypted))throw Error('Published billing-plan verification failed. Review the latest repository commit.');
     await saveBillingPlanDraft({planStart:plan.startDate,planEnd:plan.endDate,includedMinutes:plan.includedMinutes,commitmentRupees:plan.commitmentRupees,overageRate:plan.overageRate,openingUsedMinutes:plan.openingUsedMinutes,concurrentChannels:plan.concurrentChannels||''});
-    show('planStatus','Encrypted billing plan published. Refresh the dashboard to view Anya Voice Usage & Balance.','ok');
+    show('planStatus','Encrypted billing plan published. Refresh the dashboard to view Anya Usage & Runway.','ok');
     $("planConfirm").checked=false;
   }catch(e){show('planStatus',e.message||String(e),'err');}
   finally{$("planPublishBtn").disabled=!$("planConfirm").checked;}
