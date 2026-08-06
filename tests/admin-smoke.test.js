@@ -100,7 +100,7 @@ const context = {
 };
 vm.createContext(context);
 scripts.forEach(script => vm.runInContext(script, context));
-vm.runInContext(`globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,maxInputBytes,csvWorkerTimeout,gzipBytes,gunzipBytes,validationSheetName,readBillingPlanForm,billingPlanFormValues,fillBillingPlanForm,saveBillingPlanDraft,restoreBillingPlanForm};`, context);
+vm.runInContext(`globalThis.__adminTest={validateRows,encryptBytes,decryptBytes,equalBytes,publish,sha256Bytes,isSupportedExport,shouldCompressExport,maxInputBytes,maxPublishBytes:()=>MAX_PUBLISH_BYTES,csvWorkerTimeout,gzipBytes,gunzipBytes,validationSheetName,readBillingPlanForm,billingPlanFormValues,fillBillingPlanForm,saveBillingPlanDraft,restoreBillingPlanForm};`, context);
 
 const required = ['Created At (IST)', 'Call ID', 'Direction', 'Status', 'From', 'To', 'Duration (s)', 'Messages', 'Full Transcript'];
 const baseRow = {
@@ -121,9 +121,10 @@ assert(context.__adminTest.isSupportedExport('voice_analytics.csv'), 'CSV export
 assert(!context.__adminTest.isSupportedExport('voice_analytics.txt'), 'Unsupported exports should be rejected');
 assert(context.__adminTest.shouldCompressExport('voice_analytics.csv'), 'CSV exports should be compressed before publishing');
 assert(!context.__adminTest.shouldCompressExport('voice_analytics.xlsx'), 'Excel exports must retain their existing publish format');
-assert.equal(context.__adminTest.maxInputBytes('voice_analytics.csv'), 200 * 1024 * 1024, 'CSV uploads must support the temporary 200 MB ceiling');
+assert.equal(context.__adminTest.maxInputBytes('voice_analytics.csv'), 500 * 1024 * 1024, 'CSV uploads must support the temporary 500 MB ceiling');
 assert.equal(context.__adminTest.maxInputBytes('voice_analytics.xlsx'), 90 * 1024 * 1024, 'Excel uploads must retain the safer 90 MB ceiling');
-assert(context.__adminTest.csvWorkerTimeout(200 * 1024 * 1024) >= context.__adminTest.csvWorkerTimeout(90 * 1024 * 1024), 'CSV worker timeout must scale for larger files');
+assert.equal(context.__adminTest.maxPublishBytes(), 90 * 1024 * 1024, 'Compressed publishing must retain a headroom-aware 90 MB ceiling');
+assert(context.__adminTest.csvWorkerTimeout(500 * 1024 * 1024) >= context.__adminTest.csvWorkerTimeout(90 * 1024 * 1024), 'CSV worker timeout must scale for larger files');
 const csv = '\uFEFFCreated At (IST),Call ID,Direction,Status,From,To,Duration (s),Messages,Full Transcript\n"10 Jul 2026, 10:30:00 AM IST",csv-1,outbound,completed,918071436001,919999999999,30,4,"First line\nSecond line"\n"10 Jul 2026, 10:35:00 AM IST",csv-2,outbound,completed,918071436001,918888888888,45,5,"Second call"';
 const csvWorkbook = XLSX.read(Buffer.from(csv), { type: 'buffer', cellDates: true });
 const csvSheetName = context.__adminTest.validationSheetName(csvWorkbook, 'voice_analytics.csv');
