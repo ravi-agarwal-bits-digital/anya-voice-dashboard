@@ -39,7 +39,8 @@ for (const id of [
   'loginGate', 'dashboardContent', 'reportView', 'filterBar', 'directionSwitch',
   'campaignFilter', 'campaignFilterSearch', 'campaignLeaderboardSearch', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-overview',
   'resetAllFilters', 'metricDefinitions',
-  'kpiPanelLedger', 'profileLedger', 'publicationFreshness'
+  'kpiPanelLedger', 'profileLedger', 'publicationFreshness',
+  'inboundSourcePanel', 'inboundSourceSummary', 'inboundSourceEvidence', 'inboundSourceExport'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
 }
@@ -88,7 +89,7 @@ vm.createContext(context);
 scripts.forEach(script => vm.runInContext(script, context));
 
 for (const fn of [
-  'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'dedupeRowsByCallId',
+  'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'annotateInboundAttribution', 'inboundSourceRowsInView', 'inboundAttributionExportFields', 'paintInboundSource', 'exportInboundSourceCSV', 'dedupeRowsByCallId',
   'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'formatTalkDuration', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
@@ -118,6 +119,27 @@ assert.equal(context.normalizeDirection('OUTBOUND'), 'outbound');
 assert.equal(context.normalizeDirection('incoming call'), 'inbound');
 assert.equal(context.resolveLeadPhone({ From: '918071436001', To: '919999999999' }, 'outbound'), '919999999999');
 assert.equal(context.resolveLeadPhone({ From: '918888888888', To: '918062912051' }, 'inbound'), '918888888888');
+const attributionRows=[
+  {callId:'out-failed',from:'919999999999',direction:'outbound',ts:100000,d:'1970-01-02',h:3,m:46,status:'failed',dur:0,campaign:'Campaign A'},
+  {callId:'in-return',from:'+91 99999 99999',direction:'inbound',ts:100000+6*60*60,d:'1970-01-02',h:9,m:46,status:'completed',dur:30},
+  {callId:'in-direct',from:'918888888888',direction:'inbound',ts:100000+6*60*60,d:'1970-01-02',h:9,m:46,status:'completed',dur:30},
+  {callId:'out-old',from:'918888888888',direction:'outbound',ts:100000-25*60*60,d:'1970-01-01',h:2,m:46,status:'completed',dur:30,campaign:'Old campaign'},
+  {callId:'in-unattributed',from:'',direction:'inbound',ts:100000+7*60*60,d:'1970-01-02',h:10,m:46,status:'completed',dur:30}
+];
+context.annotateInboundAttribution(attributionRows);
+assert.equal(attributionRows[1].inboundSource,'return','A same-number inbound after a failed outbound must be attributed as return inbound');
+assert.equal(attributionRows[1].inboundAttribution.priorOutboundAttempts,1,'Return inbound must count preceding outbound attempts in the 24-hour window');
+assert.equal(attributionRows[1].inboundAttribution.matchedOutboundCampaign,'Campaign A','Return inbound must retain matched outbound campaign evidence');
+assert.equal(attributionRows[2].inboundSource,'direct','Inbound without a preceding same-number outbound in 24 hours must remain direct');
+assert.equal(attributionRows[3].inboundSource,'not_inbound','Outbound rows must not be classified as inbound');
+assert.equal(attributionRows[4].inboundSource,'unattributed','Inbound with no usable phone must remain unattributed');
+assert.equal(context.inboundAttributionExportFields(attributionRows[1])[0],'Return after outbound','Inbound audit export must expose the source classification');
+assert.equal(context.inboundAttributionExportFields(attributionRows[1])[1],24,'Inbound audit export must document the 24-hour window');
+context.__attributionRows=attributionRows;
+vm.runInContext("ALL_RECORDS_BACKUP=__attributionRows;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';", context);
+context.paintInboundSource();
+assert(getElement('inboundSourceSummary').innerHTML.includes('Direct inbound')&&getElement('inboundSourceSummary').innerHTML.includes('Return inbound')&&getElement('inboundSourceSummary').innerHTML.includes('Unattributed inbound'),'Inbound source mix must render all three factual buckets');
+assert(getElement('inboundSourceEvidence').innerHTML.includes('Campaign A')&&getElement('inboundSourceEvidence').innerHTML.includes('Previous outbound'),'Return inbound evidence must show the matched outbound proof');
 assert.equal(context.fullPhone("'919999999999"), '+919999999999', 'Excel text markers must not leak into phone values');
 assert.equal(context.istHourFromTs(0),5,'Concurrency hour bucketing must use IST rather than the browser timezone');
 const paceStats=context.concurrencyStats([
@@ -461,6 +483,7 @@ assert.equal(vm.runInContext('LEDGER_SCOPE.rows.length', context), 1, 'Dial-only
 assert.equal(vm.runInContext('LEDGER_SCOPE.title', context), 'Selected dial record', 'Dial-only ledger fallback title changed');
 const scopedCSV = context.recordsToCSV([scopeRecord], 'Inbound · Campaign A · 10 Jul 2026 to 10 Jul 2026');
 assert(scopedCSV.startsWith('Call ID,Lead Phone,Country,Call Direction,Call Date (IST),Call Time (IST)'), 'Drawer CSV header changed');
+assert(scopedCSV.includes('Inbound Source,Attribution Window (hours),Matched Outbound Time (IST),Hours Since Outbound,Prior Outbound Attempts,Matched Outbound Campaign'), 'Standard CSV must include inbound source evidence columns');
 assert(scopedCSV.includes("'+919999999999,India,Inbound"), 'Drawer CSV record mapping changed');
 assert(!scopedCSV.includes('Inbound · Campaign A'), 'Drawer CSV must not repeat filter scope metadata');
 assert(scopedCSV.includes('Actual Call Duration,Billable Minutes,Call Cost (Rs)') && scopedCSV.includes('Requested Callback Time'), 'Standard CSV must use human-readable duration and callback labels');

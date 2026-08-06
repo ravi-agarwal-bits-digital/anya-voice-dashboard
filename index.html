@@ -230,6 +230,11 @@
       <div class="cap" style="margin-top:-8px;margin-bottom:4px">Same metrics, both directions, side by side &mdash; always shown regardless of the view toggle above.</div>
       <div style="overflow-x:auto" id="dirCompareTable"></div>
     </div>
+    <div class="panel inbound-source-panel" id="inboundSourcePanel" style="margin-top:16px">
+      <div class="inbound-source-head"><div><h4>Inbound source mix</h4><div class="cap">Separates direct inbound from return inbound using the same normalized phone number and a fixed <b>24-hour lookback</b>. Return inbound means an outbound attempt was found first; it is evidence of timing, not proof of causality.</div></div><button id="inboundSourceExport" onclick="exportInboundSourceCSV()" class="section-export-btn">Export source audit</button></div>
+      <div id="inboundSourceSummary" class="inbound-source-summary"></div>
+      <div id="inboundSourceEvidence"></div>
+    </div>
     <div class="panel call-pace-panel" style="margin-top:16px">
       <div class="call-pace-head"><div><h4>Dialer pace &amp; vendor capacity evidence</h4><div class="cap">Shows what the export can prove: workload launched, simultaneous connected calls achieved, and any explicit throttling or channel-limit failures.</div></div><span id="callPaceScope" class="opf-scope-note"></span></div>
       <div id="callPaceSummary"></div>
