@@ -102,6 +102,8 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 
 const C={teal:"#247858",green:"#247858",amber:"#b08a3c",coral:"#a33a3a",gold:"#b08a3c",blue:"#3f6ba8",hot:"#a33a3a",warm:"#b7791f",cold:"#7b8798",indigo:"#5b47d6",line:"#dce4ef",muted:"#667085",cream:"#0b1f3a"};
+const INBOUND_ATTRIBUTION_WINDOW_HOURS=24;
+const INBOUND_ATTRIBUTION_WINDOW_SECONDS=INBOUND_ATTRIBUTION_WINDOW_HOURS*60*60;
 // Keep this view switch aligned with the body class in index.html. The hidden sections and
 // dynamic fields remain in the source so the reduced view can be restored without rebuilding logic.
 function reducedAiViewEnabled(){
@@ -265,6 +267,7 @@ async function loadPreparedCache(version){
 
 function setPreparedRecords(allCalls,sourceName){
   ALL_DIALS=allCalls;
+  annotateInboundAttribution(ALL_DIALS);
   RECORDS=allCalls.filter(isConversationRecord);
   RECORDS_DATE_INDEX=new Map();
   for(const record of RECORDS){
@@ -276,6 +279,69 @@ function setPreparedRecords(allCalls,sourceName){
   SRC=sourceName;
   BILLING_CYCLE_CACHE=BILLING_CYCLE_CACHE_PLAN=null;
   CAMPAIGN_OPTIONS_CACHE=CAMPAIGN_OPTIONS_SIG=null;
+}
+
+// Inbound source attribution is deterministic and phone-number based. It looks back through every
+// dial (including failed/initiated outbound attempts) so a return inbound is not missed merely
+// because the outbound call never connected. The 24-hour window follows the current retry policy
+// without turning an old outbound call into a false causal explanation.
+function annotateInboundAttribution(allCalls){
+  const outboundByPhone=new Map();
+  (allCalls||[]).forEach(r=>{
+    r.inboundSource=normalizeDirection(r.direction)==='inbound'?'unattributed':'not_inbound';
+    r.inboundAttribution=null;
+    if(normalizeDirection(r.direction)!=='outbound')return;
+    const key=ledgerPhoneKey(r),ts=Number(r.ts);
+    if(!key||!Number.isFinite(ts)||ts<=0)return;
+    if(!outboundByPhone.has(key))outboundByPhone.set(key,[]);
+    outboundByPhone.get(key).push(r);
+  });
+  outboundByPhone.forEach(list=>list.sort((a,b)=>Number(a.ts)-Number(b.ts)));
+  const lowerBound=(list,target)=>{
+    let lo=0,hi=list.length;
+    while(lo<hi){const mid=(lo+hi)>>1;if(Number(list[mid].ts)<target)lo=mid+1;else hi=mid;}
+    return lo;
+  };
+  const upperBound=(list,target)=>{
+    let lo=0,hi=list.length;
+    while(lo<hi){const mid=(lo+hi)>>1;if(Number(list[mid].ts)<=target)lo=mid+1;else hi=mid;}
+    return lo;
+  };
+  (allCalls||[]).forEach(r=>{
+    if(normalizeDirection(r.direction)!=='inbound')return;
+    const key=ledgerPhoneKey(r),inboundTs=Number(r.ts);
+    if(!key||!Number.isFinite(inboundTs)||inboundTs<=0){
+      r.inboundSource='unattributed';
+      r.inboundAttribution={windowHours:INBOUND_ATTRIBUTION_WINDOW_HOURS,reason:'missing_or_invalid_phone'};
+      return;
+    }
+    const list=outboundByPhone.get(key)||[];
+    const start=lowerBound(list,inboundTs-INBOUND_ATTRIBUTION_WINDOW_SECONDS);
+    const end=upperBound(list,inboundTs-1)-1;
+    if(end<start){
+      r.inboundSource='direct';
+      r.inboundAttribution={windowHours:INBOUND_ATTRIBUTION_WINDOW_HOURS,priorOutboundAttempts:0,matchedCampaigns:[]};
+      return;
+    }
+    const matched=list[end];
+    const campaigns=[...new Set(list.slice(start,end+1).map(call=>String(call.campaign||'').trim()).filter(Boolean))];
+    r.inboundSource='return';
+    r.inboundAttribution={
+      windowHours:INBOUND_ATTRIBUTION_WINDOW_HOURS,
+      matchedOutboundCallId:String(matched.callId||''),
+      matchedOutboundTs:Number(matched.ts),
+      matchedOutboundDate:matched.d||'',
+      matchedOutboundHour:Number(matched.h)||0,
+      matchedOutboundMinute:Number(matched.m)||0,
+      matchedOutboundStatus:String(matched.status||''),
+      matchedOutboundDisposition:normalizeDisposition(matched),
+      matchedOutboundCampaign:String(matched.campaign||'').trim(),
+      matchedCampaigns:campaigns,
+      hoursSinceOutbound:Math.max(0,(inboundTs-Number(matched.ts))/3600),
+      priorOutboundAttempts:end-start+1
+    };
+  });
+  return allCalls;
 }
 
 function autoLoadLatestExcel(){
@@ -762,7 +828,7 @@ function applyFilters(){
   runPaintChunks(generation,[
     ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
     ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
-    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintCallPace(),
+    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
     ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
     ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}}
@@ -1717,6 +1783,81 @@ function paintDirectionCompare(){
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Inbound)',${r[3]},window.__dirIn)">${esc(r[1])}</td>`+
       `<td style="cursor:pointer" onclick="openFilteredPanel('${esc(r[0])} (Outbound)',${r[3]},window.__dirOut)">${esc(r[2])}</td></tr>`).join('')}`+
     `</tbody></table>`;
+}
+
+function inboundSourceLabel(source){
+  if(source==='direct')return 'Direct inbound';
+  if(source==='return')return 'Return inbound';
+  if(source==='unattributed')return 'Unattributed inbound';
+  return 'Not an inbound call';
+}
+function inboundSourceRowsInView(){
+  return ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
+}
+function inboundAttributionCampaignLabel(attribution){
+  const campaigns=Array.isArray(attribution?.matchedCampaigns)?attribution.matchedCampaigns.filter(Boolean):[];
+  if(campaigns.length>1)return 'Multiple campaigns';
+  return campaigns[0]||attribution?.matchedOutboundCampaign||'No campaign recorded';
+}
+function inboundAttributionOutboundRecord(attribution){
+  if(!attribution?.matchedOutboundDate)return null;
+  return{d:attribution.matchedOutboundDate,h:Number(attribution.matchedOutboundHour)||0,m:Number(attribution.matchedOutboundMinute)||0,ts:Number(attribution.matchedOutboundTs)||0};
+}
+function inboundAttributionGapLabel(attribution){
+  const hours=Number(attribution?.hoursSinceOutbound);
+  if(!Number.isFinite(hours))return '—';
+  return hours<0.1?'< 0.1h':`${hours.toFixed(1)}h`;
+}
+function paintInboundSource(){
+  const panel=$('inboundSourcePanel'),summary=$('inboundSourceSummary'),evidence=$('inboundSourceEvidence');
+  if(!panel||!summary||!evidence)return;
+  if(SELECTED_DIRECTION==='outbound'){
+    panel.style.display='none';
+    return;
+  }
+  panel.style.display='';
+  const rows=inboundSourceRowsInView();
+  window.__inboundSourceRows=rows;
+  updateExportButton('inboundSourceExport','Export source audit',rows.length,'inbound calls');
+  if(!rows.length){
+    summary.innerHTML='';
+    evidence.innerHTML=emptyViewHtml('No inbound calls in this range.');
+    return;
+  }
+  const counts={direct:0,return:0,unattributed:0};
+  rows.forEach(r=>{const key=counts[r.inboundSource]!=null?r.inboundSource:'unattributed';counts[key]++;});
+  const cards=[
+    ['direct','Direct inbound','No outbound attempt to this number in the previous 24 hours.','direct'],
+    ['return','Return inbound','Inbound after an outbound attempt to the same number within 24 hours.','return'],
+    ['unattributed','Unattributed inbound','Phone missing or unusable, so no safe number match was possible.','unattributed']
+  ];
+  summary.innerHTML=cards.map(([key,label,note,cls])=>{
+    const pct=percentOf(counts[key],rows.length);
+    return`<article class="inbound-source-card ${cls}" role="button" tabindex="0" onclick="openFilteredPanel(${jsArg(label)},r=>r.inboundSource==='${key}',window.__inboundSourceRows)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+      <div class="inbound-source-card-head"><span>${esc(label)}</span><b>${pct}%</b></div>
+      <strong>${counts[key].toLocaleString('en-IN')}</strong>
+      <small>${esc(note)}</small>
+      <em>Open calls</em>
+    </article>`;
+  }).join('');
+  const returned=rows.filter(r=>r.inboundSource==='return').sort((a,b)=>b.ts-a.ts);
+  if(!returned.length){
+    evidence.innerHTML=`<div class="inbound-source-empty"><b>No return inbound matches in this range.</b><span>Direct inbound is not proof of organic demand; it only means no same-number outbound attempt was found within the fixed 24-hour window.</span></div>`;
+    return;
+  }
+  const shown=returned.slice(0,8),hidden=returned.length-shown.length;
+  evidence.innerHTML=`<div class="inbound-source-evidence-head"><div><b>Return inbound evidence</b><span>Exact normalized phone match · latest outbound attempt within 24 hours</span></div><strong>${returned.length.toLocaleString('en-IN')} matched</strong></div>`+
+    `<div class="inbound-source-evidence-list">${shown.map(r=>{
+      const a=r.inboundAttribution||{},outbound=inboundAttributionOutboundRecord(a);
+      const outboundTime=outbound?formatCallTime(outbound):'Time unavailable';
+      const campaign=inboundAttributionCampaignLabel(a);
+      const status=titleCaseSmall(a.matchedOutboundStatus||a.matchedOutboundDisposition||'Not specified');
+      return`<article class="inbound-source-evidence-row" role="button" tabindex="0" onclick="openProfileForPhone(${jsArg(r.from)},'inbound-attribution',this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+        <div class="inbound-source-evidence-main"><div><b>${esc(maskPhone(r.from))}</b>${copyPhoneButton(r.from)}</div><span>Inbound ${esc(formatCallTime(r))}</span></div>
+        <div class="inbound-source-evidence-details"><span><b>After</b> ${esc(inboundAttributionGapLabel(a))}</span><span><b>Previous outbound</b> ${esc(outboundTime)}</span><span><b>Attempts in window</b> ${Number(a.priorOutboundAttempts||0)}</span><span><b>Outbound result</b> ${esc(status)}</span><span><b>Campaign</b> ${esc(campaign)}</span></div>
+      </article>`;
+    }).join('')}</div>`+
+    (hidden>0?`<div class="inbound-source-more">Showing latest 8 of ${returned.length.toLocaleString('en-IN')} return inbound matches. Export the source audit for the complete list.</div>`:'');
 }
 function paintDispositionBreak(obRecs){
   const el=$('dispositionBreak');
@@ -3007,7 +3148,7 @@ function boot(){
   runPaintChunks(generation,[
     ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
     ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
-    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintCallPace(),
+    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
     ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
     ()=>paintAnomalyCards(),()=>renderExplorer(true),
     ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
@@ -3078,20 +3219,33 @@ function activeFilterScopeLabel(){return currentViewDescription();}
 function drawerScopeHtml(label='Dashboard scope'){
   return `<div class="drawer-scope-note"><b>${esc(label)}:</b> ${esc(activeFilterScopeLabel())}</div>`;
 }
+function inboundAttributionExportFields(r){
+  if(normalizeDirection(r?.direction)!=='inbound')return['Not inbound','','','','',''];
+  const a=r.inboundAttribution||{};
+  if(r.inboundSource==='return'){
+    const matched=inboundAttributionOutboundRecord(a);
+    const hours=Number(a.hoursSinceOutbound);
+    return['Return after outbound',a.windowHours||INBOUND_ATTRIBUTION_WINDOW_HOURS,matched?formatCallTime(matched):'',Number.isFinite(hours)?hours.toFixed(1):'',a.priorOutboundAttempts||0,inboundAttributionCampaignLabel(a)];
+  }
+  if(r.inboundSource==='direct')return['Direct',a.windowHours||INBOUND_ATTRIBUTION_WINDOW_HOURS,'','',0,''];
+  if(r.inboundSource==='unattributed')return['Unattributed',a.windowHours||INBOUND_ATTRIBUTION_WINDOW_HOURS,'','','',''];
+  return['Not assessed','','','','',''];
+}
 // Standard record -> CSV used by every drawer/section export, so a downloaded file always has the
 // same columns wherever it came from. Phone is full (unmasked) for actioning the lead.
 function recordsToCSV(rows,_scopeLabel=activeFilterScopeLabel(),leadCostScopeRows=rows){
   const costScope=leadCostScopeRows&&leadCostScopeRows.length?leadCostScopeRows:rows;
   const leadCosts=ledgerLeadCostMap(costScope);
   const leadMixes=ledgerLeadDirectionMixMap(costScope);
-  let csv='Call ID,Lead Phone,Country,Call Direction,Call Date (IST),Call Time (IST),Campaign,Call Status,Actual Call Duration,Billable Minutes,Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs),Lead Tier,Callback Requested,Requested Callback Time,Topic,Failure Reason,Call Summary\n';
+  let csv='Call ID,Lead Phone,Country,Call Direction,Call Date (IST),Call Time (IST),Campaign,Call Status,Actual Call Duration,Billable Minutes,Call Cost (Rs),Lead Total Calls,Lead Inbound Calls,Lead Outbound Calls,Lead Other Calls,Lead Total Cost (Rs),Lead Tier,Callback Requested,Requested Callback Time,Topic,Failure Reason,Call Summary,Inbound Source,Attribution Window (hours),Matched Outbound Time (IST),Hours Since Outbound,Prior Outbound Attempts,Matched Outbound Campaign\n';
   rows.forEach(r=>{
     const c=classifyPhone(r.from);
     const leadMix=leadMixes.get(ledgerPhoneKey(r))||{inbound:0,outbound:0,unknown:1};
     const leadTotalCalls=leadMix.inbound+leadMix.outbound+leadMix.unknown;
+    const attribution=inboundAttributionExportFields(r);
     csv+=[escCSVText(r.callId),escCSVText(fullPhone(r.from)),escCSV(c.country),escCSV(directionLabel(r.direction)),escCSV(r.d),escCSV(formatCallTime(r)),
       escCSV(r.campaign),escCSV(titleCaseSmall(r.status||'Not specified')),escCSV(formatDuration(r.dur)),isBillableRecord(r)?billedMinutes(r.dur):0,ledgerCallCost(r),leadTotalCalls,leadMix.inbound,leadMix.outbound,leadMix.unknown,leadCosts.get(ledgerPhoneKey(r))||ledgerCallCost(r),escCSV(r.leadTemp),r.callback?'Yes':'No',
-      escCSV(r.cbPreferred||'Not specified'),escCSV(r.intent),escCSV(r.failReason),escCSV(r.summary)].join(',')+'\n';
+      escCSV(r.cbPreferred||'Not specified'),escCSV(r.intent),escCSV(r.failReason),escCSV(r.summary),...attribution.map(escCSV)].join(',')+'\n';
   });
   return csv;
 }
@@ -3961,4 +4115,9 @@ function exportCallbacks(){
   const cbs=visibleCallbackGroups(RECORDS).flatMap(([,calls])=>calls).sort((a,b)=>b.ts-a.ts);
   if(!cbs.length){alert("No requested callbacks match the active filters.");return;}
   downloadCSV(csvFilename('requested-callbacks','calls',callbackFilenameExtra()),recordsToCSV(cbs,callbackExportScope(),RECORDS));
+}
+function exportInboundSourceCSV(){
+  const rows=window.__inboundSourceRows||inboundSourceRowsInView();
+  if(!rows.length){alert('No inbound calls match the current filters.');return;}
+  downloadCSV(csvFilename('inbound-source-audit','calls'),recordsToCSV(rows,activeFilterScopeLabel(),RECORDS));
 }
