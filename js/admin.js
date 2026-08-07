@@ -24,7 +24,8 @@ const { validateRows } = AdminValidation;
 const MAX_CSV_BYTES = 500 * 1024 * 1024,
   MAX_WORKBOOK_BYTES = 90 * 1024 * 1024,
   LARGE_CSV_BYTES = 150 * 1024 * 1024,
-  MAX_PUBLISH_BYTES = 90 * 1024 * 1024;
+  MAX_PUBLISH_BYTES = 35 * 1024 * 1024,
+  MAX_LOCAL_GIT_PUBLISH_BYTES = 95 * 1024 * 1024;
 let ADMIN_PASSPHRASE = "",
   selectedFile = null,
   validation = null,
@@ -368,6 +369,7 @@ function clearValidation() {
   $("publishConfirm").checked = false;
   $("publishConfirm").disabled = true;
   $("publishBtn").disabled = true;
+  $("downloadPackageBtn").disabled = true;
   hide("publishStatus");
 }
 function clearFile() {
@@ -489,6 +491,7 @@ function renderReview(v) {
   $("publishConfirm").disabled = !ok;
   $("publishConfirm").checked = false;
   $("publishBtn").disabled = true;
+  $("downloadPackageBtn").disabled = true;
   show(
     "validationStatus",
     ok
@@ -654,6 +657,87 @@ async function readPublicationMetadata(s, headers) {
     throw Error("Duplicate-publication metadata is invalid. Repair it before publishing.");
   }
 }
+function publishControlsDisabled() {
+  return !validation || validation.errors.length || !$("publishConfirm").checked;
+}
+function downloadBytes(bytes, name, type) {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function prepareEncryptedExport(maxBytes) {
+  let sourceBytes =
+    validation.bytes || new Uint8Array(await selectedFile.arrayBuffer());
+  const plaintextSha256 = await sha256Bytes(sourceBytes);
+  let publishBytes = shouldCompressExport(selectedFile?.name)
+    ? (show("publishStatus", "Compressing CSV locally…", "info"), await gzipBytes(sourceBytes))
+    : sourceBytes;
+  if (shouldCompressExport(selectedFile?.name)) sourceBytes = null;
+  if (publishBytes.byteLength > maxBytes)
+    throw Error(
+      `This export is ${formatSize(publishBytes.byteLength)} after preparation. It exceeds this publishing route’s ${formatSize(maxBytes)} encrypted-data limit. Move this growing dataset to the planned object storage or database service.`,
+    );
+  show("publishStatus", "Encrypting export locally…", "info");
+  const encrypted = await encryptBytes(publishBytes, ADMIN_PASSPHRASE, DATA_MAGIC);
+  if (encrypted.byteLength > maxBytes)
+    throw Error(
+      `The encrypted export is ${formatSize(encrypted.byteLength)}, exceeding this publishing route’s ${formatSize(maxBytes)} limit. Move this growing dataset to the planned object storage or database service.`,
+    );
+  show("publishStatus", "Running encryption self-test…", "info");
+  let decrypted = await decryptBytes(encrypted, ADMIN_PASSPHRASE, DATA_MAGIC);
+  let roundTrip = shouldCompressExport(selectedFile?.name)
+    ? await gunzipBytes(decrypted)
+    : decrypted;
+  if ((await sha256Bytes(roundTrip)) !== plaintextSha256)
+    throw Error("Encryption self-test failed; no package was created.");
+  sourceBytes = null;
+  publishBytes = null;
+  roundTrip = null;
+  decrypted = null;
+  return { encrypted, plaintextSha256 };
+}
+async function downloadEncryptedPackage() {
+  if (publishing || publishControlsDisabled()) return;
+  try {
+    publishing = true;
+    $("publishBtn").disabled = true;
+    $("downloadPackageBtn").disabled = true;
+    const { encrypted, plaintextSha256 } = await prepareEncryptedExport(
+      MAX_LOCAL_GIT_PUBLISH_BYTES,
+    );
+    const encryptedSha256 = await sha256Bytes(encrypted);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const packageMetadata = {
+      packageVersion: 1,
+      dataPath: "data/voice_analytics.xlsx",
+      metadataPath: "data/voice_analytics.xlsx.meta.json",
+      plaintextSha256,
+      encryptedSha256,
+      encryptedBytes: encrypted.byteLength,
+      createdAt: new Date().toISOString(),
+    };
+    downloadBytes(encrypted, `anya-voice-data-${stamp}.enc`, "application/octet-stream");
+    downloadBytes(
+      new TextEncoder().encode(`${JSON.stringify(packageMetadata, null, 2)}\n`),
+      `anya-voice-data-${stamp}.publish.json`,
+      "application/json",
+    );
+    show(
+      "publishStatus",
+      "Encrypted data package downloaded. Keep both downloaded files together, then run the local publisher from a clean clone. The raw CSV and passphrase were not saved in either file.",
+      "ok",
+    );
+  } catch (e) {
+    show("publishStatus", e.message || String(e), "err");
+  } finally {
+    publishing = false;
+    $("publishBtn").disabled = publishControlsDisabled();
+    $("downloadPackageBtn").disabled = publishControlsDisabled();
+  }
+}
 async function publish() {
   if (
     publishing ||
@@ -697,7 +781,7 @@ async function publish() {
     if (shouldCompressExport(selectedFile?.name)) sourceBytes = null;
     if (publishBytes.byteLength > MAX_PUBLISH_BYTES)
       throw Error(
-        `This export is still ${formatSize(publishBytes.byteLength)} after preparation, which is too large for reliable GitHub publishing. Split it into a smaller date range or move to the planned large-data storage service.`,
+        `This export is ${formatSize(publishBytes.byteLength)} after preparation. Direct browser publishing is limited to ${formatSize(MAX_PUBLISH_BYTES)} because GitHub’s API Base64-expands the encrypted file. Use “Download encrypted package” below, then run the local publisher from a clean clone.`,
       );
     show("publishStatus", "Encrypting export locally…", "info");
     const encrypted = await encryptBytes(
@@ -820,8 +904,8 @@ async function publish() {
     show("publishStatus", e.message || String(e), "err");
   } finally {
     publishing = false;
-    $("publishBtn").disabled =
-      !validation || validation.errors.length || !$("publishConfirm").checked;
+    $("publishBtn").disabled = publishControlsDisabled();
+    $("downloadPackageBtn").disabled = publishControlsDisabled();
   }
 }
 function bind() {
@@ -856,10 +940,11 @@ function bind() {
   $("validateBtn").onclick = validateWorkbook;
   $("clearFileBtn").onclick = clearFile;
   $("publishConfirm").onchange = () => {
-    $("publishBtn").disabled =
-      !$("publishConfirm").checked || !validation || validation.errors.length;
+    $("publishBtn").disabled = publishControlsDisabled();
+    $("downloadPackageBtn").disabled = publishControlsDisabled();
   };
   $("publishBtn").onclick = publish;
+  $("downloadPackageBtn").onclick = downloadEncryptedPackage;
   $("planConfirm").onchange=()=>{$("planPublishBtn").disabled=!$("planConfirm").checked;};
   $("planPublishBtn").onclick=publishBillingPlan;
   PLAN_FIELDS.forEach(id=>{$(id).oninput=scheduleBillingPlanDraft;});
