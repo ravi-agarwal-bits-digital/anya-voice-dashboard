@@ -196,14 +196,27 @@ const DATA_FETCH_TIMEOUT_MS=180000;
 const PREPARED_CACHE_DB='anya-dashboard-secure-cache';
 const PREPARED_CACHE_STORE='prepared-records';
 const PREPARED_CACHE_KEY='latest';
+const PREPARED_CACHE_DB_VERSION=2;
+// The encrypted local snapshot is only a reload optimization. Serialising a large cumulative
+// export creates another full in-memory copy after the page looks ready, which can freeze or
+// crash a browser. Keep it deliberately small; the source file remains the source of truth.
+const PREPARED_CACHE_MAX_SOURCE_BYTES=24*1024*1024;
+const PREPARED_CACHE_MAX_RECORDS=50000;
+const PREPARED_CACHE_MAX_CIPHERTEXT_BYTES=64*1024*1024;
 
 function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 function preparedCacheSupported(){return typeof indexedDB!=='undefined'&&typeof crypto!=='undefined'&&!!crypto.subtle;}
 function openPreparedCache(){
   return new Promise((resolve,reject)=>{
     if(!preparedCacheSupported()){reject(new Error('Secure local cache unavailable'));return;}
-    const request=indexedDB.open(PREPARED_CACHE_DB,1);
-    request.onupgradeneeded=()=>request.result.createObjectStore(PREPARED_CACHE_STORE,{keyPath:'key'});
+    const request=indexedDB.open(PREPARED_CACHE_DB,PREPARED_CACHE_DB_VERSION);
+    request.onupgradeneeded=()=>{
+      const db=request.result;
+      // Version 2 intentionally drops snapshots written before the large-data guard existed.
+      // This prevents an existing oversized cache from crashing the very first visit after deploy.
+      if(db.objectStoreNames.contains(PREPARED_CACHE_STORE))request.transaction.objectStore(PREPARED_CACHE_STORE).clear();
+      else db.createObjectStore(PREPARED_CACHE_STORE,{keyPath:'key'});
+    };
     request.onsuccess=()=>resolve(request.result);
     request.onerror=()=>reject(request.error||new Error('Could not open secure local cache'));
   });
@@ -233,8 +246,13 @@ async function preparedCacheDelete(){
   });}finally{db.close();}
 }
 
-async function savePreparedCache(version,allCalls){
-  if(!version||!Array.isArray(allCalls)||!preparedCacheSupported())return;
+function preparedCacheEligible(allCalls,sourceBytes=0){
+  if(!Array.isArray(allCalls)||allCalls.length>PREPARED_CACHE_MAX_RECORDS)return false;
+  const bytes=Number(sourceBytes||0);
+  return !bytes||bytes<=PREPARED_CACHE_MAX_SOURCE_BYTES;
+}
+async function savePreparedCache(version,allCalls,sourceBytes=0){
+  if(!version||!preparedCacheEligible(allCalls,sourceBytes)||!preparedCacheSupported())return;
   const salt=crypto.getRandomValues(new Uint8Array(16));
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const key=await deriveKey(window.DECRYPT_PASSPHRASE||'',salt,['encrypt']);
@@ -242,9 +260,15 @@ async function savePreparedCache(version,allCalls){
   const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);
   await preparedCacheWrite({key:PREPARED_CACHE_KEY,version,salt,iv,ciphertext,savedAt:Date.now()});
 }
-function schedulePreparedCacheSave(version,allCalls){
+function schedulePreparedCacheSave(version,allCalls,sourceBytes=0){
   if(!version||!Array.isArray(allCalls)||!preparedCacheSupported())return;
-  const save=()=>savePreparedCache(version,allCalls).catch(error=>console.warn('Could not save secure local cache:',error));
+  if(!preparedCacheEligible(allCalls,sourceBytes)){
+    // A stale oversized snapshot is worse than no snapshot: opening and decrypting it can lock up
+    // the tab before the current publication is parsed. Remove it best-effort and load the source.
+    preparedCacheDelete().catch(()=>{});
+    return;
+  }
+  const save=()=>savePreparedCache(version,allCalls,sourceBytes).catch(error=>console.warn('Could not save secure local cache:',error));
   // Let the first dashboard paint and user input win. The encrypted cache is an optimization for
   // subsequent visits and must never delay the first usable frame.
   if(typeof requestIdleCallback==='function')requestIdleCallback(save,{timeout:8000});
@@ -255,6 +279,10 @@ async function loadPreparedCache(version){
   try{
     const cached=await preparedCacheRead();
     if(!cached||cached.version!==version||!cached.salt||!cached.iv||!cached.ciphertext)return null;
+    if(Number(cached.ciphertext.byteLength||0)>PREPARED_CACHE_MAX_CIPHERTEXT_BYTES){
+      preparedCacheDelete().catch(()=>{});
+      return null;
+    }
     const key=await deriveKey(window.DECRYPT_PASSPHRASE||'',new Uint8Array(cached.salt),['decrypt']);
     const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(cached.iv)},key,cached.ciphertext);
     const allCalls=JSON.parse(new TextDecoder().decode(plain));
@@ -404,10 +432,11 @@ function autoLoadLatestExcel(){
       setDashboardLoadingMessage('Reading workbook…');
       const meta=await Promise.race([metadataPromise,delay(0).then(()=>null)]);
       const sourceName=isCsvExportBytes(fileBytes)?'voice_analytics.csv':'voice_analytics.xlsx';
+      const sourceByteLength=fileBytes.byteLength;
       const allCalls=await processWorkbookBytes(fileBytes,sourceName,meta?.plaintextSha256||meta?.dataCommitSha||'');
       // Metadata may arrive after a first load. Do not make the dashboard wait just to save an
       // optional cache; once it does arrive, persist the already-normalized records securely.
-      if(!meta&&allCalls)metadataPromise.then(fresh=>schedulePreparedCacheSave(fresh?.plaintextSha256||fresh?.dataCommitSha||'',allCalls)).catch(()=>{});
+      if(!meta&&allCalls)metadataPromise.then(fresh=>schedulePreparedCacheSave(fresh?.plaintextSha256||fresh?.dataCommitSha||'',allCalls,sourceByteLength)).catch(()=>{});
     }).catch(err=>{
       const timedOut=err && err.name==='AbortError';
       setDashboardPlaceholder(
@@ -594,7 +623,7 @@ async function processWorkbookBytes(bytes,sourceName,cacheVersion=''){
         return;
       }
       boot();
-      schedulePreparedCacheSave(cacheVersion,allCalls);
+      schedulePreparedCacheSave(cacheVersion,allCalls,bytes.byteLength);
       return allCalls;
     }
     setDashboardLoadingMessage('Parsing workbook…');
@@ -612,7 +641,7 @@ async function processWorkbookBytes(bytes,sourceName,cacheVersion=''){
     boot();
     // Saving is deliberately best-effort and happens after the dashboard is usable. The cache is
     // encrypted with the current session passphrase and invalidated by each new publication fingerprint.
-    schedulePreparedCacheSave(cacheVersion,allCalls);
+    schedulePreparedCacheSave(cacheVersion,allCalls,bytes.byteLength);
     return allCalls;
   }catch(err){setDashboardPlaceholder('Could not process data','The Excel file was found, but the dashboard could not process it.<br><br><b>Reason:</b> '+esc(err.message||String(err)));}
 }
@@ -865,6 +894,26 @@ function runPaintChunks(generation, thunks, done){
   };
   requestAnimationFrame(step);
 }
+// The reduced dashboard deliberately hides AI/quality and cadence surfaces. Do not spend CPU
+// calculating them anyway: on a cumulative export that invisible work was enough to make an
+// otherwise simple date filter feel like the page had stopped responding.
+function paintTopEssentials(o){
+  if(!reducedAiViewEnabled()){
+    paintHealth(o);paintTempQual(o);paintConfDist(o);paintConfImpact(o);
+  }
+  paintManagementBrief();paintBundleRunway();paintFunnel(o);paintDurBands(o);
+}
+function deferredPaintTasks(o){
+  const reduced=reducedAiViewEnabled();
+  return [
+    !reduced?()=>paintIntents(o):null,!reduced?()=>paintMsgImpact(o):null,()=>dayChart(o.daily),()=>hourChart(o.hourly),
+    !reduced?()=>paintFrustBreak(o):null,!reduced?()=>paintFrustCost(o):null,()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
+    !reduced?()=>paintBandBars(o):null,()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
+    ()=>paintOutboundPerf(),!reduced?()=>paintOutboundCadence():null,()=>paintCampaignSection(),!reduced?()=>paintIntentQuality(RECORDS):null,
+    !reduced?()=>paintAnomalyCards():null,()=>renderExplorer(true),
+    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn('paintCallbacks error:',e);}}
+  ].filter(Boolean);
+}
 function applyFilters(){
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50; // each filter change starts the callback list capped again (keeps toggles fast)
@@ -901,7 +950,7 @@ function applyFilters(){
   renderHeaderMeta(RECORDS);
   const o=aggregate(RECORDS);
   // Paint the top-of-page essentials synchronously so the filter feels instant...
-  paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintTopEssentials(o);
 
   // Trigger KPI and verdict animations
   document.querySelectorAll('.kpi').forEach(kpi=>{
@@ -916,14 +965,7 @@ function applyFilters(){
   // ...then defer the heavier, mostly below-the-fold sections (outbound sweeps, campaign leaderboard,
   // anomaly decomposition, ledger) to the next frame, so applying a filter doesn't freeze the tab
   // while everything repaints at once.
-  runPaintChunks(generation,[
-    ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
-    ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
-    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
-    ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
-    ()=>paintAnomalyCards(),()=>renderExplorer(true),
-    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}}
-  ],()=>setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120));
+  runPaintChunks(generation,deferredPaintTasks(o),()=>setTimeout(()=>{if(keepManagementSummaryVisible)focusManagementSummary();else syncSidebarActive();},120));
   closeUserSearch();
 }
 
@@ -1801,6 +1843,7 @@ function dispositionCounts(recs){
 // them (date range, campaign, and row count as a data-changed proxy), so the cache self-invalidates
 // the instant any filter or the dataset changes. resetOutboundCaches() clears them on a fresh load.
 let _obViewCache=null,_obViewSig=null,_obDateCache=null,_obDateSig=null;
+const _outboundSequenceCache=new WeakMap();
 function resetOutboundCaches(){
   _obViewCache=_obViewSig=_obDateCache=_obDateSig=null;
   resetCallPaceCache();
@@ -2183,7 +2226,8 @@ function paintOutboundPerf(){
     if(kpiEl)kpiEl.innerHTML=emptyViewHtml('No outbound dials in this range.');
     ['outboundFunnel','unreachableList'].forEach(id=>{if($(id))$(id).innerHTML=emptyViewHtml('No outbound dials in this range.');});
     window.__obRecs=obRecs;
-    paintDispositionBreak(obRecs);paintRedialCurve(obRecs);paintDialHeatmap(obRecs);paintDialTiming(obRecs);
+    paintDispositionBreak(obRecs);paintRedialCurve(obRecs);paintDialHeatmap(obRecs);
+    if(!reducedAiViewEnabled())paintDialTiming(obRecs);
     return;
   }
   const buckets=dispositionCounts(obRecs);
@@ -2218,7 +2262,7 @@ function paintOutboundPerf(){
   paintUnreachableList(unreachable,avgDials);
   paintRedialCurve(obRecs);
   paintDialHeatmap(obRecs);
-  paintDialTiming(obRecs);
+  if(!reducedAiViewEnabled())paintDialTiming(obRecs);
 }
 // Outbound conversion funnel: dials placed -> numbers reached -> connected conversations -> hot leads.
 // Shows exactly where outbound effort leaks on the way to a convertible lead.
@@ -2399,8 +2443,11 @@ function paintCallPace(){
 // ===== OUTBOUND CADENCE & CAPACITY =====
 // Cadence: per outbound number, the ordered attempt sequence -> compliance vs the 3-attempt / 6h / 9-9 rule.
 function outboundNumberSequences(){
-  const byPhone=groupByPhone(outboundRecordsInView());
-  return Object.values(byPhone).map(c=>c.slice().sort((a,b)=>a.ts-b.ts));
+  const records=outboundRecordsInView();
+  if(_outboundSequenceCache.has(records))return _outboundSequenceCache.get(records);
+  const sequences=Object.values(groupByPhone(records)).map(c=>c.slice().sort((a,b)=>a.ts-b.ts));
+  _outboundSequenceCache.set(records,sequences);
+  return sequences;
 }
 function paintCadenceCompliance(){
   const el=$('cadenceScorecard'),note=$('cadenceNote');
@@ -3269,20 +3316,14 @@ function boot(){
   const o=aggregate(RECORDS);
   // Paint the top essentials first so the dashboard appears fast, then let the heavier sections
   // fill in on the next frame instead of blocking the initial render all at once.
-  paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);paintTempQual(o);paintDurBands(o);paintConfDist(o);paintConfImpact(o);
+  paintTopEssentials(o);
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50;
-  runPaintChunks(generation,[
-    ()=>paintIntents(o),()=>paintMsgImpact(o),()=>dayChart(o.daily),()=>hourChart(o.hourly),
-    ()=>paintFrustBreak(o),()=>paintFrustCost(o),()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
-    ()=>paintBandBars(o),()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
-    ()=>paintOutboundPerf(),()=>paintOutboundCadence(),()=>paintCampaignSection(),()=>paintIntentQuality(RECORDS),
-    ()=>paintAnomalyCards(),()=>renderExplorer(true),
-    ()=>{try{paintCallbacks(RECORDS);}catch(e){console.warn("paintCallbacks error:",e);}},
+  runPaintChunks(generation,deferredPaintTasks(o).concat([
     ()=>{$("foot").innerHTML=reducedAiViewEnabled()
       ?`<b>Methodology.</b> Computed from Voice Export (${o.n} final unique Call-ID records). Operational totals and percentages are computed live from this session's data.`
       :`<b>Methodology.</b> Computed from Voice Export (${o.n} calls). Lead temp = Hot/Warm/Cold classification. Anya Conf. = model's confidence scores. Need Score = customer intent/urgency. Review Band = Green/Amber/Red QA classification. Intent mined from transcript. All conversions/percentages computed live from this session's data.`;}
-  ],()=>setTimeout(()=>syncSidebarActive(),120));
+  ]),()=>setTimeout(()=>syncSidebarActive(),120));
 }
 
 function paintHealth(o){
