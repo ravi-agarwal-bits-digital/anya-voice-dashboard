@@ -138,6 +138,7 @@ const $=id=>document.getElementById(id);
 let RECORDS=[], SRC="", BILLING_PLAN=null;
 let BILLING_CYCLE_CACHE=null,BILLING_CYCLE_CACHE_PLAN=null,CAMPAIGN_OPTIONS_CACHE=null,CAMPAIGN_OPTIONS_SIG=null;
 let RECORDS_DATE_INDEX=new Map(),RECORDS_DATE_INDEX_COUNT=0;
+let ALL_DIALS_DATE_INDEX=new Map(),ALL_DIALS_DATE_INDEX_COUNT=0;
 let CAMPAIGN_FILTER_QUERY='',CAMPAIGN_LEADERBOARD_QUERY='';
 
 const dz=$("dropZone"),fi=$("fileInput");
@@ -267,6 +268,7 @@ async function loadPreparedCache(version){
 
 function setPreparedRecords(allCalls,sourceName){
   ALL_DIALS=allCalls;
+  FILTER_SNAPSHOT=null;
   annotateInboundAttribution(ALL_DIALS);
   RECORDS=allCalls.filter(isConversationRecord);
   RECORDS_DATE_INDEX=new Map();
@@ -276,6 +278,13 @@ function setPreparedRecords(allCalls,sourceName){
     RECORDS_DATE_INDEX.get(record.d).push(record);
   }
   RECORDS_DATE_INDEX_COUNT=RECORDS.length;
+  ALL_DIALS_DATE_INDEX=new Map();
+  for(const record of ALL_DIALS){
+    if(!record.d)continue;
+    if(!ALL_DIALS_DATE_INDEX.has(record.d))ALL_DIALS_DATE_INDEX.set(record.d,[]);
+    ALL_DIALS_DATE_INDEX.get(record.d).push(record);
+  }
+  ALL_DIALS_DATE_INDEX_COUNT=ALL_DIALS.length;
   SRC=sourceName;
   BILLING_CYCLE_CACHE=BILLING_CYCLE_CACHE_PLAN=null;
   CAMPAIGN_OPTIONS_CACHE=CAMPAIGN_OPTIONS_SIG=null;
@@ -619,6 +628,94 @@ let ALL_RECORDS_BACKUP=[];
 let ALL_DIALS=[]; // dial-level universe: every unique call incl. failed/initiated dials. Used only by the
                   // outbound connectivity analysis. RECORDS stays the conversation universe (completed calls)
                   // so lead/quality/intent metrics are never diluted by non-connecting dials.
+let FILTER_SNAPSHOT=null;
+
+function normalizedDirectionBucket(record){
+  const direction=normalizeDirection(record?.direction);
+  return direction==='inbound'||direction==='outbound'?direction:'other';
+}
+function filterSnapshotSignature(){
+  const from=$('filterFromDate')?$('filterFromDate').value:'';
+  const to=$('filterToDate')?$('filterToDate').value:'';
+  return [from,to,SELECTED_DIRECTION,campaignSelectionKey(),ALL_RECORDS_BACKUP.length,ALL_DIALS.length].join('|');
+}
+function activeFilterSnapshot(){
+  return FILTER_SNAPSHOT&&FILTER_SNAPSHOT.signature===filterSnapshotSignature()?FILTER_SNAPSHOT:null;
+}
+function indexedRowsInRange(index,indexCount,source,fromDate,toDate){
+  if(!fromDate&&!toDate)return source;
+  if(!index.size||indexCount!==source.length)return source;
+  const rows=[];
+  index.forEach((dateRows,date)=>{
+    if(fromDate&&date<fromDate)return;
+    if(toDate&&date>toDate)return;
+    rows.push(...dateRows);
+  });
+  return rows;
+}
+// Build every shared slice once per global-filter change. The dashboard used to make each section
+// walk the full call universe independently; at 300k+ dials that turns one click into dozens of
+// large scans. These arrays deliberately preserve their former section-specific scopes.
+function buildFilterSnapshot(){
+  const fromDate=$('filterFromDate')?$('filterFromDate').value:'';
+  const toDate=$('filterToDate')?$('filterToDate').value:'';
+  const campaigns=activeCampaigns();
+  const matchesDate=record=>!!record?.d&&(!fromDate||record.d>=fromDate)&&(!toDate||record.d<=toDate);
+  const matchesCampaign=record=>!campaigns.size||campaigns.has((record?.campaign||'').trim());
+  const conversationByDirection={inbound:[],outbound:[],other:[]};
+  const dateConversationByDirection={inbound:[],outbound:[],other:[]};
+  const dialByDirection={inbound:[],outbound:[],other:[]};
+  const snapshot={
+    signature:filterSnapshotSignature(),
+    records:[],
+    conversationsInDate:[],
+    conversationByDirection,
+    dateConversationByDirection,
+    inboundConversations:conversationByDirection.inbound,
+    outboundDials:[],
+    outboundDialsInDate:[],
+    dialByDirection,
+    campaignGroups:new Map(),
+    campaignOptions:[]
+  };
+  const conversationSource=indexedRowsInRange(RECORDS_DATE_INDEX,RECORDS_DATE_INDEX_COUNT,ALL_RECORDS_BACKUP,fromDate,toDate);
+  const dialSource=indexedRowsInRange(ALL_DIALS_DATE_INDEX,ALL_DIALS_DATE_INDEX_COUNT,ALL_DIALS,fromDate,toDate);
+  for(const record of conversationSource){
+    if(!matchesDate(record))continue;
+    const bucket=normalizedDirectionBucket(record);
+    snapshot.conversationsInDate.push(record);
+    dateConversationByDirection[bucket].push(record);
+    if(!matchesCampaign(record))continue;
+    conversationByDirection[bucket].push(record);
+    if(SELECTED_DIRECTION==='all'||bucket===SELECTED_DIRECTION)snapshot.records.push(record);
+  }
+  const campaignContacts=new Map();
+  for(const dial of dialSource){
+    if(!matchesDate(dial))continue;
+    const bucket=normalizedDirectionBucket(dial);
+    if(bucket==='outbound'){
+      snapshot.outboundDialsInDate.push(dial);
+      const campaign=(dial.campaign||'').trim();
+      if(campaign){
+        if(!campaignContacts.has(campaign))campaignContacts.set(campaign,new Set());
+        const phone=ledgerPhoneKey(dial);
+        if(phone)campaignContacts.get(campaign).add(phone);
+      }
+    }
+    if(!matchesCampaign(dial))continue;
+    dialByDirection[bucket].push(dial);
+    if(bucket==='outbound')snapshot.outboundDials.push(dial);
+  }
+  for(const dial of snapshot.outboundDialsInDate){
+    const campaign=(dial.campaign||'').trim()||'(no campaign)';
+    if(!snapshot.campaignGroups.has(campaign))snapshot.campaignGroups.set(campaign,[]);
+    snapshot.campaignGroups.get(campaign).push(dial);
+  }
+  snapshot.campaignOptions=[...campaignContacts].map(([name,contacts])=>({name,count:contacts.size}))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+  FILTER_SNAPSHOT=snapshot;
+  return snapshot;
+}
 let SELECTED_DIRECTION="all";
 let SELECTED_CAMPAIGN="all"; // 'all' or an exact Campaign name; scopes the whole dashboard when set
 let SELECTED_CAMPAIGNS=new Set();
@@ -794,14 +891,8 @@ function applyFilters(){
     $("selectedDateRange").style.display="none";
   }
 
-  FILTERED_RECORDS=ALL_RECORDS_BACKUP.filter(r=>{
-    if(!r.d) return false;
-    if(fromDate && r.d<fromDate) return false;
-    if(toDate && r.d>toDate) return false;
-    if(SELECTED_DIRECTION!=='all' && normalizeDirection(r.direction)!==SELECTED_DIRECTION) return false;
-    if(!recordMatchesCampaign(r)) return false;
-    return true;
-  });
+  const snapshot=buildFilterSnapshot();
+  FILTERED_RECORDS=snapshot.records;
 
   RECORDS=FILTERED_RECORDS;
   populateCampaignFilter();
@@ -1580,7 +1671,11 @@ function populateCampaignFilter(){
   if(!filter||!options)return;
   const fromDate=$('filterFromDate')?$('filterFromDate').value:'',toDate=$('filterToDate')?$('filterToDate').value:'';
   const signature=`${fromDate}|${toDate}|${ALL_DIALS.length}`;
-  if(CAMPAIGN_OPTIONS_SIG!==signature||!CAMPAIGN_OPTIONS_CACHE){
+  const snapshot=activeFilterSnapshot();
+  if(snapshot){
+    CAMPAIGN_OPTIONS_SIG=signature;
+    CAMPAIGN_OPTIONS_CACHE=snapshot.campaignOptions;
+  }else if(CAMPAIGN_OPTIONS_SIG!==signature||!CAMPAIGN_OPTIONS_CACHE){
     const contacts={};
     ALL_DIALS.forEach(r=>{
       const campaign=(r.campaign||'').trim(),phone=ledgerPhoneKey(r);
@@ -1640,10 +1735,11 @@ function emptyViewHtml(message){
 function paintDirectionSplit(){
   const el=$('directionSummary');
   if(!el)return;
-  const base=ALL_RECORDS_BACKUP.filter(recordMatchesDate);
+  const snapshot=activeFilterSnapshot();
+  const base=snapshot?snapshot.conversationsInDate:ALL_RECORDS_BACKUP.filter(recordMatchesDate);
   const n=base.length||0;
-  const inbound=base.filter(r=>normalizeDirection(r.direction)==='inbound').length;
-  const outbound=base.filter(r=>normalizeDirection(r.direction)==='outbound').length;
+  const inbound=snapshot?snapshot.dateConversationByDirection.inbound.length:base.filter(r=>normalizeDirection(r.direction)==='inbound').length;
+  const outbound=snapshot?snapshot.dateConversationByDirection.outbound.length:base.filter(r=>normalizeDirection(r.direction)==='outbound').length;
   const outboundAttempts=outboundRecordsInView().length;
   const unknown=Math.max(0,n-inbound-outbound);
   // In the combined view, the comparison table below already owns the direction split.
@@ -1713,6 +1809,8 @@ function _dateSig(){const f=$('filterFromDate')?$('filterFromDate').value:'';con
 function outboundRecordsInView(){
   // Dial-level: pulls from ALL_DIALS (incl. failed/initiated) so connect rate is real, not the ~100%
   // you'd get from completed-only conversation records. Respects the campaign filter too.
+  const snapshot=activeFilterSnapshot();
+  if(snapshot)return snapshot.outboundDials;
   const sig=_dateSig()+'|'+campaignSelectionKey();
   if(_obViewSig===sig && _obViewCache)return _obViewCache;
   _obViewSig=sig;
@@ -1722,6 +1820,8 @@ function outboundRecordsInView(){
 // Date-scoped outbound dials, ignoring the campaign filter — the campaign leaderboard shows every
 // campaign side by side regardless of the active campaign selection.
 function outboundDialsInDateView(){
+  const snapshot=activeFilterSnapshot();
+  if(snapshot)return snapshot.outboundDialsInDate;
   const sig=_dateSig();
   if(_obDateSig===sig && _obDateCache)return _obDateCache;
   _obDateSig=sig;
@@ -1731,7 +1831,8 @@ function outboundDialsInDateView(){
 function fmtDurLabel(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return `${m}m ${String(s).padStart(2,'0')}s`;}
 function fmtDayLabel(iso){if(!iso)return '—';const p=String(iso).split('-');if(p.length<3)return String(iso);const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return `${p[2]} ${mon[Number(p[1])-1]||''}`;}
 function directionStats(dir){
-  const recs=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)===dir);
+  const snapshot=activeFilterSnapshot();
+  const recs=snapshot?(snapshot.conversationByDirection[dir]||[]):ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r) && recordMatchesCampaign(r) && normalizeDirection(r.direction)===dir);
   const n=recs.length;
   const connected=recs.filter(r=>normalizeDisposition(r)==='connected').length;
   const hot=recs.filter(r=>r.leadTemp==='Hot').length;
@@ -1760,8 +1861,9 @@ function paintDirectionCompare(){
   if(!el)return;
   const ib=directionStats('inbound'), ob=directionStats('outbound');
   const obAttempts=outboundRecordsInView().length;
-  window.__dirIn=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
-  window.__dirOut=ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound');
+  const snapshot=activeFilterSnapshot();
+  window.__dirIn=snapshot?snapshot.conversationByDirection.inbound:ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
+  window.__dirOut=snapshot?snapshot.conversationByDirection.outbound:ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='outbound');
   if(!ib.n || !ob.n){el.innerHTML=emptyViewHtml('Not enough data in both directions to compare for this range.');return;}
   // Dial mechanics intentionally live in Outbound results. This table is only for a clean
   // inbound/outbound conversation comparison, avoiding repeated reach and failure metrics.
@@ -1792,7 +1894,8 @@ function inboundSourceLabel(source){
   return 'Not an inbound call';
 }
 function inboundSourceRowsInView(){
-  return ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
+  const snapshot=activeFilterSnapshot();
+  return snapshot?snapshot.inboundConversations:ALL_RECORDS_BACKUP.filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)==='inbound');
 }
 function inboundAttributionCampaignLabel(attribution){
   const campaigns=Array.isArray(attribution?.matchedCampaigns)?attribution.matchedCampaigns.filter(Boolean):[];
@@ -2259,6 +2362,8 @@ function capacityEvidenceVerdict(stats,limit){
   return{tone:'inconclusive',title:`${demonstrated.toLocaleString('en-IN')} of ${configured.toLocaleString('en-IN')} channels demonstrated`,detail:`The remaining ${unevidenced.toLocaleString('en-IN')} channels are not yet evidenced—not disproved. A controlled burst or ringing-duration logs are needed to verify the full commitment.`,demonstrated,unevidenced,failures};
 }
 function callPaceRecords(direction){
+  const snapshot=activeFilterSnapshot();
+  if(snapshot)return snapshot.dialByDirection[direction]||[];
   return (ALL_DIALS||[]).filter(r=>recordMatchesDate(r)&&recordMatchesCampaign(r)&&normalizeDirection(r.direction)===direction);
 }
 let _callPaceCache=null,_callPaceSig=null;
@@ -2386,6 +2491,8 @@ function paintOutboundCadence(){
 // Per-campaign outbound stats over the current DATE view (not scoped to the campaign filter -- the
 // leaderboard's whole point is to compare every campaign side by side).
 function campaignStats(){
+  const snapshot=activeFilterSnapshot();
+  if(snapshot)return [...snapshot.campaignGroups].map(([campaign,dials])=>campaignStatsForRows(campaign,dials));
   const dials=outboundDialsInDateView();
   const byC={};
   dials.forEach(r=>{
@@ -2410,6 +2517,20 @@ function campaignStats(){
       // Hot % = share of REACHED numbers that ever went hot (per-lead conversion, not per-call).
       hotPct:reached?Math.round(numbersHot/reached*100):0,numbers:numsTotal,reached,numbersHot};
   });
+}
+function campaignStatsForRows(campaign,dials){
+  const numbers={};let connected=0;
+  dials.forEach(r=>{
+    const conn=normalizeDisposition(r)==='connected';
+    if(conn)connected++;
+    const number=r.from||'?';
+    const state=numbers[number]||(numbers[number]={reached:false,hot:false});
+    if(conn){state.reached=true;if(r.leadTemp==='Hot')state.hot=true;}
+  });
+  const leads=Object.values(numbers),reached=leads.filter(state=>state.reached).length,numbersHot=leads.filter(state=>state.hot).length;
+  return {campaign,dials:dials.length,connectPct:dials.length?Math.round(connected/dials.length*100):0,
+    reachPct:leads.length?Math.round(reached/leads.length*100):0,
+    hotPct:reached?Math.round(numbersHot/reached*100):0,numbers:leads.length,reached,numbersHot};
 }
 // Campaigns stay alphabetical for predictable lookup until a manager explicitly ranks a metric.
 let CAMPAIGN_LEADERBOARD_SORT={key:'campaign',direction:'asc'};
@@ -2451,8 +2572,13 @@ function paintCampaignLeaderboard(){
     el.innerHTML=emptyViewHtml(message);return;
   }
   window.__campaignRows={};
+  const snapshot=activeFilterSnapshot();
   const base=outboundDialsInDateView();
-  rows.forEach(x=>{window.__campaignRows[x.campaign]=base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);});
+  rows.forEach(x=>{
+    window.__campaignRows[x.campaign]=snapshot
+      ?snapshot.campaignGroups.get(x.campaign)||[]
+      :base.filter(r=>((r.campaign||'').trim()||'(no campaign)')===x.campaign);
+  });
   const maxHot=Math.max(...rows.map(r=>r.hotPct),1);
   el.innerHTML=`<div class="campaign-leaderboard-scroll"><table class="iq-table"><thead><tr>${campaignLeaderboardHeader('campaign','Campaign')}${campaignLeaderboardHeader('dials','Dials',true)}${campaignLeaderboardHeader('connectPct','Connect %',true)}${campaignLeaderboardHeader('reachPct','Reach %',true)}${campaignLeaderboardHeader('hotPct','Hot %',true)}</tr></thead><tbody>`+
     rows.map(x=>`<tr class="iq-row" onclick="openFilteredPanel(${jsArg(`${x.campaign} (outbound)`)},()=>true,window.__campaignRows[${jsArg(x.campaign)}])">`+
@@ -2523,7 +2649,8 @@ function paintCampaignSection(){
 function paintAnomalyCards(){
   const el=$('anomalyCards');
   if(!el)return;
-  const recs=ALL_RECORDS_BACKUP.filter(recordMatchesCurrentFilters).filter(r=>r.d).slice().sort((a,b)=>a.d<b.d?-1:1);
+  const snapshot=activeFilterSnapshot();
+  const recs=(snapshot?snapshot.records:ALL_RECORDS_BACKUP.filter(recordMatchesCurrentFilters)).filter(r=>r.d).slice().sort((a,b)=>a.d<b.d?-1:1);
   const days=[...new Set(recs.map(r=>r.d))];
   if(recs.length<40 || days.length<4){
     el.innerHTML=`<div class="anom stable" style="grid-column:1/-1"><span class="anom-tag">Not enough history</span><h3>Widen the date range to surface trends</h3><div class="anom-why">Auto-attribution needs at least a few days of calls on each side to compare. Select a broader range (or All) and this fills in.</div></div>`;

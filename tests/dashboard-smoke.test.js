@@ -89,8 +89,8 @@ vm.createContext(context);
 scripts.forEach(script => vm.runInContext(script, context));
 
 for (const fn of [
-  'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'annotateInboundAttribution', 'inboundSourceRowsInView', 'inboundAttributionExportFields', 'paintInboundSource', 'exportInboundSourceCSV', 'dedupeRowsByCallId',
-  'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField',
+  'parseDateFull', 'normalizeDirection', 'resolveLeadPhone', 'annotateInboundAttribution', 'inboundSourceRowsInView', 'inboundAttributionExportFields', 'paintInboundSource', 'exportInboundSourceCSV', 'dedupeRowsByCallId', 'buildFilterSnapshot', 'activeFilterSnapshot',
+  'chooseWorkbookRows', 'rowToRecord', 'aggregate', 'applyFilters', 'pickField', 'setPreparedRecords',
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'formatTalkDuration', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'resetCallPaceCache', 'callPaceAnalysis', 'paintCallPace',
@@ -99,7 +99,7 @@ for (const fn of [
   'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
   'isGzipData', 'unpackPublishedData',
   'copyPhoneButton', 'copyPhone',
-  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'closeCampaignFilterOnOutsidePress', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch',
+  'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'closeCampaignFilterOnOutsidePress', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch', 'campaignStats',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
   'resolveLeadSearch', 'searchUserByMobile', 'profileSummaryStats', 'percentOf', 'outboundGlanceStats', 'exportUnreachableCSV', 'paintDialHeatmap',
   'openPanelInLedger', 'openProfileInLedger', 'openRecordProfile', 'clearLedgerScope', 'resetAllFilters', 'sortCampaignLeaderboardRows', 'setCampaignLeaderboardSort', 'campaignLeaderboardHeader',
@@ -668,6 +668,32 @@ const performanceElapsed = performance.now() - performanceStart;
 assert.equal(performanceDeduped.length, 4000, 'Large-workbook Call-ID deduplication changed');
 assert.equal(performanceAggregate.n, 4000, 'Large-workbook aggregation changed');
 assert(performanceElapsed < 5000, `Large-workbook core processing is too slow (${Math.round(performanceElapsed)}ms)`);
+
+// A growing cumulative export must build all shared filter slices once, rather than re-scan the
+// 400k dial universe separately for every dashboard section and every campaign row.
+const filterPerfDials = Array.from({ length: 400000 }, (_, index) => ({
+  d: `2026-${String(Math.floor(index % 400 / 28) + 1).padStart(2, '0')}-${String(index % 28 + 1).padStart(2, '0')}`,
+  direction: index % 25 === 0 ? 'inbound' : 'outbound',
+  campaign: `Campaign ${String(index % 80).padStart(2, '0')}`,
+  from: `91${String(6000000000 + index % 120000).padStart(10, '0')}`,
+  status: index % 5 === 0 ? 'completed' : 'failed',
+  leadTemp: index % 11 === 0 ? 'Hot' : 'Warm', ts: index + 1, dur: index % 5 === 0 ? 45 : 0,
+  h: 10, m: 0, callback: false, conf: 80, need: 70, band: 'Green'
+}));
+context.__filterPerfDials = filterPerfDials;
+vm.runInContext("setPreparedRecords(__filterPerfDials,'synthetic performance data');ALL_RECORDS_BACKUP=[...RECORDS];FILTER_SNAPSHOT=null;SELECTED_DIRECTION='all';SELECTED_CAMPAIGN='all';SELECTED_CAMPAIGNS.clear();$('filterFromDate').value='2026-01-01';$('filterToDate').value='2026-01-28';", context);
+const filterPerfStart = performance.now();
+const filterSnapshot = context.buildFilterSnapshot();
+const filterPerfElapsed = performance.now() - filterPerfStart;
+assert.equal(filterSnapshot.records.length, 6000, 'Shared filter snapshot lost completed conversations');
+assert.equal(filterSnapshot.outboundDialsInDate.length, 26000, 'Shared filter snapshot lost outbound dials');
+assert.equal(filterSnapshot.campaignGroups.size, 26, 'Campaign groups must be built in one shared pass');
+assert.equal(context.campaignStats().length, 26, 'Campaign stats must reuse the shared campaign groups');
+assert(filterPerfElapsed < 8000, `400k-call filter snapshot is too slow (${Math.round(filterPerfElapsed)}ms)`);
+vm.runInContext("SELECTED_DIRECTION='outbound';SELECTED_CAMPAIGNS=new Set(['Campaign 05']);FILTER_SNAPSHOT=null;", context);
+const scopedSnapshot = context.buildFilterSnapshot();
+assert.equal(scopedSnapshot.records.length, 1000, 'Direction and campaign filtering must retain matching conversations');
+assert.equal(scopedSnapshot.outboundDials.length, 1000, 'Outbound snapshot must retain matching dial attempts');
 
 const overview = XLSX.utils.aoa_to_sheet([['Overview'], ['Not call data']]);
 const voiceRows = [
