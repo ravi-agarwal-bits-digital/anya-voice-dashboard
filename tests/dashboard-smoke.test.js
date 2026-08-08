@@ -97,7 +97,7 @@ for (const fn of [
   'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
-  'isGzipData', 'unpackPublishedData',
+  'isGzipData', 'unpackPublishedData', 'preparedCacheEligible',
   'copyPhoneButton', 'copyPhone',
   'activeCampaigns', 'toggleCampaignOption', 'applyCampaignFilter', 'populateCampaignFilter', 'closeCampaignFilterOnOutsidePress', 'recordMatchesCampaign', 'campaignMatchesSearch', 'setCampaignFilterSearch', 'setCampaignLeaderboardSearch', 'campaignStats',
   'chooseWorkbookCandidates', 'setDashboardLoadingMessage', 'processWorkbookBytes',
@@ -110,6 +110,14 @@ for (const fn of [
 assert.equal(typeof context[fn], 'function', `Missing dashboard function: ${fn}`);
 }
 assert(context.copyPhoneButton('919111111111').includes('aria-label="Copy mobile number"'), 'Phone copy control must remain accessible');
+assert(context.preparedCacheEligible(Array.from({length: 50000}), 24 * 1024 * 1024), 'Small prepared snapshots must remain eligible for faster reloads');
+assert(!context.preparedCacheEligible(Array.from({length: 50001}), 1024), 'Large record sets must not create a second browser-memory snapshot');
+assert(!context.preparedCacheEligible([], 24 * 1024 * 1024 + 1), 'Large source files must not create a second browser-memory snapshot');
+const originalReducedViewContains=document.body.classList.contains;
+document.body.classList.contains=name=>name==='dashboard-reduced-ai-view';
+const reducedTaskSource=context.deferredPaintTasks({}).map(task=>String(task)).join('\n');
+document.body.classList.contains=originalReducedViewContains;
+assert(!reducedTaskSource.includes('paintOutboundCadence') && !reducedTaskSource.includes('paintAnomalyCards') && !reducedTaskSource.includes('paintIntentQuality'), 'Reduced view must not schedule hidden heavy sections');
 assert(context.copyPhoneButton('919111111111').includes('<svg'), 'Phone copy control must use a compact icon');
 assert(!context.copyPhoneButton('919111111111').includes('>Copy</button>'), 'Phone copy control must not use the long Copy text label');
 assert.equal(context.formatTalkDuration(6144),'1h 42m','Priority talk time must use a human-readable duration');
@@ -329,7 +337,9 @@ assert(html.includes('Management readout'), 'Management readout must sit in the 
 assert(!html.includes('id="sec-brief"'), 'Standalone executive summary must be merged into overview');
 assert(!html.includes('id="kpis"'), 'Duplicate KPI strip must be merged into the management readout');
 assert(!scripts[1].includes('paintHealth(o);paintKPIs(o);'), 'Initial dashboard render must not target the removed KPI strip');
-assert(scripts[1].includes('paintHealth(o);paintManagementBrief();paintBundleRunway();paintFunnel(o);'), 'Management readout and bundle runway must render with the top essentials');
+assert(scripts[1].includes('function paintTopEssentials(o){') && scripts[1].includes('paintManagementBrief();paintBundleRunway();paintFunnel(o);paintDurBands(o);'), 'Management readout and bundle runway must render with the top essentials');
+assert(scripts[1].includes('function deferredPaintTasks(o){') && scripts[1].includes('!reduced?()=>paintOutboundCadence():null'), 'Hidden reduced-view sections must not be recalculated on every filter change');
+assert(scripts[1].includes('PREPARED_CACHE_MAX_SOURCE_BYTES=24*1024*1024') && scripts[1].includes('PREPARED_CACHE_MAX_RECORDS=50000'), 'Large datasets must not be serialized into a second secure local snapshot');
 assert(html.includes('id="sec-bundle"') && html.includes('id="bundleRunway"') && html.includes('Anya Usage &amp; Runway'), 'Anya Usage & Runway section is missing');
 assert(scripts[1].includes('data/voice_billing_plan.enc'), 'Encrypted billing plan path is missing');
 assert(html.includes('id="callPaceSummary"') && html.includes('Dialer pace &amp; vendor capacity evidence'), 'Visible vendor capacity evidence panel is missing');
