@@ -196,7 +196,7 @@ const DATA_FETCH_TIMEOUT_MS=180000;
 const PREPARED_CACHE_DB='anya-dashboard-secure-cache';
 const PREPARED_CACHE_STORE='prepared-records';
 const PREPARED_CACHE_KEY='latest';
-const PREPARED_CACHE_DB_VERSION=2;
+const PREPARED_CACHE_DB_VERSION=3;
 // The encrypted local snapshot is only a reload optimization. Serialising a large cumulative
 // export creates another full in-memory copy after the page looks ready, which can freeze or
 // crash a browser. Keep it deliberately small; the source file remains the source of truth.
@@ -212,8 +212,8 @@ function openPreparedCache(){
     const request=indexedDB.open(PREPARED_CACHE_DB,PREPARED_CACHE_DB_VERSION);
     request.onupgradeneeded=()=>{
       const db=request.result;
-      // Version 2 intentionally drops snapshots written before the large-data guard existed.
-      // This prevents an existing oversized cache from crashing the very first visit after deploy.
+      // Version 3 intentionally drops snapshots written before compact student-question tags were
+      // added (and retains the v2 large-data guard). Cached records must never show stale analytics.
       if(db.objectStoreNames.contains(PREPARED_CACHE_STORE))request.transaction.objectStore(PREPARED_CACHE_STORE).clear();
       else db.createObjectStore(PREPARED_CACHE_STORE,{keyPath:'key'});
     };
@@ -906,7 +906,7 @@ function paintTopEssentials(o){
 function deferredPaintTasks(o){
   const reduced=reducedAiViewEnabled();
   return [
-    !reduced?()=>paintIntents(o):null,!reduced?()=>paintMsgImpact(o):null,()=>dayChart(o.daily),()=>hourChart(o.hourly),
+    ()=>paintStudentQuestions(RECORDS),!reduced?()=>paintIntents(o):null,!reduced?()=>paintMsgImpact(o):null,()=>dayChart(o.daily),()=>hourChart(o.hourly),
     !reduced?()=>paintFrustBreak(o):null,!reduced?()=>paintFrustCost(o):null,()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
     !reduced?()=>paintBandBars(o):null,()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
     ()=>paintOutboundPerf(),!reduced?()=>paintOutboundCadence():null,()=>paintCampaignSection(),!reduced?()=>paintIntentQuality(RECORDS):null,
@@ -1428,6 +1428,42 @@ function intentOf(t){
   if(/placement|job|career|internship/.test(t))return "Career";
   if(/support|help|issue|problem|not working/.test(t))return "Support";
   return "General";
+}
+
+// Management-facing question taxonomy. These are factual transcript tags, not an AI score:
+// only User/Caller/Customer turns are considered, and one call counts once per canonical question.
+// English, Hindi and common Hinglish/transliterated wording are intentionally covered together.
+const STUDENT_QUESTION_DEFINITIONS=Object.freeze([
+  {id:'admission',label:'How does the admission and application process work?',pattern:/\b(admission|application|apply|registration|enrol|enroll|documents?|deadline|last date)\b|एडमिशन|प्रवेश|आवेदन|अप्लाई|रजिस्ट्रेशन|दस्तावेज/i},
+  {id:'fees',label:'What are the programme fees and payment options?',pattern:/\b(fees?|cost|price|payment|emi|instalments?|installments?|scholarship|discount|refund|education loan)\b|फीस|शुल्क|भुगतान|किस्त|स्कॉलरशिप|लोन/i},
+  {id:'learning_mode',label:'Is the programme online and what attendance is required?',pattern:/\b(online|offline|hybrid|campus|hostel|residential|attendance|classes|weekend|recorded|live sessions?)\b|ऑनलाइन|ऑफलाइन|कैंपस|हॉस्टल|अटेंडेंस|क्लास|वीकेंड|रिकॉर्डेड|लाइव/i},
+  {id:'duration_start',label:'When does the programme start and how long does it run?',pattern:/\b(duration|how long|start date|when.*start|next batch|batch start|semester|timeline|how many (?:years?|months?))\b|अवधि|कितने साल|कितने महीने|कब शुरू|बैच|सेमेस्टर/i},
+  {id:'recognition',label:'Is the degree recognised and what credential is awarded?',pattern:/\b(degree|certificate|certification|recognition|recognised|recognized|ugc|accreditation|accredited|alumni status)\b|डिग्री|सर्टिफिकेट|मान्यता|यूजीसी|एलुमनाई/i},
+  {id:'career',label:'What placement and career support is available?',pattern:/\b(placements?|jobs?|career|internship|salary|package|recruiters?|companies|career support)\b|प्लेसमेंट|नौकरी|करियर|इंटर्नशिप|सैलरी|पैकेज/i},
+  {id:'eligibility',label:'Am I eligible and what qualifications are required?',pattern:/\b(eligib\w*|qualifications?|qualify|criteria|requirements?|prerequisites?|percentage|marks|required qualification)\b|योग्यता|पात्रता|एलिजिबिलिटी|क्वालिफिकेशन|मार्क्स|प्रतिशत/i},
+  {id:'assessment',label:'How are exams, assignments and assessments conducted?',pattern:/\b(exams?|examination|assessments?|quiz|assignments?|grading|proctor|evaluation)\b|एग्जाम|परीक्षा|असाइनमेंट|असेसमेंट|क्विज|ग्रेडिंग/i},
+  {id:'curriculum',label:'What subjects and specialisations are included?',pattern:/\b(curriculum|syllabus|subjects?|modules?|course content|specialisations?|specializations?|electives?)\b|सिलेबस|विषय|करिकुलम|स्पेशलाइजेशन|इलेक्टिव/i},
+  {id:'support',label:'How do I access the portal or get learner support?',pattern:/\b(login|portal|password|account access|technical issue|not working|learner support|student support|helpdesk)\b|लॉगिन|पोर्टल|पासवर्ड|काम नहीं|तकनीकी|सपोर्ट|हेल्पडेस्क/i}
+]);
+const STUDENT_QUESTION_CUE=/(?:\?|\b(?:what|when|where|why|who|which|how|can|could|would|will|is|are|am|do|does|did|tell me|want to know|need to know|please explain|please share|details|information|kya|kaise|kab|kitna|kitni|bata|bataye|jaanna|janna)\b|क्या|कैसे|कब|कितना|कितनी|बताइ|जानना|जानकारी|डिटेल)/i;
+function studentTranscriptTurns(transcript){
+  const turns=[];
+  String(transcript||'').split(/\n+/).forEach(line=>{
+    const match=String(line||'').trim().match(/^(User|Caller|Customer)\s*(?:\[[^\]]*\])?\s*:?(.*)$/i);
+    if(match&&String(match[2]||'').trim())turns.push(String(match[2]).trim());
+  });
+  return turns;
+}
+function extractStudentQuestionTags(transcript){
+  const tags=new Set();
+  for(const turn of studentTranscriptTurns(transcript)){
+    const compact=turn.replace(/\s+/g,' ').trim();
+    const shortDemand=compact.split(/\s+/).filter(Boolean).length<=10;
+    for(const definition of STUDENT_QUESTION_DEFINITIONS){
+      if(definition.pattern.test(compact)&&(shortDemand||STUDENT_QUESTION_CUE.test(compact)))tags.add(definition.id);
+    }
+  }
+  return [...tags];
 }
 
 
@@ -2911,6 +2947,7 @@ function rowToRecord(r){
   const dtStr=pickField(r,['Created At (IST)','Created At','Timestamp','Call Time','Call Date','Date','Started At','Start Time','created_at','createdAt']);
   const dt=parseDateFull(dtStr);
   const trans=String(pickField(r,['Full Transcript','Transcript','Call Transcript','Conversation Transcript','Conversation','Messages','Dialogue'])||'');
+  const studentQuestions=extractStudentQuestionTags(trans);
   const excelSummary=String(pickField(r,['Summary','Call Summary','Conversation Summary','AI Summary','Synopsis'])||'').trim();
   let summary=excelSummary;
   if(!summary){const cleanTrans=trans.replace(/\s+/g,' ').trim();summary=cleanTrans.length>120?cleanTrans.slice(0,120)+'...':cleanTrans;}
@@ -2952,7 +2989,7 @@ function rowToRecord(r){
     failDetail:String(pickField(r,['Failure Detail'])||'').trim(),
     sipCode:String(pickField(r,['SIP / Hangup Code','SIP/Hangup Code','SIP Code','Hangup Code'])||'').trim(),
     hangupCause:String(pickField(r,['Hangup Cause'])||'').trim(),
-    from:leadPhone,leadPhone,leadKey:String(leadPhone||'').replace(/\D/g,''),isIntl:classifyPhone(leadPhone).intl,rawFrom,rawTo,trans
+    from:leadPhone,leadPhone,leadKey:String(leadPhone||'').replace(/\D/g,''),isIntl:classifyPhone(leadPhone).intl,rawFrom,rawTo,trans,studentQuestions
   };
 }
 
@@ -3576,6 +3613,64 @@ function paintIntents(o){
   const sorted=Object.entries(o.intent).filter(d=>d[1]>0).sort((a,b)=>b[1]-a[1]);
   if(!sorted.length){$("intents").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px;font-size:12.5px">No intent data in this range.</div>`;return;}
   $("intents").innerHTML=sorted.map(d=>`<div class="intitem" style="cursor:pointer" onclick="openFilteredPanel('${esc(d[0])} theme',r=>r.intent==='${esc(d[0]).replace(/'/g,"\\'")}')"><span class="in">${esc(d[0])}</span><span class="ct">${d[1]}</span></div>`).join("");
+}
+
+function studentQuestionAnalysis(records=RECORDS,limit=10){
+  const eligible=(records||[]).filter(record=>/^(completed|done)$/i.test(String(record?.status||'').trim()));
+  const groups=new Map(STUDENT_QUESTION_DEFINITIONS.map(definition=>[definition.id,{...definition,calls:[],contacts:new Set(),inbound:0,outbound:0,other:0}]));
+  let callsWithQuestions=0;
+  for(const record of eligible){
+    const tags=Array.isArray(record.studentQuestions)?record.studentQuestions:extractStudentQuestionTags(record.trans);
+    const valid=[...new Set(tags)].filter(tag=>groups.has(tag));
+    if(valid.length)callsWithQuestions++;
+    for(const tag of valid){
+      const group=groups.get(tag),direction=normalizeDirection(record.direction),contact=ledgerPhoneKey(record);
+      group.calls.push(record);
+      if(contact)group.contacts.add(contact);
+      if(direction==='inbound')group.inbound++;
+      else if(direction==='outbound')group.outbound++;
+      else group.other++;
+    }
+  }
+  const rows=[...groups.values()].filter(group=>group.calls.length).sort((a,b)=>b.calls.length-a.calls.length||a.label.localeCompare(b.label)).slice(0,limit)
+    .map((group,index)=>{const{contacts,...summary}=group;return{...summary,rank:index+1,uniqueContacts:contacts.size,sharePct:eligible.length?group.calls.length/eligible.length*100:0};});
+  return{eligibleCalls:eligible.length,callsWithQuestions,recognizedPct:eligible.length?callsWithQuestions/eligible.length*100:0,rows};
+}
+function paintStudentQuestions(records=RECORDS){
+  const el=$('studentQuestions'),summary=$('studentQuestionSummary');
+  if(!el)return;
+  const analysis=studentQuestionAnalysis(records,10);
+  window.__studentQuestionAnalysis=analysis;
+  window.__studentQuestionRows={};window.__studentQuestionSummaryMap={};
+  analysis.rows.forEach(row=>{window.__studentQuestionRows[row.id]=row.calls;window.__studentQuestionSummaryMap[row.id]=row;});
+  updateExportButton('studentQuestionsExport','Export ranked questions',analysis.rows.length,'questions');
+  if(summary){
+    summary.innerHTML=analysis.eligibleCalls
+      ?`<b>${analysis.callsWithQuestions.toLocaleString('en-IN')}</b> of <b>${analysis.eligibleCalls.toLocaleString('en-IN')}</b> completed calls contain at least one recognised student question <span>(${analysis.recognizedPct.toFixed(1)}%)</span>.`
+      :'No completed calls match the selected filters.';
+  }
+  if(!analysis.rows.length){el.innerHTML=emptyViewHtml('No recognised student questions in this view.');return;}
+  const max=Math.max(...analysis.rows.map(row=>row.calls.length),1);
+  el.innerHTML=`<div class="student-question-scroll"><table class="iq-table student-question-table"><thead><tr><th class="student-question-rank">#</th><th>Question students ask</th><th class="num">Calls</th><th class="num">Share</th><th class="student-question-direction">Direction</th></tr></thead><tbody>`+
+    analysis.rows.map(row=>`<tr class="iq-row" onclick="openStudentQuestion(${jsArg(row.id)})" title="Open the completed calls behind this question"><td class="student-question-rank"><span>${row.rank}</span></td><td><b class="student-question-label">${esc(row.label)}</b><div class="student-question-meta">${row.uniqueContacts.toLocaleString('en-IN')} unique contact${row.uniqueContacts===1?'':'s'}</div><div class="student-question-meter"><i style="width:${Math.max(3,row.calls.length/max*100)}%"></i></div></td><td class="num"><b>${row.calls.length.toLocaleString('en-IN')}</b></td><td class="num"><b>${row.sharePct.toFixed(1)}%</b></td><td class="student-question-direction"><span class="student-question-dir inbound">In ${row.inbound.toLocaleString('en-IN')}</span><span class="student-question-dir outbound">Out ${row.outbound.toLocaleString('en-IN')}</span>${row.other?`<span class="student-question-dir">Other ${row.other.toLocaleString('en-IN')}</span>`:''}</td></tr>`).join('')+
+    `</tbody></table></div>`;
+}
+function openStudentQuestion(id){
+  const row=window.__studentQuestionSummaryMap&&window.__studentQuestionSummaryMap[id];
+  if(!row||!row.calls.length)return;
+  const denominator=window.__studentQuestionAnalysis?.eligibleCalls||0;
+  const stats=[['Completed calls',row.calls.length.toLocaleString('en-IN')],['Share of selected completed calls',row.sharePct.toFixed(1)+'%'],['Unique contacts',row.uniqueContacts.toLocaleString('en-IN')],['Direction',`In ${row.inbound.toLocaleString('en-IN')} · Out ${row.outbound.toLocaleString('en-IN')}`]];
+  showKpiPanel(`Student question: ${row.label}`,statsGridHtml(stats)+`<div class="drawer-scope-note"><b>Counting rule:</b> One completed Call ID counts once for this question. ${denominator.toLocaleString('en-IN')} completed calls are in the denominator.</div>`+recordListHtml(row.calls),row.calls);
+}
+function studentQuestionsToCSV(analysis=window.__studentQuestionAnalysis){
+  let csv='Rank,Question Students Ask,Completed Calls,Share of Selected Completed Calls (%),Selected Completed Calls,Unique Contacts,Inbound Calls,Outbound Calls,Other Direction Calls\n';
+  (analysis?.rows||[]).forEach(row=>{csv+=[row.rank,escCSV(row.label),row.calls.length,row.sharePct.toFixed(1),analysis.eligibleCalls,row.uniqueContacts,row.inbound,row.outbound,row.other].join(',')+'\n';});
+  return csv;
+}
+function exportStudentQuestions(){
+  const analysis=window.__studentQuestionAnalysis||studentQuestionAnalysis(RECORDS,10);
+  if(!analysis.rows.length){alert('No recognised student questions match the active filters.');return;}
+  downloadCSV(csvFilename('student-questions','question-summary'),studentQuestionsToCSV(analysis));
 }
 
 // ===== CONVERSION QUALITY BY INTENT =====

@@ -40,7 +40,8 @@ for (const id of [
   'campaignFilter', 'campaignFilterSearch', 'campaignLeaderboardSearch', 'searchMobile', 'userSearchResult', 'explorerList', 'sec-overview',
   'resetAllFilters', 'metricDefinitions',
   'kpiPanelLedger', 'profileLedger', 'publicationFreshness',
-  'inboundSourcePanel', 'inboundSourceSummary', 'inboundSourceEvidence', 'inboundSourceExport'
+  'inboundSourcePanel', 'inboundSourceSummary', 'inboundSourceEvidence', 'inboundSourceExport',
+  'studentQuestionsPanel', 'studentQuestionSummary', 'studentQuestions', 'studentQuestionsExport'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
 }
@@ -94,7 +95,7 @@ for (const fn of [
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'formatTalkDuration', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'resetCallPaceCache', 'callPaceAnalysis', 'paintCallPace',
-  'intentOf', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
+  'intentOf', 'studentTranscriptTurns', 'extractStudentQuestionTags', 'studentQuestionAnalysis', 'paintStudentQuestions', 'openStudentQuestion', 'studentQuestionsToCSV', 'exportStudentQuestions', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
   'isGzipData', 'unpackPublishedData', 'preparedCacheEligible',
@@ -118,6 +119,7 @@ document.body.classList.contains=name=>name==='dashboard-reduced-ai-view';
 const reducedTaskSource=context.deferredPaintTasks({}).map(task=>String(task)).join('\n');
 document.body.classList.contains=originalReducedViewContains;
 assert(!reducedTaskSource.includes('paintOutboundCadence') && !reducedTaskSource.includes('paintAnomalyCards') && !reducedTaskSource.includes('paintIntentQuality'), 'Reduced view must not schedule hidden heavy sections');
+assert(reducedTaskSource.includes('paintStudentQuestions'),'Reduced clean view must retain the management student-question section');
 assert(context.copyPhoneButton('919111111111').includes('<svg'), 'Phone copy control must use a compact icon');
 assert(!context.copyPhoneButton('919111111111').includes('>Copy</button>'), 'Phone copy control must not use the long Copy text label');
 assert.equal(context.formatTalkDuration(6144),'1h 42m','Priority talk time must use a human-readable duration');
@@ -214,6 +216,39 @@ assert(!context.isMeaningfulConversation({ status: 'failed', dur: 120 }), 'Faile
 assert.equal(context.intentOf('I need help with programme eligibility criteria'), 'Eligibility');
 assert.equal(context.intentOf('Please explain the course fee and EMI'), 'Payment');
 assert.equal(context.intentOf('I have a portal login issue'), 'Support');
+const studentQuestionTranscript=[
+  'Assistant: Would you like admission information?',
+  'User: Fees kitni hai and EMI available hai?',
+  'User: Is the degree UGC recognised?',
+  'Assistant: The programme is recognised.'
+].join('\n');
+const studentQuestionTags=context.extractStudentQuestionTags(studentQuestionTranscript);
+assert(studentQuestionTags.includes('fees')&&studentQuestionTags.includes('recognition'),'English and Hinglish student questions must map to canonical question tags');
+assert(!studentQuestionTags.includes('admission'),'Assistant wording must never be counted as a student question');
+assert.equal(context.extractStudentQuestionTags('Assistant: What are the fees?').length,0,'Assistant-only transcripts must not create student demand');
+const questionRecords=[
+  {callId:'question-1',status:'completed',direction:'inbound',from:'919111111111',studentQuestions:['fees','admission'],trans:''},
+  {callId:'question-2',status:'completed',direction:'outbound',from:'919222222222',studentQuestions:['fees'],trans:''},
+  {callId:'question-3',status:'failed',direction:'outbound',from:'919333333333',studentQuestions:['fees'],trans:''},
+  {callId:'question-4',status:'completed',direction:'inbound',from:'919444444444',studentQuestions:[],trans:''}
+];
+const questionAnalysis=context.studentQuestionAnalysis(questionRecords,10);
+assert.equal(questionAnalysis.eligibleCalls,3,'Student-question denominator must use completed Call-ID records only');
+assert.equal(questionAnalysis.callsWithQuestions,2,'Calls with recognised student questions changed');
+assert.equal(questionAnalysis.rows[0].id,'fees','Question ranking must use completed-call frequency');
+assert.equal(questionAnalysis.rows[0].calls.length,2,'One call must count at most once per canonical question');
+assert.equal(questionAnalysis.rows[0].inbound,1,'Question direction mix lost inbound calls');
+assert.equal(questionAnalysis.rows[0].outbound,1,'Question direction mix lost outbound calls');
+assert.equal(questionAnalysis.rows[0].sharePct.toFixed(1),'66.7','Question share must use all selected completed calls as the denominator');
+context.RECORDS=questionRecords;
+context.paintStudentQuestions(questionRecords);
+assert(getElement('studentQuestions').innerHTML.includes('What are the programme fees and payment options?'),'Student-question ranking must render canonical management wording');
+assert(getElement('studentQuestions').innerHTML.includes('In 1')&&getElement('studentQuestions').innerHTML.includes('Out 1'),'Student-question ranking must show direction evidence');
+assert(getElement('studentQuestionSummary').innerHTML.includes('2</b> of <b>3'),'Question summary must disclose recognised-call coverage and denominator');
+const studentQuestionCSV=context.studentQuestionsToCSV(questionAnalysis);
+assert(studentQuestionCSV.startsWith('Rank,Question Students Ask,Completed Calls,Share of Selected Completed Calls (%)'),'Student-question CSV must use descriptive human-readable headers');
+assert(studentQuestionCSV.includes('What are the programme fees and payment options?,2,66.7,3,2,1,1,0'),'Student-question CSV must reconcile rank, denominator, unique contacts and direction mix');
+context.RECORDS=[];
 context.paintFunnel({n:154014,callbacks:12345,hot:23456,warm:34567,cold:43567});
 assert(getElement('funnel').innerHTML.includes('1,54,014'), 'Demand outcomes must format large raw counts');
 assert(getElement('funnel').innerHTML.includes('fstep-meter'), 'Demand outcomes must keep a full-width readable row with a proportional meter');
@@ -324,6 +359,10 @@ assert(html.includes('<summary>View day &amp; time detail</summary>'), 'Day and 
 assert(html.includes('id="timingMetricControls"'), 'Outbound timing metric toggle is missing');
 assert(html.includes('<body class="dashboard-reduced-ai-view">'), 'Reduced dashboard view toggle is missing');
 assert(html.includes('<span>Demand</span>'), 'Reduced navigation should use the concise Demand label');
+assert(html.includes('href="#studentQuestionsPanel"')&&html.includes('<span>Student questions</span>'),'Demand navigation must link directly to student questions');
+assert(html.includes('id="studentQuestionsPanel"')&&html.includes('<h4>What students ask most</h4>'),'Management student-question panel is missing');
+assert(!html.includes('id="studentQuestionsPanel" data-hide-in-reduced-view="true"'),'Student questions must remain visible in the clean dashboard view');
+assert(html.includes('one completed Call ID counts once per question'),'Question counting grain must be visible beside the ranking');
 assert(html.includes('Follow-up &amp; repeat engagement'), 'Follow-up section heading is missing');
 assert(html.includes('<h4>Priority contacts</h4>'), 'Priority contacts panel title is missing');
 assert(!html.includes('<h4>Follow-up queue</h4>'), 'Legacy Follow-up queue panel title must not remain');
@@ -392,6 +431,7 @@ assert(scripts[1].includes('csv+=[escCSVText(r.callId),escCSVText(fullPhone(r.fr
 assert(!scripts[1].includes('Avg Confidence %,Avg Need Score'), 'Visible operational exports must not use AI score columns');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('body.dashboard-reduced-ai-view [data-hide-in-reduced-view="true"]'), 'Reduced-view CSS contract is missing');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('.repeat-engagement-panel{margin-top:24px!important;}'), 'Follow-up and repeat engagement panels need clear visual separation');
+assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('.student-question-scroll{max-height:'), 'Student-question ranking must scroll instead of extending the page indefinitely');
 assert(fs.readFileSync('css/dashboard.css', 'utf8').includes('#cbReadiness .follow-up-readiness-chip[aria-pressed="true"]'), 'Requested follow-up filter needs an obvious active state');
 assert(html.includes('value="need_desc" data-hide-in-reduced-view="true"'), 'Reduced Ledger need sort marker is missing');
 assert(html.includes('data-f="low_conf" data-hide-in-reduced-view="true"'), 'Reduced Ledger confidence filter marker is missing');

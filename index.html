@@ -91,6 +91,7 @@
       <button type="button" class="side-group-label"><span>Demand</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Conversion</span></a>
+        <a class="side-link" href="#studentQuestionsPanel"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M9.7 9a2.4 2.4 0 1 1 3.9 1.9c-1 .7-1.6 1.1-1.6 2.3"></path><path d="M12 17h.01"></path></svg></span><span>Student questions</span></a>
         <a class="side-link" href="#sec-perf" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI &amp; quality</span></a>
         <a class="side-link" href="#sec-themes" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
         <a class="side-link" href="#sec-volume"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m7 14 3-3 4 4 5-8"></path></svg></span><span>Trends</span></a>
@@ -277,7 +278,14 @@
         <div class="panel" data-hide-in-reduced-view="true"><h4>Quality by lead tier</h4><div class="cap">Average confidence and need score for each lead tier.</div><div id="tempQual"></div></div>
         <div class="panel"><h4>Conversation duration mix</h4><div class="cap">Completed conversations grouped into practical duration bands.</div><div id="durBands"></div></div>
       </div>
-    </div></section>
+    </div>
+    <div class="panel student-question-panel" id="studentQuestionsPanel">
+      <div class="student-question-head"><div><h4>What students ask most</h4><div class="cap">Top questions found only in student-labelled turns from completed calls. Similar English, Hindi and Hinglish wording is grouped into one practical question.</div></div><button type="button" id="studentQuestionsExport" onclick="exportStudentQuestions()">Export ranked questions</button></div>
+      <div id="studentQuestionSummary" class="student-question-summary">Preparing student-question evidence…</div>
+      <div id="studentQuestions"></div>
+      <div class="student-question-rule"><b>Counting rule:</b> one completed Call ID counts once per question. A call can contain multiple questions, so row percentages should not be added together. Click a row for the supporting calls.</div>
+    </div>
+  </section>
 
   <section id="sec-perf" data-hide-in-reduced-view="true"><div class="shead"><span class="n">04</span><h2>AI advisor &amp; quality</h2></div>
     <div class="grid2">
