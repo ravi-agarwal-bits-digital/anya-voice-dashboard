@@ -196,7 +196,7 @@ const DATA_FETCH_TIMEOUT_MS=180000;
 const PREPARED_CACHE_DB='anya-dashboard-secure-cache';
 const PREPARED_CACHE_STORE='prepared-records';
 const PREPARED_CACHE_KEY='latest';
-const PREPARED_CACHE_DB_VERSION=3;
+const PREPARED_CACHE_DB_VERSION=4;
 // The encrypted local snapshot is only a reload optimization. Serialising a large cumulative
 // export creates another full in-memory copy after the page looks ready, which can freeze or
 // crash a browser. Keep it deliberately small; the source file remains the source of truth.
@@ -906,7 +906,7 @@ function paintTopEssentials(o){
 function deferredPaintTasks(o){
   const reduced=reducedAiViewEnabled();
   return [
-    ()=>paintStudentQuestions(RECORDS),!reduced?()=>paintIntents(o):null,!reduced?()=>paintMsgImpact(o):null,()=>dayChart(o.daily),()=>hourChart(o.hourly),
+    ()=>paintStudentQuestions(RECORDS),()=>paintConversationDepth(RECORDS),!reduced?()=>paintIntents(o):null,!reduced?()=>paintMsgImpact(o):null,()=>dayChart(o.daily),()=>hourChart(o.hourly),
     !reduced?()=>paintFrustBreak(o):null,!reduced?()=>paintFrustCost(o):null,()=>paintHottestLeads(RECORDS),()=>paintSerialCallers(RECORDS),
     !reduced?()=>paintBandBars(o):null,()=>paintGeo(o),()=>paintDirectionSplit(),()=>paintDirectionCompare(),()=>paintInboundSource(),()=>paintCallPace(),
     ()=>paintOutboundPerf(),!reduced?()=>paintOutboundCadence():null,()=>paintCampaignSection(),!reduced?()=>paintIntentQuality(RECORDS):null,
@@ -917,6 +917,7 @@ function deferredPaintTasks(o){
 function applyFilters(){
   const generation=++renderGeneration;
   CB_RENDER_LIMIT=50; // each filter change starts the callback list capped again (keeps toggles fast)
+  LONG_CALL_RENDER_LIMIT=24;
   const keepManagementSummaryVisible=isManagementSummaryVisible();
   updateDirectionButtons();
   const fromDate=$("filterFromDate").value;
@@ -1445,18 +1446,31 @@ const STUDENT_QUESTION_DEFINITIONS=Object.freeze([
   {id:'curriculum',label:'What subjects and specialisations are included?',pattern:/\b(curriculum|syllabus|subjects?|modules?|course content|specialisations?|specializations?|electives?)\b|सिलेबस|विषय|करिकुलम|स्पेशलाइजेशन|इलेक्टिव/i},
   {id:'support',label:'How do I access the portal or get learner support?',pattern:/\b(login|portal|password|account access|technical issue|not working|learner support|student support|helpdesk)\b|लॉगिन|पोर्टल|पासवर्ड|काम नहीं|तकनीकी|सपोर्ट|हेल्पडेस्क/i}
 ]);
+const STUDENT_QUESTION_BY_ID=new Map(STUDENT_QUESTION_DEFINITIONS.map(definition=>[definition.id,definition]));
 const STUDENT_QUESTION_CUE=/(?:\?|\b(?:what|when|where|why|who|which|how|can|could|would|will|is|are|am|do|does|did|tell me|want to know|need to know|please explain|please share|details|information|kya|kaise|kab|kitna|kitni|bata|bataye|jaanna|janna)\b|क्या|कैसे|कब|कितना|कितनी|बताइ|जानना|जानकारी|डिटेल)/i;
-function studentTranscriptTurns(transcript){
+function speakerTranscriptTurns(transcript){
   const turns=[];
-  String(transcript||'').split(/\n+/).forEach(line=>{
-    const match=String(line||'').trim().match(/^(User|Caller|Customer)\s*(?:\[[^\]]*\])?\s*:?(.*)$/i);
-    if(match&&String(match[2]||'').trim())turns.push(String(match[2]).trim());
-  });
+  const pattern=/(?:^|\n)(Assistant|Anya|Bot|User|Caller|Customer)\s*(?:\[[^\]]*\])?\s*:?\s*([\s\S]*?)(?=\n(?:Assistant|Anya|Bot|User|Caller|Customer)\s*(?:\[[^\]]*\])?\s*:|$)/gi;
+  let match;
+  while((match=pattern.exec(String(transcript||'')))!==null){
+    const text=String(match[2]||'').replace(/\s+/g,' ').trim();
+    if(text)turns.push({role:/^(User|Caller|Customer)$/i.test(match[1])?'student':'assistant',text});
+  }
   return turns;
 }
-function extractStudentQuestionTags(transcript){
+function studentTranscriptTurns(transcriptOrTurns){
+  const turns=Array.isArray(transcriptOrTurns)?transcriptOrTurns:speakerTranscriptTurns(transcriptOrTurns);
+  return turns.filter(turn=>turn.role==='student').map(turn=>turn.text);
+}
+function transcriptParticipation(transcriptOrTurns){
+  const turns=Array.isArray(transcriptOrTurns)?transcriptOrTurns:speakerTranscriptTurns(transcriptOrTurns);
+  const student=turns.filter(turn=>turn.role==='student'),assistant=turns.filter(turn=>turn.role==='assistant');
+  const studentWords=student.reduce((sum,turn)=>sum+turn.text.split(/\s+/).filter(Boolean).length,0);
+  return{studentTurns:student.length,studentWords,assistantTurns:assistant.length,labelledTurns:turns.length};
+}
+function extractStudentQuestionTags(transcript,parsedTurns){
   const tags=new Set();
-  for(const turn of studentTranscriptTurns(transcript)){
+  for(const turn of studentTranscriptTurns(parsedTurns||transcript)){
     const compact=turn.replace(/\s+/g,' ').trim();
     const shortDemand=compact.split(/\s+/).filter(Boolean).length<=10;
     for(const definition of STUDENT_QUESTION_DEFINITIONS){
@@ -2947,7 +2961,9 @@ function rowToRecord(r){
   const dtStr=pickField(r,['Created At (IST)','Created At','Timestamp','Call Time','Call Date','Date','Started At','Start Time','created_at','createdAt']);
   const dt=parseDateFull(dtStr);
   const trans=String(pickField(r,['Full Transcript','Transcript','Call Transcript','Conversation Transcript','Conversation','Messages','Dialogue'])||'');
-  const studentQuestions=extractStudentQuestionTags(trans);
+  const transcriptTurns=speakerTranscriptTurns(trans);
+  const studentQuestions=extractStudentQuestionTags(trans,transcriptTurns);
+  const participation=transcriptParticipation(transcriptTurns);
   const excelSummary=String(pickField(r,['Summary','Call Summary','Conversation Summary','AI Summary','Synopsis'])||'').trim();
   let summary=excelSummary;
   if(!summary){const cleanTrans=trans.replace(/\s+/g,' ').trim();summary=cleanTrans.length>120?cleanTrans.slice(0,120)+'...':cleanTrans;}
@@ -2981,7 +2997,7 @@ function rowToRecord(r){
     msg:Number(pickField(r,['Messages','Message Count','Total Messages','Turns']))||0,
     status,leadTemp:String(pickField(r,['Lead Temp.','Lead Temp','Lead Temperature','Lead Tier','Temperature'])||'').trim(),
     conf:Number(pickField(r,['Bot Conf.','Bot Conf','Bot Confidence','AI Confidence','Confidence','Model Confidence']))||0,need,
-    band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:cbWindow.label,cbPreferredDate:cbWindow.date,frustrated,summary,
+    band:String(pickField(r,['Review Band','QA Band','Quality Band','Review'])||'').trim(),direction,intent,callback:callbackReq,cbReason,cbPreferred:cbWindow.label,cbPreferredDate:cbWindow.date,frustrated,summary,summaryFromExport:Boolean(excelSummary),
     campaign:String(pickField(r,['Campaign','Campaign Name'])||'').trim(),
     campaignId:String(pickField(r,['Campaign ID','CampaignId'])||'').trim(),
     failStage:String(pickField(r,['Failure Stage'])||'').trim(),
@@ -2989,7 +3005,8 @@ function rowToRecord(r){
     failDetail:String(pickField(r,['Failure Detail'])||'').trim(),
     sipCode:String(pickField(r,['SIP / Hangup Code','SIP/Hangup Code','SIP Code','Hangup Code'])||'').trim(),
     hangupCause:String(pickField(r,['Hangup Cause'])||'').trim(),
-    from:leadPhone,leadPhone,leadKey:String(leadPhone||'').replace(/\D/g,''),isIntl:classifyPhone(leadPhone).intl,rawFrom,rawTo,trans,studentQuestions
+    from:leadPhone,leadPhone,leadKey:String(leadPhone||'').replace(/\D/g,''),isIntl:classifyPhone(leadPhone).intl,rawFrom,rawTo,trans,studentQuestions,
+    studentTurns:participation.studentTurns,studentWords:participation.studentWords,assistantTurns:participation.assistantTurns,labelledTurns:participation.labelledTurns
   };
 }
 
@@ -3011,7 +3028,7 @@ function aggregate(recs){
     o.hourly[r.h]=(o.hourly[r.h]||0)+1;
     o.daily[r.d]=(o.daily[r.d]||0)+1;
     o.intent[r.intent]=(o.intent[r.intent]||0)+1;
-    const db=r.dur<30?"<30s":r.dur<60?"30-60s":r.dur<120?"1-2m":r.dur<180?"2-3m":"3m+";
+    const db=r.dur<30?"<30s":r.dur<60?"30-60s":r.dur<120?"1-2m":r.dur<180?"2-3m":r.dur<300?"3-5m":r.dur<600?"5-10m":r.dur<900?"10-15m":"15m+";
     o.durBands[db]=(o.durBands[db]||0)+1;
     const cb=Math.round(r.conf/20)*20;o.confBands[cb]=(o.confBands[cb]||0)+1;
     if(r.leadTemp in confQual){confQual[r.leadTemp].conf+=r.conf;confQual[r.leadTemp].need+=r.need;confQual[r.leadTemp].n++;}
@@ -3741,14 +3758,118 @@ function paintIntentQuality(recs){
 }
 
 function paintDurBands(o){
-  const order={"3m+":0,"2-3m":1,"1-2m":2,"30-60s":3,"<30s":4};
+  const order={"15m+":0,"10-15m":1,"5-10m":2,"3-5m":3,"2-3m":4,"1-2m":5,"30-60s":6,"<30s":7};
   const sorted=Object.entries(o.durBands).filter(d=>d[1]).sort((a,b)=>(order[a[0]]??9)-(order[b[0]]??9));
   if(!sorted.length){$("durBands").innerHTML=`<div style="color:var(--faint);text-align:center;padding:20px">No duration data.</div>`;return;}
   const max=Math.max(...sorted.map(d=>d[1]),1);
-  const col={"<30s":C.muted,"30-60s":C.blue,"1-2m":C.teal,"2-3m":C.amber,"3m+":C.hot};
-  const durPred={"<30s":"r=>r.dur<30","30-60s":"r=>r.dur>=30&&r.dur<60","1-2m":"r=>r.dur>=60&&r.dur<120","2-3m":"r=>r.dur>=120&&r.dur<180","3m+":"r=>r.dur>=180"};
+  const col={"<30s":C.muted,"30-60s":C.blue,"1-2m":C.teal,"2-3m":C.amber,"3-5m":C.gold,"5-10m":C.coral,"10-15m":C.hot,"15m+":C.cream};
+  const durPred={"<30s":"r=>r.dur<30","30-60s":"r=>r.dur>=30&&r.dur<60","1-2m":"r=>r.dur>=60&&r.dur<120","2-3m":"r=>r.dur>=120&&r.dur<180","3-5m":"r=>r.dur>=180&&r.dur<300","5-10m":"r=>r.dur>=300&&r.dur<600","10-15m":"r=>r.dur>=600&&r.dur<900","15m+":"r=>r.dur>=900"};
   const total=sorted.reduce((sum,[,count])=>sum+count,0);
   $("durBands").innerHTML=sorted.map(d=>{const share=total?Math.round(d[1]/total*100):0;return `<div style="margin-bottom:13px;cursor:pointer" onclick="openFilteredPanel('${d[0]} duration',${durPred[d[0]]})"><div style="font-size:12.5px;margin-bottom:5px;display:flex;justify-content:space-between"><span>${d[0]}</span><b>${d[1]} calls · ${share}%</b></div><div style="background:#0c121b;border-radius:5px;height:8px"><div style="background:${col[d[0]]||C.teal};height:100%;width:${d[1]/max*100}%"></div></div></div>`;}).join("");
+}
+
+// Long-call review is deliberately separate from the mutually-exclusive duration mix above.
+// It uses cumulative 5m+/10m+/15m+ thresholds and transcript participation evidence to help
+// management inspect where billed time represents a two-way exchange. It is a review proxy,
+// not an AI score or a claim that a call was valuable/wasted.
+let LONG_CALL_THRESHOLD=300,LONG_CALL_RENDER_LIMIT=24;
+const CONVERSATION_DEPTH_META=Object.freeze({
+  substantive:{label:'Substantive exchange',description:'3+ student turns and 20+ student words',className:'substantive'},
+  some:{label:'Some participation',description:'Student speech is present but below the substantive threshold',className:'some'},
+  limited:{label:'Limited participation',description:'0-1 student turns or fewer than 10 student words',className:'limited'},
+  unclear:{label:'Transcript unclear',description:'No usable speaker-labelled turns',className:'unclear'}
+});
+function recordParticipation(record){
+  const values=['studentTurns','studentWords','assistantTurns','labelledTurns'].map(key=>Number(record?.[key]));
+  if(values.every(Number.isFinite))return{studentTurns:values[0],studentWords:values[1],assistantTurns:values[2],labelledTurns:values[3]};
+  return transcriptParticipation(record?.trans||'');
+}
+function conversationDepthClass(record,participation=recordParticipation(record)){
+  if(!participation.labelledTurns)return'unclear';
+  if(participation.studentTurns>=3&&participation.studentWords>=20)return'substantive';
+  if(participation.studentTurns<=1||participation.studentWords<10)return'limited';
+  return'some';
+}
+function longCallQuestionLabels(record){
+  const tags=Array.isArray(record?.studentQuestions)?record.studentQuestions:extractStudentQuestionTags(record?.trans||'');
+  return [...new Set(tags)].map(tag=>STUDENT_QUESTION_BY_ID.get(tag)?.label).filter(Boolean);
+}
+function longCallStudentCrux(record){
+  const questions=longCallQuestionLabels(record);
+  if(questions.length)return questions.slice(0,3).join(' · ');
+  const turns=studentTranscriptTurns(record?.trans||'').sort((a,b)=>b.split(/\s+/).length-a.split(/\s+/).length);
+  if(!turns.length)return'No student-labelled speech available.';
+  const text=turns[0].replace(/\s+/g,' ').trim();
+  return text.length>220?text.slice(0,217)+'...':text;
+}
+function longCallAnalysis(records=RECORDS,threshold=LONG_CALL_THRESHOLD){
+  const rows=(records||[]).filter(record=>/^(completed|done)$/i.test(String(record?.status||'').trim())&&Number(record?.dur||0)>=threshold)
+    .map(record=>{const participation=recordParticipation(record);return{record,participation,depth:conversationDepthClass(record,participation)};})
+    .sort((a,b)=>Number(b.record.dur||0)-Number(a.record.dur||0)||Number(b.record.ts||0)-Number(a.record.ts||0));
+  const classes=Object.fromEntries(Object.keys(CONVERSATION_DEPTH_META).map(key=>[key,{calls:0,billedMins:0,cost:0}]));
+  const topics=new Map();let durationSeconds=0,billedMins=0;
+  rows.forEach(row=>{
+    const mins=isBillableRecord(row.record)?billedMinutes(row.record.dur):0,cost=mins*5;
+    durationSeconds+=Number(row.record.dur||0);billedMins+=mins;
+    classes[row.depth].calls++;classes[row.depth].billedMins+=mins;classes[row.depth].cost+=cost;
+    longCallQuestionLabels(row.record).forEach(label=>topics.set(label,(topics.get(label)||0)+1));
+  });
+  return{threshold,rows,durationSeconds,billedMins,cost:billedMins*5,classes,topics:[...topics.entries()].map(([label,calls])=>({label,calls})).sort((a,b)=>b.calls-a.calls||a.label.localeCompare(b.label))};
+}
+function setLongCallThreshold(seconds){
+  const value=Number(seconds);
+  if(![300,600,900].includes(value))return;
+  LONG_CALL_THRESHOLD=value;LONG_CALL_RENDER_LIMIT=24;paintConversationDepth(RECORDS);
+}
+function showMoreLongCalls(){LONG_CALL_RENDER_LIMIT+=24;paintConversationDepth(RECORDS);}
+function paintConversationDepth(records=RECORDS){
+  const el=$('conversationDepthList'),summary=$('conversationDepthSummary'),topics=$('conversationDepthTopics');
+  if(!el)return;
+  const analysis=longCallAnalysis(records,LONG_CALL_THRESHOLD);
+  window.__conversationDepthAnalysis=analysis;
+  window.__conversationDepthRows=analysis.rows.map(row=>row.record);
+  document.querySelectorAll?.('.conversation-depth-threshold[data-seconds]').forEach(button=>{
+    const active=Number(button.dataset.seconds)===LONG_CALL_THRESHOLD;
+    button.classList.toggle('active',active);button.setAttribute('aria-pressed',active?'true':'false');
+  });
+  updateExportButton('conversationDepthExport','Export reviewed calls',analysis.rows.length,'calls');
+  const reviewCost=analysis.classes.limited.cost+analysis.classes.unclear.cost;
+  if(summary){
+    summary.innerHTML=analysis.rows.length
+      ?`<b>${analysis.rows.length.toLocaleString('en-IN')}</b> completed calls lasted ${Math.round(LONG_CALL_THRESHOLD/60)}+ minutes: <b>${formatTalkDuration(analysis.durationSeconds)} actual talk time</b> and <b>${analysis.billedMins.toLocaleString('en-IN')} billed mins</b> (₹${analysis.cost.toLocaleString('en-IN')}). Evidence split: <strong>₹${analysis.classes.substantive.cost.toLocaleString('en-IN')}</strong> substantive, <strong>₹${analysis.classes.some.cost.toLocaleString('en-IN')}</strong> some participation, and <strong>₹${reviewCost.toLocaleString('en-IN')}</strong> limited or unclear—review the last group before calling it waste.`
+      :`No completed calls lasted ${Math.round(LONG_CALL_THRESHOLD/60)}+ minutes in the selected view.`;
+  }
+  if(topics){
+    topics.innerHTML=analysis.topics.length
+      ?`<span>Student questions in these calls</span>${analysis.topics.slice(0,5).map(topic=>`<b>${esc(topic.label)} <i>${topic.calls.toLocaleString('en-IN')}</i></b>`).join('')}`
+      :'<span>No canonical student questions were detected in these calls.</span>';
+  }
+  if(!analysis.rows.length){el.innerHTML=emptyViewHtml(`No ${Math.round(LONG_CALL_THRESHOLD/60)}+ minute completed calls match the active filters.`);return;}
+  const visible=analysis.rows.slice(0,LONG_CALL_RENDER_LIMIT);
+  el.innerHTML=`<div class="conversation-depth-grid">${visible.map((row,index)=>{
+    const record=row.record,meta=CONVERSATION_DEPTH_META[row.depth],questions=longCallQuestionLabels(record),crux=longCallStudentCrux(record),mins=isBillableRecord(record)?billedMinutes(record.dur):0;
+    return`<article class="conversation-depth-card drawer-click-card" role="button" tabindex="0" onkeydown="handleDrawerCardKey(event)" onclick="openRecordProfile(window.__conversationDepthRows[${index}],'conversation-depth')">
+      <div class="conversation-depth-card-head"><div><span class="conversation-depth-duration">${esc(formatDuration(record.dur))}</span><span class="conversation-depth-time">${esc(formatCallTime(record))}</span></div><span class="conversation-depth-badge ${meta.className}" title="${esc(meta.description)}">${esc(meta.label)}</span></div>
+      <div class="conversation-depth-contact"><b>${esc(maskPhone(record.from))}</b>${copyPhoneButton(record.from)}${directionPill(record.direction)}${normalizeDirection(record.direction)==='outbound'?`<span class="conversation-depth-campaign">${esc(String(record.campaign||'').trim()||'Campaign not recorded')}</span>`:''}</div>
+      <div class="conversation-depth-evidence"><span><b>${row.participation.studentTurns}</b> student turns</span><span><b>${row.participation.studentWords}</b> student words</span><span><b>${row.participation.assistantTurns}</b> Anya turns</span><span><b>${mins}</b> billed mins · <b>₹${mins*5}</b></span></div>
+      <div class="conversation-depth-crux"><span>Student crux</span><b>${esc(crux)}</b>${questions.length?'':'<small>Shown from the longest student-labelled utterance; not generated by a new AI model.</small>'}</div>
+      <div class="conversation-depth-call-summary"><span>Summary from export</span><p>${esc(record.summaryFromExport?record.summary:'No summary supplied in the export.')}</p></div>
+      <div class="drawer-action-hint">Open full call history and transcript</div>
+    </article>`;
+  }).join('')}</div>${analysis.rows.length>visible.length?`<button type="button" class="conversation-depth-more" onclick="showMoreLongCalls()">Show 24 more · ${(analysis.rows.length-visible.length).toLocaleString('en-IN')} remaining</button>`:''}`;
+}
+function conversationDepthToCSV(analysis=window.__conversationDepthAnalysis){
+  let csv='Call ID,Lead Phone,Call Direction,Call Date and Time (IST),Campaign,Actual Call Duration,Actual Duration Seconds,Billable Minutes,Call Cost (Rs),Student Turns,Student Words,Anya Turns,Participation Evidence,Detected Student Questions,Student Speech Crux,Export Call Summary,Full Transcript\n';
+  (analysis?.rows||[]).forEach(row=>{
+    const record=row.record,mins=isBillableRecord(record)?billedMinutes(record.dur):0,meta=CONVERSATION_DEPTH_META[row.depth];
+    csv+=[escCSVText(record.callId),escCSVText(fullPhone(record.from)),escCSV(directionLabel(record.direction)),escCSV(formatCallTime(record)),escCSV(record.campaign),escCSV(formatDuration(record.dur)),Number(record.dur||0),mins,mins*5,row.participation.studentTurns,row.participation.studentWords,row.participation.assistantTurns,escCSV(meta.label),escCSV(longCallQuestionLabels(record).join(' | ')),escCSV(longCallStudentCrux(record)),escCSV(record.summaryFromExport?record.summary:''),escCSV(record.trans)].join(',')+'\n';
+  });
+  return csv;
+}
+function exportConversationDepth(){
+  const analysis=window.__conversationDepthAnalysis||longCallAnalysis(RECORDS,LONG_CALL_THRESHOLD);
+  if(!analysis.rows.length){alert('No long completed calls match the active filters.');return;}
+  downloadCSV(csvFilename('conversation-depth','calls',`${Math.round(LONG_CALL_THRESHOLD/60)}m-plus`),conversationDepthToCSV(analysis));
 }
 
 function paintMsgImpact(o){
