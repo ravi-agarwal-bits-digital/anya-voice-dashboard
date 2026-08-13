@@ -91,6 +91,7 @@
       <button type="button" class="side-group-label"><span>Demand</span><svg class="side-caret" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
       <div class="side-group-links">
         <a class="side-link" href="#sec-conversion"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19v-11"></path></svg></span><span>Conversion</span></a>
+        <a class="side-link" href="#conversationDepthPanel"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M4 12h3l2-6 4 12 2-6h5"></path><path d="M4 21h16"></path></svg></span><span>Conversation depth</span></a>
         <a class="side-link" href="#studentQuestionsPanel"><span class="side-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M9.7 9a2.4 2.4 0 1 1 3.9 1.9c-1 .7-1.6 1.1-1.6 2.3"></path><path d="M12 17h.01"></path></svg></span><span>Student questions</span></a>
         <a class="side-link" href="#sec-perf" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-4z"></path><path d="m9.5 12 1.8 1.8 3.7-3.7"></path></svg></span><span>AI &amp; quality</span></a>
         <a class="side-link" href="#sec-themes" data-hide-in-reduced-view="true"><span class="side-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-4 12.8c.6.4 1 1 1.1 1.7l.2 1.5h5.4l.2-1.5c.1-.7.5-1.3 1.1-1.7A7 7 0 0 0 12 2z"></path></svg></span><span>Themes</span></a>
@@ -278,6 +279,22 @@
         <div class="panel" data-hide-in-reduced-view="true"><h4>Quality by lead tier</h4><div class="cap">Average confidence and need score for each lead tier.</div><div id="tempQual"></div></div>
         <div class="panel"><h4>Conversation duration mix</h4><div class="cap">Completed conversations grouped into practical duration bands.</div><div id="durBands"></div></div>
       </div>
+    </div>
+    <div class="panel conversation-depth-panel" id="conversationDepthPanel">
+      <div class="conversation-depth-head">
+        <div><h4>Conversation depth &amp; transcript review</h4><div class="cap">Review long completed calls using student participation, billed cost, questions, export summaries and supporting transcripts. This is deterministic evidence—not an AI quality score.</div></div>
+        <button type="button" id="conversationDepthExport" onclick="exportConversationDepth()">Export reviewed calls</button>
+      </div>
+      <div class="conversation-depth-controls" role="group" aria-label="Minimum completed call duration">
+        <span>Review calls lasting</span>
+        <button type="button" class="conversation-depth-threshold active" data-seconds="300" aria-pressed="true" onclick="setLongCallThreshold(300)">5m+</button>
+        <button type="button" class="conversation-depth-threshold" data-seconds="600" aria-pressed="false" onclick="setLongCallThreshold(600)">10m+</button>
+        <button type="button" class="conversation-depth-threshold" data-seconds="900" aria-pressed="false" onclick="setLongCallThreshold(900)">15m+</button>
+      </div>
+      <div id="conversationDepthSummary" class="conversation-depth-summary">Preparing long-call evidence…</div>
+      <div id="conversationDepthTopics" class="conversation-depth-topics"></div>
+      <div id="conversationDepthList"></div>
+      <div class="conversation-depth-rule"><b>Evidence rule:</b> substantive exchange means at least three student turns and 20 student words. Limited or unclear participation is flagged for review, not automatically labelled waste. Open a card to inspect the complete call history and transcript.</div>
     </div>
     <div class="panel student-question-panel" id="studentQuestionsPanel">
       <div class="student-question-head"><div><h4>What students ask most</h4><div class="cap">Top questions found only in student-labelled turns from completed calls. Similar English, Hindi and Hinglish wording is grouped into one practical question.</div></div><button type="button" id="studentQuestionsExport" onclick="exportStudentQuestions()">Export ranked questions</button></div>

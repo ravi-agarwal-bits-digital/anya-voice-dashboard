@@ -41,7 +41,8 @@ for (const id of [
   'resetAllFilters', 'metricDefinitions',
   'kpiPanelLedger', 'profileLedger', 'publicationFreshness',
   'inboundSourcePanel', 'inboundSourceSummary', 'inboundSourceEvidence', 'inboundSourceExport',
-  'studentQuestionsPanel', 'studentQuestionSummary', 'studentQuestions', 'studentQuestionsExport'
+  'studentQuestionsPanel', 'studentQuestionSummary', 'studentQuestions', 'studentQuestionsExport',
+  'conversationDepthPanel', 'conversationDepthSummary', 'conversationDepthTopics', 'conversationDepthList', 'conversationDepthExport'
 ]) {
   assert(idSet.has(id), `Missing required dashboard element: ${id}`);
 }
@@ -95,7 +96,9 @@ for (const fn of [
   'recordDateBounds', 'preferLifecycleRow', 'esc', 'jsArg', 'sumBilledMinutes', 'sumTalkTimeMinutes', 'formatTalkMinutes', 'formatTalkDuration', 'isBillableRecord', 'billingRunwayStats', 'selectedBillingStats', 'paintBundleRunway',
   'groupByPhone', 'runPaintChunks', 'resolveCallbackWindow', 'normalizeDisposition',
   'istHourFromTs', 'isCapacityLimitFailure', 'concurrencyStats', 'capacityEvidenceVerdict', 'callPaceRecords', 'resetCallPaceCache', 'callPaceAnalysis', 'paintCallPace',
-  'intentOf', 'studentTranscriptTurns', 'extractStudentQuestionTags', 'studentQuestionAnalysis', 'paintStudentQuestions', 'openStudentQuestion', 'studentQuestionsToCSV', 'exportStudentQuestions', 'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
+  'intentOf', 'speakerTranscriptTurns', 'studentTranscriptTurns', 'transcriptParticipation', 'extractStudentQuestionTags', 'studentQuestionAnalysis', 'paintStudentQuestions', 'openStudentQuestion', 'studentQuestionsToCSV', 'exportStudentQuestions',
+  'recordParticipation', 'conversationDepthClass', 'longCallQuestionLabels', 'longCallStudentCrux', 'longCallAnalysis', 'setLongCallThreshold', 'showMoreLongCalls', 'paintConversationDepth', 'conversationDepthToCSV', 'exportConversationDepth',
+  'paintIntentQuality', 'paintCallbacks', 'parseWorkbookBytes', 'isMeaningfulConversation', 'setOutboundTimingMetric',
   'parseWorkbookInWorker', 'parseWorkbookOnMainThread', 'workbookWorkerTimeout',
   'isCsvExportBytes', 'csvDashboardWorkerTimeout', 'parseCsvRecordsInWorker',
   'isGzipData', 'unpackPublishedData', 'preparedCacheEligible',
@@ -120,6 +123,7 @@ const reducedTaskSource=context.deferredPaintTasks({}).map(task=>String(task)).j
 document.body.classList.contains=originalReducedViewContains;
 assert(!reducedTaskSource.includes('paintOutboundCadence') && !reducedTaskSource.includes('paintAnomalyCards') && !reducedTaskSource.includes('paintIntentQuality'), 'Reduced view must not schedule hidden heavy sections');
 assert(reducedTaskSource.includes('paintStudentQuestions'),'Reduced clean view must retain the management student-question section');
+assert(reducedTaskSource.includes('paintConversationDepth'),'Reduced clean view must retain the separate long-call transcript review');
 assert(context.copyPhoneButton('919111111111').includes('<svg'), 'Phone copy control must use a compact icon');
 assert(!context.copyPhoneButton('919111111111').includes('>Copy</button>'), 'Phone copy control must not use the long Copy text label');
 assert.equal(context.formatTalkDuration(6144),'1h 42m','Priority talk time must use a human-readable duration');
@@ -226,6 +230,19 @@ const studentQuestionTags=context.extractStudentQuestionTags(studentQuestionTran
 assert(studentQuestionTags.includes('fees')&&studentQuestionTags.includes('recognition'),'English and Hinglish student questions must map to canonical question tags');
 assert(!studentQuestionTags.includes('admission'),'Assistant wording must never be counted as a student question');
 assert.equal(context.extractStudentQuestionTags('Assistant: What are the fees?').length,0,'Assistant-only transcripts must not create student demand');
+const multilineTranscript=[
+  'Assistant: Hello, I can explain the programme.',
+  'User: Please tell me the fee structure',
+  'and whether EMI is available.',
+  'Assistant: Yes, I can help with that.',
+  'User: I also need the eligibility criteria.'
+].join('\n');
+const parsedTurns=context.speakerTranscriptTurns(multilineTranscript);
+const participation=context.transcriptParticipation(parsedTurns);
+assert.equal(parsedTurns.length,4,'Multiline labelled transcript turns must remain intact');
+assert.equal(participation.studentTurns,2,'Only student-labelled transcript turns may count as student participation');
+assert.equal(participation.assistantTurns,2,'Anya-labelled transcript turns must be counted separately');
+assert.equal(participation.studentWords,17,'Student word evidence must include continuation lines and exclude Anya speech');
 const questionRecords=[
   {callId:'question-1',status:'completed',direction:'inbound',from:'919111111111',studentQuestions:['fees','admission'],trans:''},
   {callId:'question-2',status:'completed',direction:'outbound',from:'919222222222',studentQuestions:['fees'],trans:''},
@@ -805,6 +822,9 @@ assert.deepEqual(
 const records = deduped.map(context.rowToRecord).filter(record => record && record.d);
 assert.equal(records.find(record => record.callId === 'call-1').from, '919999999999', 'Outbound learner mapping changed');
 assert.equal(records.find(record => record.callId === 'call-2').from, '918888888888', 'Inbound learner mapping changed');
+assert.equal(typeof records.find(record => record.callId === 'call-1').studentTurns, 'number', 'Prepared records must cache compact transcript participation evidence');
+assert.equal(records.find(record => record.callId === 'call-1').summaryFromExport, false, 'Transcript fallback must not be presented as a supplied export summary');
+assert.equal(context.rowToRecord({...voiceRows[1],Summary:'Vendor supplied summary'}).summaryFromExport, true, 'Prepared records must retain supplied export-summary provenance');
 assert.strictEqual(context.groupByPhone(records), context.groupByPhone(records), 'Phone grouping cache should reuse the same grouping');
 
 const outcomeAggregate = context.aggregate([
@@ -812,14 +832,47 @@ const outcomeAggregate = context.aggregate([
   { leadTemp: 'Warm', callback: false, dur: 45, from: '919222222222', d: '2026-07-10', h: 11, intent: 'Eligibility', conf: 70, need: 60, band: 'Amber', msg: 8 },
   { leadTemp: 'Cold', callback: true, dur: 90, from: '919333333333', d: '2026-07-10', h: 12, intent: 'Support', conf: 50, need: 40, band: 'Red', msg: 3 },
   { leadTemp: 'Hot', callback: false, dur: 150, from: '919444444444', d: '2026-07-10', h: 13, intent: 'Programme', conf: 85, need: 75, band: 'Green', msg: 10 },
-  { leadTemp: 'Warm', callback: false, dur: 240, from: '919555555555', d: '2026-07-10', h: 14, intent: 'Other', conf: 65, need: 55, band: 'Green', msg: 12 }
+  { leadTemp: 'Warm', callback: false, dur: 180, from: '919555555555', d: '2026-07-10', h: 14, intent: 'Other', conf: 65, need: 55, band: 'Green', msg: 12 },
+  { leadTemp: 'Warm', callback: false, dur: 300, from: '919666666666', d: '2026-07-10', h: 15, intent: 'Other', conf: 65, need: 55, band: 'Green', msg: 12 },
+  { leadTemp: 'Warm', callback: false, dur: 600, from: '919777777777', d: '2026-07-10', h: 16, intent: 'Other', conf: 65, need: 55, band: 'Green', msg: 12 },
+  { leadTemp: 'Warm', callback: false, dur: 900, from: '919888888888', d: '2026-07-10', h: 17, intent: 'Other', conf: 65, need: 55, band: 'Green', msg: 12 }
 ]);
 assert.equal(outcomeAggregate.callbacks, 2, 'Demand outcomes must count callback requests');
-assert.deepEqual(JSON.parse(JSON.stringify(outcomeAggregate.durBands)), { '<30s': 1, '30-60s': 1, '1-2m': 1, '2-3m': 1, '3m+': 1 }, 'Duration bands changed');
+assert.deepEqual(JSON.parse(JSON.stringify(outcomeAggregate.durBands)), { '<30s': 1, '30-60s': 1, '1-2m': 1, '2-3m': 1, '3-5m': 1, '5-10m': 1, '10-15m': 1, '15m+': 1 }, 'Duration bands must remain mutually exclusive at every long-call boundary');
 assert(html.includes('id="durBands"'), 'Duration mix panel is missing');
 assert(scripts[1].includes('paintDurBands(o)'), 'Duration mix must be painted during dashboard rendering');
 context.paintDurBands(outcomeAggregate);
-assert(getElement('durBands').innerHTML.includes('1 calls · 20%'), 'Duration mix must show each bucket share of filtered conversations');
+assert(getElement('durBands').innerHTML.includes('1 calls · 13%'), 'Duration mix must show each mutually-exclusive bucket share of filtered conversations');
+for(const label of ['3-5m','5-10m','10-15m','15m+'])assert(getElement('durBands').innerHTML.includes(label), `Duration mix is missing ${label}`);
+assert(html.indexOf('id="durBands"') < html.indexOf('id="conversationDepthPanel"'), 'Conversation duration mix must remain independent from the extra transcript-review section');
+assert(html.includes('data-seconds="300"')&&html.includes('data-seconds="600"')&&html.includes('data-seconds="900"'),'Long-call review must expose cumulative 5m+, 10m+ and 15m+ thresholds');
+
+const substantiveWords='I want complete details about fees payment options eligibility admission process class schedule and the recognised degree before I apply';
+const longCallRecords=[
+  {callId:'long-5',from:'919111111111',direction:'outbound',campaign:'Campaign Alpha',d:'2026-07-10',ts:100,status:'completed',dur:300,billMins:5,studentTurns:3,studentWords:22,assistantTurns:4,labelledTurns:7,studentQuestions:['fees'],summary:'Student discussed fees and eligibility.',trans:`Assistant: Hello\nUser: ${substantiveWords}\nAssistant: Sure\nUser: Please explain EMI options too\nAssistant: Certainly\nUser: Is the degree recognised?`},
+  {callId:'long-10',from:'919222222222',direction:'inbound',d:'2026-07-10',ts:200,status:'completed',dur:600,billMins:10,studentTurns:1,studentWords:5,assistantTurns:8,labelledTurns:9,studentQuestions:[],summary:'Mostly assistant-led call.',trans:'Assistant: Hello\nUser: Yes please continue\nAssistant: Programme details'},
+  {callId:'long-15',from:'919333333333',direction:'outbound',campaign:'Campaign Beta',d:'2026-07-10',ts:300,status:'done',dur:900,billMins:15,studentTurns:0,studentWords:0,assistantTurns:0,labelledTurns:0,studentQuestions:[],summary:'Transcript labels unavailable.',trans:'Unlabelled transcript text'},
+  {callId:'failed-long',from:'919444444444',direction:'outbound',d:'2026-07-10',ts:400,status:'failed',dur:1200,studentTurns:4,studentWords:30,assistantTurns:4,labelledTurns:8,studentQuestions:['fees'],trans:''},
+  {callId:'short',from:'919555555555',direction:'inbound',d:'2026-07-10',ts:500,status:'completed',dur:299,studentTurns:4,studentWords:30,assistantTurns:4,labelledTurns:8,studentQuestions:['fees'],trans:''}
+];
+const depth5=context.longCallAnalysis(longCallRecords,300);
+assert.equal(depth5.rows.length,3,'Long-call review must include only completed or legacy done calls at the cumulative threshold');
+assert.equal(depth5.billedMins,30,'Long-call review billed minutes changed');
+assert.equal(depth5.cost,150,'Long-call review cost must reconcile to per-call rounded billed minutes');
+assert.equal(depth5.classes.substantive.calls,1,'Substantive exchange evidence classification changed');
+assert.equal(depth5.classes.limited.calls,1,'Limited participation evidence classification changed');
+assert.equal(depth5.classes.unclear.calls,1,'Unclear transcript evidence classification changed');
+assert.equal(context.longCallAnalysis(longCallRecords,600).rows.length,2,'10m+ must be a cumulative long-call review threshold');
+assert.equal(context.longCallAnalysis(longCallRecords,900).rows.length,1,'15m+ must be a cumulative long-call review threshold');
+context.RECORDS=longCallRecords;
+context.paintConversationDepth(longCallRecords);
+assert(getElement('conversationDepthSummary').innerHTML.includes('30 billed mins')&&getElement('conversationDepthSummary').innerHTML.includes('₹150'),'Long-call summary must reconcile billed usage and cost');
+assert(getElement('conversationDepthSummary').innerHTML.includes('30m actual talk time'),'Long-call summary must show raw talk time separately from rounded billing');
+assert(getElement('conversationDepthList').innerHTML.includes('Student crux')&&getElement('conversationDepthList').innerHTML.includes('Summary from export'),'Long-call cards must show deterministic student crux and supplied export summary separately');
+const depthCSV=context.conversationDepthToCSV(depth5);
+assert(depthCSV.startsWith('Call ID,Lead Phone,Call Direction,Call Date and Time (IST),Campaign,Actual Call Duration'),'Long-call CSV must use descriptive human-readable columns');
+assert(depthCSV.includes('Participation Evidence,Detected Student Questions,Student Speech Crux,Export Call Summary,Full Transcript'),'Long-call CSV must preserve review evidence and full supporting transcript');
+assert(!getElement('conversationDepthSummary').innerHTML.toLowerCase().includes('ai score'),'Rendered long-call verdict must not present an AI score');
 
 const intentRecords = [
   { from: '911111111111', intent: 'Payment', leadTemp: 'Warm', band: 'Amber', frustrated: false, conf: 70, need: 60 },
