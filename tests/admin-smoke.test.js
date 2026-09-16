@@ -123,7 +123,8 @@ assert(context.__adminTest.isSupportedExport('voice_analytics.csv'), 'CSV export
 assert(!context.__adminTest.isSupportedExport('voice_analytics.txt'), 'Unsupported exports should be rejected');
 assert(context.__adminTest.shouldCompressExport('voice_analytics.csv'), 'CSV exports should be compressed before publishing');
 assert(!context.__adminTest.shouldCompressExport('voice_analytics.xlsx'), 'Excel exports must retain their existing publish format');
-assert.equal(context.__adminTest.maxInputBytes('voice_analytics.csv'), 500 * 1024 * 1024, 'CSV uploads must support the temporary 500 MB ceiling');
+assert.equal(context.__adminTest.maxInputBytes('voice_analytics.csv'), 1024 * 1024 * 1024, 'CSV uploads must support the 1 GiB browser ceiling');
+assert(526 * 1024 * 1024 <= context.__adminTest.maxInputBytes('voice_analytics.csv'), 'The current cleaned CSV must fit below the browser ceiling');
 assert.equal(context.__adminTest.maxInputBytes('voice_analytics.xlsx'), 90 * 1024 * 1024, 'Excel uploads must retain the safer 90 MB ceiling');
 assert.equal(context.__adminTest.maxPublishBytes(), 35 * 1024 * 1024, 'Direct Contents API publishing must stop before Base64 request growth becomes unreliable');
 assert.equal(context.__adminTest.maxLocalGitPublishBytes(), 95 * 1024 * 1024, 'Encrypted local Git artifacts must remain below GitHub’s normal hard limit');
