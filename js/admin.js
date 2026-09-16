@@ -21,7 +21,7 @@ const PLAN_FIELDS = ["planStart", "planEnd", "includedMinutes", "commitmentRupee
 const IDLE_MINS = 60,
   MAX_SESSION_MINS = 720;
 const { validateRows } = AdminValidation;
-const MAX_CSV_BYTES = 500 * 1024 * 1024,
+const MAX_CSV_BYTES = 1024 * 1024 * 1024,
   MAX_WORKBOOK_BYTES = 90 * 1024 * 1024,
   LARGE_CSV_BYTES = 150 * 1024 * 1024,
   MAX_PUBLISH_BYTES = 35 * 1024 * 1024,
@@ -336,7 +336,7 @@ function chooseFile(file) {
   if (file.size > maxInputBytes(file.name)) {
     show(
       "validationStatus",
-      `This ${isCsv ? "CSV" : "workbook"} is ${formatSize(file.size)}. Local validation is limited to ${isCsv ? "500 MB for CSV" : "90 MB for Excel"} to keep browser memory use safe.`,
+      `This ${isCsv ? "CSV" : "workbook"} is ${formatSize(file.size)}. Local validation is limited to ${isCsv ? "1 GB for CSV" : "90 MB for Excel"} to keep browser memory use safe.`,
       "err",
     );
     return;
@@ -387,7 +387,7 @@ function clearFile() {
 }
 function csvWorkerTimeout(fileSize) {
   const mb = Number(fileSize || 0) / 1048576;
-  return Math.min(600000, Math.max(120000, 90000 + mb * 1500));
+  return Math.min(1800000, Math.max(120000, 90000 + mb * 1500));
 }
 async function validateCsvInWorker(file) {
   if (typeof Worker !== "function")
