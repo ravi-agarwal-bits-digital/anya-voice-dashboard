@@ -129,6 +129,7 @@ assert.equal(context.__adminTest.maxInputBytes('voice_analytics.xlsx'), 90 * 102
 assert.equal(context.__adminTest.maxPublishBytes(), 35 * 1024 * 1024, 'Direct Contents API publishing must stop before Base64 request growth becomes unreliable');
 assert.equal(context.__adminTest.maxLocalGitPublishBytes(), 95 * 1024 * 1024, 'Encrypted local Git artifacts must remain below GitHub’s normal hard limit');
 assert(context.__adminTest.csvWorkerTimeout(500 * 1024 * 1024) >= context.__adminTest.csvWorkerTimeout(90 * 1024 * 1024), 'CSV worker timeout must scale for larger files');
+assert(context.__adminTest.csvWorkerTimeout(1024 * 1024 * 1024) > context.__adminTest.csvWorkerTimeout(500 * 1024 * 1024), 'The 1 GiB CSV ceiling must receive more validation time than the old 500 MiB ceiling');
 const csv = '\uFEFFCreated At (IST),Call ID,Direction,Status,From,To,Duration (s),Messages,Full Transcript\n"10 Jul 2026, 10:30:00 AM IST",csv-1,outbound,completed,918071436001,919999999999,30,4,"First line\nSecond line"\n"10 Jul 2026, 10:35:00 AM IST",csv-2,outbound,completed,918071436001,918888888888,45,5,"Second call"';
 const csvWorkbook = XLSX.read(Buffer.from(csv), { type: 'buffer', cellDates: true });
 const csvSheetName = context.__adminTest.validationSheetName(csvWorkbook, 'voice_analytics.csv');

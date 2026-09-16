@@ -387,7 +387,7 @@ function clearFile() {
 }
 function csvWorkerTimeout(fileSize) {
   const mb = Number(fileSize || 0) / 1048576;
-  return Math.min(600000, Math.max(120000, 90000 + mb * 1500));
+  return Math.min(1800000, Math.max(120000, 90000 + mb * 1500));
 }
 async function validateCsvInWorker(file) {
   if (typeof Worker !== "function")
